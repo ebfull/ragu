@@ -83,7 +83,7 @@ mod domain;
 mod util;
 
 pub use domain::Domain;
-pub use util::{dot, eval, factor, mul};
+pub use util::{dot, eval, factor, factor_iter, mul};
 
 /// Represents a "cycle" of elliptic curves where the scalar field of one curve
 /// is the base field of the other, and vice-versa.

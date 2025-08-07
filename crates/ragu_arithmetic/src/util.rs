@@ -40,34 +40,52 @@ where
         .fold(F::ZERO, |acc, x| acc + x)
 }
 
+/// Returns an iterator that yields the coefficients of $a / (X - b)$ with no remainder
+/// for the given univariate polynomial $a \in \mathbb{F}\[X]$ and value $b \in \mathbb{F}$.
+/// The coefficients are yielded in reverse order (highest degree first).
+///
+/// # Panics
+///
+/// Panics if the polynomial $a$ is of degree $0$, as it cannot be factored by a linear term.
+pub fn factor_iter<F: Field, I: IntoIterator<Item = F>>(a: I, mut b: F) -> impl Iterator<Item = F>
+where
+    I::IntoIter: DoubleEndedIterator,
+{
+    b = -b;
+    let mut a = a.into_iter().rev().peekable();
+
+    if a.peek().is_none() {
+        panic!("cannot factor a polynomial of degree 0");
+    }
+
+    let mut tmp = F::ZERO;
+
+    core::iter::from_fn(move || {
+        let current = a.next()?;
+
+        // Discard `current` if constant term and short-circuit the iterator.
+        a.peek()?;
+
+        let mut lead_coeff = current;
+        lead_coeff -= tmp;
+        tmp = lead_coeff;
+        tmp *= b;
+        Some(lead_coeff)
+    })
+}
+
 /// Computes $a / (X - b)$ with no remainder for the given univariate polynomial $a \in \mathbb{F}\[X]$ and value $b \in \mathbb{F}$.
 ///
 /// # Panics
 ///
 /// Panics if the polynomial $a$ is of degree $0$, as it cannot be factored by a linear term.
-pub fn factor<'a, F: Field, I: IntoIterator<Item = &'a F>>(a: I, mut b: F) -> Vec<F>
+pub fn factor<F: Field, I: IntoIterator<Item = F>>(a: I, b: F) -> Vec<F>
 where
-    I::IntoIter: DoubleEndedIterator + ExactSizeIterator,
+    I::IntoIter: DoubleEndedIterator,
 {
-    b = -b;
-    let a = a.into_iter();
-
-    if a.len() == 0 {
-        panic!("cannot factor a polynomial of degree 0");
-    }
-
-    let mut q = vec![F::ZERO; a.len() - 1];
-
-    let mut tmp = F::ZERO;
-    for (q, r) in q.iter_mut().rev().zip(a.rev()) {
-        let mut lead_coeff = *r;
-        lead_coeff -= tmp;
-        *q = lead_coeff;
-        tmp = lead_coeff;
-        tmp *= b;
-    }
-
-    q
+    let mut result: Vec<F> = factor_iter(a, b).collect();
+    result.reverse();
+    result
 }
 
 /// Given a number of scalars, returns the ideal bucket size (in bits) for
@@ -272,7 +290,10 @@ fn test_factor() {
     ];
     let x = F::from(F::TWO_INV);
     let v = eval(poly.iter(), x);
-    let quot = factor(poly.iter(), x);
+    let quot = factor(poly.clone(), x);
+    let mut quot_iter = factor_iter(poly.clone(), x).collect::<Vec<_>>();
+    quot_iter.reverse();
+    assert_eq!(quot, quot_iter);
     let y = F::from(F::DELTA + F::from(100));
     assert_eq!(eval(quot.iter(), y) * (y - x), eval(poly.iter(), y) - v);
 }
