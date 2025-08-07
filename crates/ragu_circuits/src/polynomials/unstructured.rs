@@ -10,6 +10,7 @@ use core::ops::{Deref, DerefMut};
 use super::Rank;
 
 /// Represents a polynomial in an unstructured (monomial basis) arrangement.
+#[derive(Clone)]
 pub struct Polynomial<F: Field, R: Rank> {
     /// Coefficients of the polynomial.
     pub(super) coeffs: Vec<F>,
