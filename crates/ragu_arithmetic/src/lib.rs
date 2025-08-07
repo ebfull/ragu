@@ -148,6 +148,14 @@ pub trait FixedGenerators<C: CurveAffine>: Send + Sync + 'static {
 
     /// Generator used as a blinding factor or randomization.
     fn h(&self) -> &C;
+
+    /// Compute a commitment to a single value.
+    fn short_commit(&self, value: C::ScalarExt, blind: C::ScalarExt) -> C {
+        // TODO(ebfull): This returns a C, but the most efficient method would
+        // be to return a `C::Curve` and let the caller perform batch inversion
+        // if possible.
+        (self.g()[0] * value + *self.h() * blind).into()
+    }
 }
 
 /// Specification for a [Poseidon](https://eprint.iacr.org/2019/458) permutation over a field $\mathbb{F}$.
