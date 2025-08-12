@@ -42,6 +42,21 @@ pub struct Polynomial<F: Field, R: Rank> {
     _marker: core::marker::PhantomData<R>,
 }
 
+impl<F: Field, R: Rank> arithmetic::Ring for Polynomial<F, R> {
+    type R = Self;
+    type F = F;
+
+    fn scale_assign(r: &mut Self, by: Self::F) {
+        r.scale(by);
+    }
+    fn add_assign(r: &mut Self, other: &Self) {
+        Self::add_assign(r, other);
+    }
+    fn sub_assign(r: &mut Self, other: &Self) {
+        Self::sub_assign(r, other);
+    }
+}
+
 impl<F: Field, R: Rank> Default for Polynomial<F, R> {
     fn default() -> Self {
         Self::new()
@@ -597,4 +612,89 @@ fn test_product_with_dot() {
             poly2.unstructured().iter().rev(),
         )
     );
+}
+
+#[test]
+fn ring_poly_test() {
+    use ragu_pasta::Fp;
+    use rand::thread_rng;
+
+    type R = super::R<5>;
+
+    let rand = || Fp::random(thread_rng());
+
+    let little = arithmetic::Domain::<Fp>::new(2);
+    let big = arithmetic::Domain::<Fp>::new(3);
+
+    let mut a_polys = vec![];
+    let mut b_polys = vec![];
+
+    for _ in 0..4 {
+        let mut tmp = Polynomial::<Fp, R>::new();
+        for _ in 0..8 {
+            tmp.u.push(rand());
+            tmp.v.push(rand());
+            tmp.w.push(rand());
+            tmp.d.push(rand());
+        }
+        a_polys.push(tmp);
+    }
+
+    for _ in 0..4 {
+        let mut tmp = Polynomial::<Fp, R>::new();
+        for _ in 0..8 {
+            tmp.u.push(rand());
+            tmp.v.push(rand());
+            tmp.w.push(rand());
+            tmp.d.push(rand());
+        }
+        b_polys.push(tmp);
+    }
+
+    let mut c = vec![];
+    for i in 0..4 {
+        c.push(a_polys[i].revdot(&b_polys[i]));
+    }
+
+    little.ring_ifft::<Polynomial<Fp, R>>(&mut a_polys);
+    let a_polys_collapse = a_polys.clone();
+    a_polys.resize(8, Default::default());
+    big.ring_fft::<Polynomial<Fp, R>>(&mut a_polys);
+
+    little.ring_ifft::<Polynomial<Fp, R>>(&mut b_polys);
+    let b_polys_collapse = b_polys.clone();
+    b_polys.resize(8, Default::default());
+    big.ring_fft::<Polynomial<Fp, R>>(&mut b_polys);
+
+    let mut big_c = vec![];
+    for i in 0..8 {
+        big_c.push(a_polys[i].revdot(&b_polys[i]));
+    }
+
+    big.ifft(&mut big_c);
+
+    let x = rand();
+
+    let mut cur = Fp::ONE;
+    let mut a = Polynomial::<Fp, R>::new();
+    let mut b = Polynomial::<Fp, R>::new();
+    for i in 0..4 {
+        let mut tmp = a_polys_collapse[i].clone();
+        tmp.scale(cur);
+        a.add_assign(&tmp);
+
+        let mut tmp = b_polys_collapse[i].clone();
+        tmp.scale(cur);
+        b.add_assign(&tmp);
+
+        cur *= x;
+    }
+    let mut cur = Fp::ONE;
+    let mut cx = Fp::ZERO;
+    for i in 0..8 {
+        cx += big_c[i] * cur;
+        cur *= x;
+    }
+
+    assert_eq!(a.revdot(&b), cx);
 }
