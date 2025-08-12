@@ -87,71 +87,30 @@ impl<F: PrimeField> Domain<F> {
         self.omega
     }
 
-    /// Computes the radix2 Fast Fourier Transform (FFT) of a slice using the
-    /// Cooley-Tukey algorithm.
-    ///
-    /// # Panics
-    ///
-    /// This will panic if the length is not the power of two specified by
-    /// `log2_n`.
+    /// Computes the radix2 discrete Fourier transform (DFT) of a slice of
+    /// generic ring elements using the Cooley-Tukey FFT algorithm.
+    pub fn ring_fft<R: crate::fft::Ring<F = F>>(&self, input: &mut [R::R]) {
+        crate::fft::fft::<R>(self.log2_n, input, self.omega);
+    }
+
+    /// Performs the inverse operation of [`Self::ring_fft`].
+    pub fn ring_ifft<R: crate::fft::Ring<F = F>>(&self, input: &mut [R::R]) {
+        crate::fft::fft::<R>(self.log2_n, input, self.omega_inv);
+
+        for input in input.iter_mut() {
+            R::scale_assign(input, self.n_inv);
+        }
+    }
+
+    /// Computes the radix2 discrete Fourier transform (DFT) of a slice of field
+    /// elements using the Cooley-Tukey FFT algorithm.
     pub fn fft(&self, input: &mut [F]) {
-        self.fft_inner(input, self.omega);
+        self.ring_fft::<crate::fft::FFTField<F>>(input);
     }
 
     /// Performs the inverse operation of [`Self::fft`].
-    ///
-    /// # Panics
-    ///
-    /// This will panic if the length is not the power of two specified by
-    /// `log2_n`.
     pub fn ifft(&self, input: &mut [F]) {
-        self.fft_inner(input, self.omega_inv);
-
-        for input in input.iter_mut() {
-            *input *= self.n_inv;
-        }
-    }
-
-    fn fft_inner(&self, input: &mut [F], omega: F) {
-        fn bitreverse(mut n: u32, l: u32) -> u32 {
-            let mut r = 0;
-            for _ in 0..l {
-                r = (r << 1) | (n & 1);
-                n >>= 1;
-            }
-            r
-        }
-
-        assert_eq!(input.len(), 1 << self.log2_n);
-        let n = input.len() as u32;
-
-        for i in 0..n {
-            let ri = bitreverse(i, self.log2_n);
-            if i < ri {
-                input.swap(ri as usize, i as usize);
-            }
-        }
-
-        let mut m = 1;
-        for _ in 0..self.log2_n {
-            let w_m = omega.pow([(n / (m << 1)) as u64]);
-
-            let mut i = 0;
-            while i < n {
-                let mut w = F::ONE;
-                for j in 0..m {
-                    let a = input[(i + j + m) as usize] * w;
-                    let b = input[(i + j) as usize] - a;
-                    input[(i + j + m) as usize] = b;
-                    input[(i + j) as usize] += a;
-                    w *= w_m;
-                }
-
-                i += m << 1;
-            }
-
-            m <<= 1;
-        }
+        self.ring_ifft::<crate::fft::FFTField<F>>(input);
     }
 
     /// This function produces the evaluations of Lagrange basis polynomials

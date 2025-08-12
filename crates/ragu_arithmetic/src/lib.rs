@@ -80,9 +80,11 @@ extern crate alloc;
 pub use ragu_macros::repr256;
 
 mod domain;
+mod fft;
 mod util;
 
 pub use domain::Domain;
+pub use fft::Ring;
 pub use util::{dot, eval, factor, factor_iter, mul};
 
 /// Represents a "cycle" of elliptic curves where the scalar field of one curve
