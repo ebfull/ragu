@@ -77,7 +77,7 @@ impl<F: Field, R: Rank> Polynomial<F, R> {
 
     /// Iterate over the coefficients of this polynomial in ascending order of
     /// degree.
-    pub fn iter_coeffs(&self) -> impl Iterator<Item = F> + DoubleEndedIterator {
+    pub fn iter_coeffs(&self) -> impl DoubleEndedIterator<Item = F> {
         use core::iter::repeat_n;
 
         assert!(self.u.len() <= R::n());
@@ -243,10 +243,10 @@ impl<F: Field, R: Rank> Polynomial<F, R> {
     where
         Op: Fn(&mut F),
     {
-        self.u.iter_mut().for_each(|c| op(c));
-        self.v.iter_mut().for_each(|c| op(c));
-        self.w.iter_mut().for_each(|c| op(c));
-        self.d.iter_mut().for_each(|c| op(c));
+        self.u.iter_mut().for_each(&op);
+        self.v.iter_mut().for_each(&op);
+        self.w.iter_mut().for_each(&op);
+        self.d.iter_mut().for_each(&op);
     }
 
     /// Helper function to combine two polynomials with a binary operation.

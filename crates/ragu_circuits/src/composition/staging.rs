@@ -35,7 +35,7 @@ pub trait StagingCircuit<F: Field, R: Rank> {
     fn rx(values: &[F]) -> structured::Polynomial<F, R> {
         assert_eq!(values.len(), Self::values());
 
-        let mut values = values.into_iter().cloned();
+        let mut values = values.iter().cloned();
         let mut rx = structured::Polynomial::new();
         {
             let rx = rx.forward();
@@ -120,7 +120,7 @@ impl<R: Rank> StagingObject<R> {
 impl<F: Field, R: Rank> CircuitObject<F, R> for StagingObject<R> {
     fn sxy(&self, x: F, y: F) -> F {
         // Bound is enforced in `StagingObject::new`.
-        assert!(self.skip + self.size + 1 <= R::n());
+        assert!(self.skip + self.size < R::n());
         let reserved: usize = R::n() - self.skip - self.size - 1;
 
         if x == F::ZERO || y == F::ZERO {
@@ -155,7 +155,7 @@ impl<F: Field, R: Rank> CircuitObject<F, R> for StagingObject<R> {
 
     fn sx(&self, x: F) -> unstructured::Polynomial<F, R> {
         // Bound is enforced in `StagingObject::new`.
-        assert!(self.skip + self.size + 1 <= R::n());
+        assert!(self.skip + self.size < R::n());
         let reserved: usize = R::n() - self.skip - self.size - 1;
 
         if x == F::ZERO {
@@ -207,7 +207,7 @@ impl<F: Field, R: Rank> CircuitObject<F, R> for StagingObject<R> {
 
     fn sy(&self, y: F) -> structured::Polynomial<F, R> {
         // Bound is enforced in `StagingObject::new`.
-        assert!(self.skip + self.size + 1 <= R::n());
+        assert!(self.skip + self.size < R::n());
         let reserved: usize = R::n() - self.skip - self.size - 1;
 
         let mut poly = structured::Polynomial::new();

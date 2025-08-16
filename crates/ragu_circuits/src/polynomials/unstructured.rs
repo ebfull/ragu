@@ -59,7 +59,7 @@ impl<F: Field, R: Rank> Polynomial<F, R> {
 
     /// Iterate over the coefficients of this polynomial in ascending order of
     /// degree.
-    pub fn iter_coeffs(&self) -> impl Iterator<Item = F> + DoubleEndedIterator {
+    pub fn iter_coeffs(&self) -> impl DoubleEndedIterator<Item = F> {
         self.coeffs.iter().cloned()
     }
 
