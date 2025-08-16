@@ -23,6 +23,7 @@ use ragu_primitives::serialize::GadgetSerialize;
 
 use alloc::{boxed::Box, vec::Vec};
 
+pub mod composition;
 mod ky;
 mod metrics;
 pub mod polynomials;
