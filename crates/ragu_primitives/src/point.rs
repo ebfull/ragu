@@ -188,9 +188,7 @@ impl<'dr, D: Driver<'dr, F = C::Base>, C: CurveAffine> Point<'dr, D, C> {
     }
 }
 
-impl<'dr, D: Driver<'dr, F: WithSmallOrderMulGroup<3>>, C: CurveAffine<Base = D::F>>
-    GadgetSerialize<'dr, D> for Point<'dr, D, C>
-{
+impl<'dr, D: Driver<'dr>, C: CurveAffine> GadgetSerialize<'dr, D> for Point<'dr, D, C> {
     fn serialize<B: Buffer<'dr, D>>(&self, dr: &mut D, buf: &mut B) -> Result<()> {
         self.x.serialize(dr, buf)?;
         self.y.serialize(dr, buf)?;
