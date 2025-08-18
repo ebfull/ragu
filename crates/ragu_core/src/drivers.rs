@@ -54,12 +54,14 @@ use crate::{
 };
 
 mod coeff;
+mod emulator;
 mod linexp;
 mod phantom;
 mod simulator;
 mod wireless;
 
 pub use coeff::Coeff;
+pub use emulator::Emulator;
 pub use linexp::{DirectSum, LinearExpression};
 pub use simulator::Simulator;
 pub use wireless::Wireless;
