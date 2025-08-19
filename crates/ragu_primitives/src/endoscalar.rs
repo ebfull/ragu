@@ -208,7 +208,7 @@ mod tests {
     use arithmetic::{CurveAffine, CurveExt};
     use ff::{Field, PrimeField, WithSmallOrderMulGroup};
     use group::{Group, prime::PrimeCurveAffine};
-    use ragu::{Result, drivers::Simulator};
+    use ragu_core::{Result, drivers::Simulator};
     use ragu_pasta::{EpAffine, Fp};
     use rand::{Rng, thread_rng};
 

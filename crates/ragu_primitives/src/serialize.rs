@@ -29,7 +29,6 @@ pub trait Buffer<'dr, D: Driver<'dr>> {
 /// ## Example
 ///
 /// ```rust
-/// # extern crate ragu_core as ragu;
 /// # use arithmetic::CurveAffine;
 /// # use ragu_core::{drivers::{Driver, Witness}, gadgets::Gadget};
 /// # use ragu_primitives::{Element, serialize::GadgetSerialize};

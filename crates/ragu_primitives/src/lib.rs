@@ -12,7 +12,6 @@
 #![doc(html_logo_url = "https://seanbowe.com/ragu_assets/icons/v1_rustdoc128.png")]
 
 extern crate alloc;
-extern crate ragu_core as ragu;
 extern crate self as ragu_primitives;
 
 mod boolean;

@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
     AngleBracketedGenericArguments, Data, DeriveInput, Error, Fields, GenericArgument,
-    GenericParam, Generics, Ident, Lifetime, Result, Type, parse_quote, spanned::Spanned,
+    GenericParam, Generics, Ident, Lifetime, Path, Result, Type, parse_quote, spanned::Spanned,
 };
 
 use crate::helpers::*;
@@ -33,12 +33,13 @@ impl GenericDriver {
     fn kind_arguments(
         &self,
         ty_generics: &AngleBracketedGenericArguments,
+        ragu_core_path: &Path,
     ) -> AngleBracketedGenericArguments {
         let driver_ident = &self.ident;
         let static_lifetime = Lifetime::new("'static", Span::call_site());
         let current_lifetime = &self.lifetime;
         let args = ty_generics.args.iter().map(move |gp| { match gp {
-            GenericArgument::Type(ty) if self.is_ty(ty) => parse_quote!( ::core::marker::PhantomData<<#driver_ident as ::ragu::drivers::Driver<#current_lifetime>>::F> ),
+            GenericArgument::Type(ty) if self.is_ty(ty) => parse_quote!( ::core::marker::PhantomData<<#driver_ident as #ragu_core_path::drivers::Driver<#current_lifetime>>::F> ),
             GenericArgument::Lifetime(lt) if self.is_lt(lt) => parse_quote!( #static_lifetime ),
             a => parse_quote!( #a ),
         }}).collect::<Vec<GenericArgument>>();
@@ -85,7 +86,7 @@ impl GenericDriver {
     }
 }
 
-pub fn derive(input: DeriveInput) -> Result<TokenStream> {
+pub fn derive(input: DeriveInput, ragu_core_path: Path) -> Result<TokenStream> {
     let DeriveInput {
         ident: struct_ident,
         generics,
@@ -196,7 +197,7 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
             FieldType::Witness => {
                 let driver_id = &driver.ident;
                 quote! { {
-                    use ::ragu::maybe::Maybe;
+                    use #ragu_core_path::maybe::Maybe;
                     #driver_id::just(|| self.#id.view().take().clone())
                 } }
             }
@@ -216,12 +217,12 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
         }
     };
 
-    let kind_ty_arguments = driver.kind_arguments(&ty_generics);
+    let kind_ty_arguments = driver.kind_arguments(&ty_generics, &ragu_core_path);
 
     let gadget_impl = {
         quote! {
             #[automatically_derived]
-            impl #impl_generics ::ragu::gadgets::Gadget #gadget_args for #struct_ident #ty_generics  {
+            impl #impl_generics #ragu_core_path::gadgets::Gadget #gadget_args for #struct_ident #ty_generics  {
                 type Kind = #struct_ident #kind_ty_arguments;
             }
         }
@@ -255,7 +256,7 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
         let init = match ty {
             FieldType::Witness => quote! {
                 {
-                    use ::ragu::maybe::Maybe;
+                    use #ragu_core_path::maybe::Maybe;
 
                     let tmp = ND::just(|| this.#id.view().take().clone());
                     is_send(&tmp);
@@ -263,10 +264,10 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
                 }
             },
             FieldType::Wire => {
-                quote! { ::ragu::drivers::FromDriver::convert_wire(ndr, &this.#id) }
+                quote! { #ragu_core_path::drivers::FromDriver::convert_wire(ndr, &this.#id) }
             }
             FieldType::Gadget => {
-                quote! { ::ragu::gadgets::Gadget::map_gadget(&this.#id, ndr) }
+                quote! { #ragu_core_path::gadgets::Gadget::map_gadget(&this.#id, ndr) }
             }
             FieldType::Phantom => quote! { ::core::marker::PhantomData },
         };
@@ -278,10 +279,10 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
         let driver_lifetime = &driver.lifetime;
         quote! {
             #[automatically_derived]
-            unsafe impl #gadget_kind_generic_params ::ragu::gadgets::GadgetKind<#driverfield_ident> for #struct_ident #kind_subst_arguments  {
-                type Rebind<#driver_lifetime, #driver_ident: ::ragu::drivers::Driver<#driver_lifetime, F = #driverfield_ident>> = #struct_ident #rebind_arguments;
+            unsafe impl #gadget_kind_generic_params #ragu_core_path::gadgets::GadgetKind<#driverfield_ident> for #struct_ident #kind_subst_arguments  {
+                type Rebind<#driver_lifetime, #driver_ident: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident>> = #struct_ident #rebind_arguments;
 
-                fn map<#driver_lifetime, 'new_dr, #driver_ident: ::ragu::drivers::Driver<#driver_lifetime, F = #driverfield_ident>, ND: ::ragu::drivers::FromDriver<#driver_lifetime, 'new_dr, #driver_ident>>(
+                fn map<#driver_lifetime, 'new_dr, #driver_ident: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident>, ND: #ragu_core_path::drivers::FromDriver<#driver_lifetime, 'new_dr, #driver_ident>>(
                     this: &Self::Rebind<#driver_lifetime, #driver_ident>,
                     ndr: &mut ND,
                 ) -> Self::Rebind<'new_dr, ND::NewDriver> {
@@ -314,7 +315,10 @@ fn test_fail_enum() {
         }
     };
 
-    assert!(derive(input).is_err(), "Expected error for enum usage");
+    assert!(
+        derive(input, parse_quote! {::ragu}).is_err(),
+        "Expected error for enum usage"
+    );
 }
 
 #[test]
@@ -331,7 +335,10 @@ fn test_fail_where_clause() {
         }
     };
 
-    assert!(derive(input).is_err(), "Expected error for where clause");
+    assert!(
+        derive(input, parse_quote! {::ragu}).is_err(),
+        "Expected error for where clause"
+    );
 }
 
 #[test]
@@ -348,7 +355,7 @@ fn test_fail_multi_annotations() {
     };
 
     assert!(
-        derive(input).is_err(),
+        derive(input, parse_quote! {::ragu}).is_err(),
         "Expected error for multiple annotations on field"
     );
 }
@@ -365,7 +372,7 @@ fn test_fail_unnamed_struct() {
     };
 
     assert!(
-        derive(input).is_err(),
+        derive(input, parse_quote! {::ragu}).is_err(),
         "Expected error for unnamed struct fields"
     );
 }
@@ -385,7 +392,7 @@ fn test_gadget_derive_boolean_customdriver() {
         }
     };
 
-    let result = derive(input).unwrap();
+    let result = derive(input, parse_quote!{::ragu}).unwrap();
 
     assert_eq!(
         result.to_string(),
@@ -457,7 +464,7 @@ fn test_gadget_derive() {
         }
     };
 
-    let result = derive(input).unwrap();
+    let result = derive(input, parse_quote!{::ragu}).unwrap();
 
     assert_eq!(
         result.to_string(),

@@ -151,7 +151,6 @@ pub unsafe trait GadgetKind<F: Field>: core::any::Any {
 /// ## Example
 ///
 /// ```rust
-/// # extern crate ragu_core as ragu;
 /// # use ragu_core::{drivers::{Driver, Witness}, gadgets::Gadget};
 /// #[derive(Gadget)]
 /// struct Boolean<'dr, D: Driver<'dr>> {
@@ -179,7 +178,6 @@ pub unsafe trait GadgetKind<F: Field>: core::any::Any {
 /// `#[ragu(driver)]` like so:
 ///
 /// ```rust
-/// # extern crate ragu_core as ragu;
 /// # use ragu_core::{drivers::{Driver, Witness}, gadgets::Gadget};
 /// #[derive(Gadget)]
 /// struct Boolean<'my_dr, #[ragu(driver)] MyD: Driver<'my_dr>> {

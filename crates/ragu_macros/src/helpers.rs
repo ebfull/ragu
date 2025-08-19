@@ -1,9 +1,48 @@
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Span, TokenTree};
 use quote::format_ident;
 use syn::{
-    Attribute, Error, GenericArgument, GenericParam, Ident, Lifetime, Meta, PathArguments, Result,
-    Type, TypeParam, TypeParamBound, TypePath, parse_quote, spanned::Spanned,
+    Attribute, Error, GenericArgument, GenericParam, Ident, Lifetime, Meta, Path, PathArguments,
+    Result, Type, TypeParam, TypeParamBound, TypePath, parse_quote, spanned::Spanned,
 };
+
+pub fn ragu_core_path() -> Result<Path> {
+    Ok(match (crate_name("ragu_core"), crate_name("ragu")) {
+        (Ok(FoundCrate::Itself), _) => parse_quote! { ::ragu_core },
+        (_, Ok(FoundCrate::Itself)) => parse_quote! { ::ragu },
+        (Ok(FoundCrate::Name(name)), _) | (Err(_), Ok(FoundCrate::Name(name))) => {
+            let name: Ident = format_ident!("{}", name);
+            parse_quote! { ::#name }
+        }
+        _ => {
+            return Err(Error::new(
+                Span::call_site(),
+                "Failed to find ragu/ragu_core crate. Ensure it is included in your Cargo.toml.",
+            ));
+        }
+    })
+}
+
+pub fn ragu_primitives_path() -> Result<Path> {
+    Ok(match (crate_name("ragu_primitives"), crate_name("ragu")) {
+        (Ok(FoundCrate::Itself), _) => parse_quote! { ::ragu_primitives },
+        (_, Ok(FoundCrate::Itself)) => parse_quote! { ::ragu::primitives },
+        (Ok(FoundCrate::Name(name)), _) => {
+            let name: Ident = format_ident!("{}", name);
+            parse_quote! { ::#name }
+        }
+        (_, Ok(FoundCrate::Name(name))) => {
+            let name: Ident = format_ident!("{}", name);
+            parse_quote! { ::#name::primitives }
+        }
+        _ => {
+            return Err(Error::new(
+                Span::call_site(),
+                "Failed to find ragu/ragu_primitives crate. Ensure it is included in your Cargo.toml.",
+            ));
+        }
+    })
+}
 
 pub fn attr_is(attr: &Attribute, needle: &str) -> bool {
     if !attr.path().is_ident("ragu") {

@@ -31,7 +31,6 @@ ff = { workspace = true }
 ragu_macros = { path = "../ragu_macros", version = "0.0.0" }
 thiserror = "2.0.12"
 
-
 [dev-dependencies]
 rand = { workspace = true }
 group = { workspace = true }

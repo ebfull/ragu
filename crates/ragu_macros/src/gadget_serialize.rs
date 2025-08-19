@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
     AngleBracketedGenericArguments, Data, DeriveInput, Error, Fields, GenericParam, Generics,
-    Ident, Result, parse_quote, spanned::Spanned,
+    Ident, Path, Result, parse_quote, spanned::Spanned,
 };
 
 use crate::helpers::*;
@@ -16,7 +16,11 @@ impl GenericDriver {
     }
 }
 
-pub fn derive(input: DeriveInput) -> Result<TokenStream> {
+pub fn derive(
+    input: DeriveInput,
+    ragu_core_path: Path,
+    ragu_primitives_path: Path,
+) -> Result<TokenStream> {
     let DeriveInput {
         ident: struct_ident,
         generics,
@@ -110,8 +114,8 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
     let gadget_serialize_impl = {
         quote! {
             #[automatically_derived]
-            impl #impl_generics ::ragu_primitives::serialize::GadgetSerialize #gadget_serialize_args for #struct_ident #ty_generics {
-                fn serialize<B: ::ragu_primitives::serialize::Buffer #gadget_serialize_args>(&self, dr: &mut #driver_ident, buf: &mut B) -> ::ragu_core::Result<()> {
+            impl #impl_generics #ragu_primitives_path::serialize::GadgetSerialize #gadget_serialize_args for #struct_ident #ty_generics {
+                fn serialize<B: #ragu_primitives_path::serialize::Buffer #gadget_serialize_args>(&self, dr: &mut #driver_ident, buf: &mut B) -> #ragu_core_path::Result<()> {
                     #( #serialize_calls )*
                     Ok(())
                 }
@@ -137,7 +141,7 @@ fn test_gadget_serialize_derive() {
         }
     };
 
-    let result = derive(input).unwrap();
+    let result = derive(input, parse_quote!(::ragu_core), parse_quote!(::ragu_primitives)).unwrap();
 
     assert_eq!(
         result.to_string(),

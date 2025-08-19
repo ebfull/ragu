@@ -31,7 +31,13 @@ pub fn repr256(input: TokenStream) -> TokenStream {
 #[allow(missing_docs)]
 #[proc_macro_derive(Gadget, attributes(ragu))]
 pub fn derive_gadget(input: TokenStream) -> TokenStream {
-    gadget::derive(parse_macro_input!(input as DeriveInput))
+    let ragu_core_path = helpers::ragu_core_path();
+    let ragu_core_path = if let Err(e) = ragu_core_path {
+        return e.into_compile_error().into();
+    } else {
+        ragu_core_path.unwrap()
+    };
+    gadget::derive(parse_macro_input!(input as DeriveInput), ragu_core_path)
         .unwrap_or_else(Error::into_compile_error)
         .into()
 }
@@ -40,7 +46,24 @@ pub fn derive_gadget(input: TokenStream) -> TokenStream {
 #[allow(missing_docs)]
 #[proc_macro_derive(GadgetSerialize, attributes(ragu))]
 pub fn derive_gadget_serialize(input: TokenStream) -> TokenStream {
-    gadget_serialize::derive(parse_macro_input!(input as DeriveInput))
-        .unwrap_or_else(Error::into_compile_error)
-        .into()
+    let ragu_core_path = helpers::ragu_core_path();
+    let ragu_core_path = if let Err(e) = ragu_core_path {
+        return e.into_compile_error().into();
+    } else {
+        ragu_core_path.unwrap()
+    };
+    let ragu_primitives_path = helpers::ragu_primitives_path();
+    let ragu_primitives_path = if let Err(e) = ragu_primitives_path {
+        return e.into_compile_error().into();
+    } else {
+        ragu_primitives_path.unwrap()
+    };
+
+    gadget_serialize::derive(
+        parse_macro_input!(input as DeriveInput),
+        ragu_core_path,
+        ragu_primitives_path,
+    )
+    .unwrap_or_else(Error::into_compile_error)
+    .into()
 }
