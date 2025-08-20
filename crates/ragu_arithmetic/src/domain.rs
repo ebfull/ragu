@@ -121,9 +121,7 @@ impl<F: PrimeField> Domain<F> {
     ///
     /// # Panics
     ///
-    /// This function may panic if `omega` is not a `n`-th primitive root of
-    /// unity or if `n_inv` is not the inverse of `n`. Also panics if the
-    /// provided `amount` exceeds `n`.
+    /// Panics if the provided `amount` exceeds `n`.
     ///
     /// # Implementation
     ///
@@ -152,11 +150,20 @@ impl<F: PrimeField> Domain<F> {
     pub fn ell(&self, x: F, amount: usize) -> Option<Vec<F>> {
         assert!(amount <= self.n);
 
-        let xn = x.pow([self.n as u64]);
+        let xn = x.pow([self.n as u64]); // x^n
         if xn == F::ONE {
+            // By definition, `x` must be an element of the domain itself. This
+            // means that the coefficients returned will have a trivial value:
+            // all zeroes except for the $i$-th coefficient which will be 1.
+
+            // The implementation this function relies on `x` not being in the
+            // domain. Therefore, we return None here to indicate to the caller
+            // that the value `x` provided is in the domain so that this case
+            // can be handled explicitly (and more efficiently).
             return None;
         }
 
+        // Compute (x - \omega^i)^{-1} for i = 0, ..., amount - 1
         let mut denominators: Vec<F> = (0..amount)
             .scan(F::ONE, |acc, _| {
                 let tmp = x - *acc;
@@ -170,6 +177,7 @@ impl<F: PrimeField> Domain<F> {
         }
 
         Some(
+            // (x - \omega^i)^{-1} \cdot \frac{(x^n - 1) \omega^i}{n}
             denominators
                 .into_iter()
                 .scan((xn - F::ONE) * self.n_inv, move |numerator, denominator| {
