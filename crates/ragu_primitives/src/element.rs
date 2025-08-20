@@ -191,7 +191,7 @@ impl<'dr, D: Driver<'dr>> Element<'dr, D> {
         Element { value, wire }
     }
 
-    /// Add another element scaled by a constant: `self` + `other` * `coeff`
+    /// Add another element scaled by a constant: `self` + `other` * `coeff`.
     pub fn add_coeff(&self, dr: &mut D, other: &Self, coeff: Coeff<D::F>) -> Self {
         let value = D::just(|| {
             *self.value.snag() + (Coeff::Arbitrary(*other.value.snag()) * coeff).value()
@@ -207,7 +207,7 @@ impl<'dr, D: Driver<'dr>> Element<'dr, D> {
         Element { value, wire }
     }
 
-    /// Double this element
+    /// Double this element.
     pub fn double(&self, dr: &mut D) -> Self {
         self.add(dr, self)
     }
@@ -316,7 +316,7 @@ impl<'dr, D: Driver<'dr>, B: Buffer<'dr, D>> Buffer<'dr, D> for &mut B {
     }
 }
 
-/// Computes a fixed linear combination of some allocated values
+/// Computes a fixed linear combination of some allocated values.
 pub fn multiadd<'dr, D: Driver<'dr>>(
     dr: &mut D,
     values: &[Element<'dr, D>],

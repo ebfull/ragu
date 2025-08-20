@@ -16,16 +16,6 @@ pub struct DemotedDriver<'dr, D: Driver<'dr>> {
     _marker: core::marker::PhantomData<(&'dr (), D)>,
 }
 
-impl<'dr, D: Driver<'dr>> DemotedDriver<'dr, D> {
-    // This is not public so that it is not constructible outside of this
-    // module.
-    fn new() -> Self {
-        DemotedDriver {
-            _marker: core::marker::PhantomData,
-        }
-    }
-}
-
 impl<'dr, D: Driver<'dr>> DriverTypes for DemotedDriver<'dr, D> {
     type MaybeKind = Empty;
     type LCadd = ();
@@ -99,7 +89,12 @@ impl<'dr, D: Driver<'dr>, G: Gadget<'dr, D>> Demoted<'dr, D, G> {
     /// Strips a gadget of its witness data and returns a demoted version of it.
     pub fn new(gadget: &G) -> Self {
         Demoted {
-            gadget: <G::Kind as GadgetKind<D::F>>::map(gadget, &mut DemotedDriver::new()),
+            gadget: <G::Kind as GadgetKind<D::F>>::map(
+                gadget,
+                &mut DemotedDriver {
+                    _marker: core::marker::PhantomData,
+                },
+            ),
         }
     }
 }
