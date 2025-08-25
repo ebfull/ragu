@@ -134,6 +134,15 @@ pub struct Staged<F: Field, R: Rank, S: StagedCircuit<F, R>> {
     _marker: core::marker::PhantomData<(F, R)>,
 }
 
+impl<F: Field, R: Rank, S: StagedCircuit<F, R> + Clone> Clone for Staged<F, R, S> {
+    fn clone(&self) -> Self {
+        Staged {
+            circuit: self.circuit.clone(),
+            _marker: core::marker::PhantomData,
+        }
+    }
+}
+
 impl<F: Field, R: Rank, S: StagedCircuit<F, R>> Staged<F, R, S> {
     /// Creates a new [`Circuit`] implementation from the given staged
     /// `circuit`.
@@ -243,6 +252,14 @@ pub trait StageExt<F: Field, R: Rank>: Stage<F, R> {
         Ok(Box::new(object::StageObject::new(
             Self::skip_multiplications(),
             Self::num_multiplications(),
+        )?))
+    }
+
+    /// Creates a staging circuit a final stage that has this stage as its
+    /// parent.
+    fn final_into_object<'a>() -> Result<Box<dyn CircuitObject<F, R> + 'a>> {
+        Ok(Box::new(object::StageObject::new_max(
+            Self::skip_multiplications() + Self::num_multiplications(),
         )?))
     }
 }

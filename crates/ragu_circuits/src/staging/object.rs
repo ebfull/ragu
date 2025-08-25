@@ -34,6 +34,25 @@ impl<R: Rank> StageObject<R> {
             _marker: core::marker::PhantomData,
         })
     }
+
+    /// Creates a new staging circuit polynomial with the given
+    /// `skip_multiplications` and maximum possible multiplications.
+    /// The number of multiplications will be `R::n() - skip_multiplications - 1`,
+    /// which is the maximum before bounds are reached.
+    pub fn new_max(skip_multiplications: usize) -> Result<Self> {
+        if skip_multiplications + 1 > R::n() {
+            return Err(ragu_core::Error::MultiplicationBoundExceeded(R::n()));
+        }
+
+        let num_multiplications = R::n() - skip_multiplications - 1;
+        assert!(skip_multiplications + num_multiplications < R::n()); // Technically a redundant assertion.
+
+        Ok(Self {
+            skip_multiplications,
+            num_multiplications,
+            _marker: core::marker::PhantomData,
+        })
+    }
 }
 
 impl<F: Field, R: Rank> CircuitObject<F, R> for StageObject<R> {
@@ -66,6 +85,8 @@ impl<F: Field, R: Rank> CircuitObject<F, R> for StageObject<R> {
             w * plus + v * minus + u * plus
         };
 
+        // TODO(ebfull): underflows possible, though they don't affect the
+        // arithmetic in practice.
         let c1 = block(self.skip_multiplications - 1, self.skip_multiplications);
         let c2 = block(R::n() - 2, reserved);
 
