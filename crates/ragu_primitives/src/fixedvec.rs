@@ -163,19 +163,19 @@ impl<'dr, D: Driver<'dr>, G: Gadget<'dr, D>, L: Len> Gadget<'dr, D> for FixedVec
 unsafe impl<F: Field, G: GadgetKind<F>, L: Len> GadgetKind<F> for FixedVec<PhantomData<G>, L> {
     type Rebind<'dr, D: Driver<'dr, F = F>> = FixedVec<G::Rebind<'dr, D>, L>;
 
-    fn map<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
+    fn map_gadget<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
         this: &Self::Rebind<'dr, D>,
         ndr: &mut ND,
     ) -> Result<Self::Rebind<'new_dr, ND::NewDriver>> {
         assert_eq!(this.len(), L::len());
-        let v: Result<_> = this.iter().map(|g| G::map(g, ndr)).collect();
+        let v: Result<_> = this.iter().map(|g| G::map_gadget(g, ndr)).collect();
         Ok(FixedVec {
             v: v?,
             _marker: PhantomData,
         })
     }
 
-    fn enforce_equal<
+    fn enforce_equal_gadget<
         'dr,
         D1: Driver<'dr, F = F>,
         D2: Driver<'dr, F = F, Wire = <D1 as Driver<'dr>>::Wire>,
@@ -185,7 +185,7 @@ unsafe impl<F: Field, G: GadgetKind<F>, L: Len> GadgetKind<F> for FixedVec<Phant
         b: &Self::Rebind<'dr, D2>,
     ) -> Result<()> {
         for (a, b) in a.iter().zip(b.iter()) {
-            G::enforce_equal(dr, a, b)?;
+            G::enforce_equal_gadget(dr, a, b)?;
         }
         Ok(())
     }

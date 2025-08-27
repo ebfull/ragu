@@ -221,9 +221,9 @@ pub fn derive(input: DeriveInput, ragu_core_path: Path) -> Result<TokenStream> {
         FieldType::Wire => {
             Some(quote! { #ragu_core_path::drivers::Driver::enforce_equal(dr, &a.#id, &b.#id)? })
         }
-        FieldType::Gadget => Some(
-            quote! { #ragu_core_path::gadgets::Gadget::enforce_equal_gadget(&a.#id, dr, &b.#id)? },
-        ),
+        FieldType::Gadget => {
+            Some(quote! { #ragu_core_path::gadgets::Gadget::enforce_equal(&a.#id, dr, &b.#id)? })
+        }
         _ => None,
     });
 
@@ -277,7 +277,7 @@ pub fn derive(input: DeriveInput, ragu_core_path: Path) -> Result<TokenStream> {
                 quote! { #ragu_core_path::drivers::FromDriver::convert_wire(ndr, &this.#id)? }
             }
             FieldType::Gadget => {
-                quote! { #ragu_core_path::gadgets::Gadget::map_gadget(&this.#id, ndr)? }
+                quote! { #ragu_core_path::gadgets::Gadget::map(&this.#id, ndr)? }
             }
             FieldType::Phantom => quote! { ::core::marker::PhantomData },
         };
@@ -292,7 +292,7 @@ pub fn derive(input: DeriveInput, ragu_core_path: Path) -> Result<TokenStream> {
             unsafe impl #gadget_kind_generic_params #ragu_core_path::gadgets::GadgetKind<#driverfield_ident> for #struct_ident #kind_subst_arguments  {
                 type Rebind<#driver_lifetime, #driver_ident: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident>> = #struct_ident #rebind_arguments;
 
-                fn map<#driver_lifetime, 'new_dr, #driver_ident: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident>, ND: #ragu_core_path::drivers::FromDriver<#driver_lifetime, 'new_dr, #driver_ident>>(
+                fn map_gadget<#driver_lifetime, 'new_dr, #driver_ident: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident>, ND: #ragu_core_path::drivers::FromDriver<#driver_lifetime, 'new_dr, #driver_ident>>(
                     this: &Self::Rebind<#driver_lifetime, #driver_ident>,
                     ndr: &mut ND,
                 ) -> #ragu_core_path::Result<Self::Rebind<'new_dr, ND::NewDriver>> {
@@ -303,7 +303,7 @@ pub fn derive(input: DeriveInput, ragu_core_path: Path) -> Result<TokenStream> {
                     })
                 }
 
-                fn enforce_equal<#driver_lifetime, D1: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident>, D2: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident, Wire = <D1 as #ragu_core_path::drivers::Driver<#driver_lifetime>>::Wire>>(
+                fn enforce_equal_gadget<#driver_lifetime, D1: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident>, D2: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident, Wire = <D1 as #ragu_core_path::drivers::Driver<#driver_lifetime>>::Wire>>(
                     dr: &mut D1,
                     a: &Self::Rebind<#driver_lifetime, D2>,
                     b: &Self::Rebind<#driver_lifetime, D2>,
@@ -442,7 +442,7 @@ fn test_gadget_derive_boolean_customdriver() {
                 type Rebind<'my_dr, MyD: ::ragu::drivers::Driver<'my_dr, F = DriverField>> =
                     Boolean<'my_dr, MyD>;
 
-                fn map<'my_dr, 'new_dr, MyD: ::ragu::drivers::Driver<'my_dr, F = DriverField>, ND: ::ragu::drivers::FromDriver<'my_dr, 'new_dr, MyD>>(
+                fn map_gadget<'my_dr, 'new_dr, MyD: ::ragu::drivers::Driver<'my_dr, F = DriverField>, ND: ::ragu::drivers::FromDriver<'my_dr, 'new_dr, MyD>>(
                     this: &Self::Rebind<'my_dr, MyD>,
                     ndr: &mut ND,
                 ) -> ::ragu::Result<Self::Rebind<'new_dr, ND::NewDriver>> {
@@ -460,7 +460,7 @@ fn test_gadget_derive_boolean_customdriver() {
                     })
                 }
 
-                fn enforce_equal<
+                fn enforce_equal_gadget<
                     'my_dr,
                     D1: ::ragu::drivers::Driver<'my_dr, F = DriverField>,
                     D2: ::ragu::drivers::Driver<
@@ -530,7 +530,7 @@ fn test_gadget_derive() {
             {
                 type Rebind<'mydr, MyD: ::ragu::drivers::Driver<'mydr, F = DriverField>> = MyGadget<'mydr, MyD, C, N>;
 
-                fn map<'mydr, 'new_dr, MyD: ::ragu::drivers::Driver<'mydr, F = DriverField>, ND: ::ragu::drivers::FromDriver<'mydr, 'new_dr, MyD>>(
+                fn map_gadget<'mydr, 'new_dr, MyD: ::ragu::drivers::Driver<'mydr, F = DriverField>, ND: ::ragu::drivers::FromDriver<'mydr, 'new_dr, MyD>>(
                     this: &Self::Rebind<'mydr, MyD>,
                     ndr: &mut ND,
                 ) -> ::ragu::Result<Self::Rebind<'new_dr, ND::NewDriver>> {
@@ -545,12 +545,12 @@ fn test_gadget_derive() {
                             tmp
                         },
                         wire_field: ::ragu::drivers::FromDriver::convert_wire(ndr, &this.wire_field)?,
-                        map_field: ::ragu::gadgets::Gadget::map_gadget(&this.map_field, ndr)?,
+                        map_field: ::ragu::gadgets::Gadget::map(&this.map_field, ndr)?,
                         phantom_field: ::core::marker::PhantomData,
                     })
                 }
 
-                fn enforce_equal<
+                fn enforce_equal_gadget<
                     'mydr,
                     D1: ::ragu::drivers::Driver<'mydr, F = DriverField>,
                     D2: ::ragu::drivers::Driver<
@@ -563,7 +563,7 @@ fn test_gadget_derive() {
                     b: &Self::Rebind<'mydr, D2>,
                 ) -> ::ragu::Result<()> {
                     ::ragu::drivers::Driver::enforce_equal(dr, &a.wire_field, &b.wire_field)?;
-                    ::ragu::gadgets::Gadget::enforce_equal_gadget(&a.map_field, dr, &b.map_field)?;
+                    ::ragu::gadgets::Gadget::enforce_equal(&a.map_field, dr, &b.map_field)?;
                     Ok(())
                 }
             }

@@ -88,7 +88,7 @@ pub trait RoutineExt<F: Field>: Routine<F> {
         input: <Self::Input as GadgetKind<F>>::Rebind<'dr, D>,
     ) -> Result<<Self::Output as GadgetKind<F>>::Rebind<'dr, D>> {
         let mut dummy = Wireless::<D::MaybeKind, F>::default();
-        let dummy_input = Self::Input::map(&input, &mut dummy)?;
+        let dummy_input = Self::Input::map_gadget(&input, &mut dummy)?;
         match self.predict(&mut dummy, &dummy_input)? {
             Prediction::Known(_, aux) | Prediction::Unknown(aux) => self.execute(dr, input, aux),
         }

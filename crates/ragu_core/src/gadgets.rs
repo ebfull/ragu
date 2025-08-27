@@ -100,20 +100,20 @@ pub trait Gadget<'dr, D: Driver<'dr>>: Clone {
     type Kind: GadgetKind<D::F, Rebind<'dr, D> = Self>;
 
     /// Proxy for the `GadgetKind::map_gadget` method.
-    fn map_gadget<'new_dr, ND: FromDriver<'dr, 'new_dr, D>>(
+    fn map<'new_dr, ND: FromDriver<'dr, 'new_dr, D>>(
         &self,
         ndr: &mut ND,
     ) -> Result<<Self::Kind as GadgetKind<D::F>>::Rebind<'new_dr, ND::NewDriver>> {
-        Self::Kind::map(self, ndr)
+        Self::Kind::map_gadget(self, ndr)
     }
 
-    /// Proxy for the `GadgetKind::enforce_equal` method.
-    fn enforce_equal_gadget<D2: Driver<'dr, F = D::F, Wire = D::Wire>>(
+    /// Proxy for the `GadgetKind::enforce_equal_gadget` method.
+    fn enforce_equal<D2: Driver<'dr, F = D::F, Wire = D::Wire>>(
         &self,
         dr: &mut D2,
         other: &Self,
     ) -> Result<()> {
-        Self::Kind::enforce_equal::<D2, D>(dr, self, other)
+        Self::Kind::enforce_equal_gadget::<D2, D>(dr, self, other)
     }
 }
 
@@ -148,7 +148,7 @@ pub unsafe trait GadgetKind<F: Field>: core::any::Any {
     type Rebind<'dr, D: Driver<'dr, F = F>>: Gadget<'dr, D, Kind = Self>;
 
     /// Maps a gadget of this kind to a new driver type.
-    fn map<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
+    fn map_gadget<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
         this: &Self::Rebind<'dr, D>,
         ndr: &mut ND,
     ) -> Result<Self::Rebind<'new_dr, ND::NewDriver>>;
@@ -159,7 +159,7 @@ pub unsafe trait GadgetKind<F: Field>: core::any::Any {
     /// gadgets' wires through recursive descent through the gadget structure.
     /// The provided gadgets can be for another driver, since it's only
     /// important that the wire type be the same.
-    fn enforce_equal<
+    fn enforce_equal_gadget<
         'dr,
         D1: Driver<'dr, F = F>,
         D2: Driver<'dr, F = F, Wire = <D1 as Driver<'dr>>::Wire>,
@@ -197,7 +197,7 @@ pub unsafe trait GadgetKind<F: Field>: core::any::Any {
 ///   which are converted or cloned using
 ///   [`Witness::just`](crate::maybe::Maybe::just).
 /// * `#[ragu(gadget)]` for fields that are themselves gadgets, which are
-///   converted using [`GadgetKind::map`].
+///   converted using [`GadgetKind::map_gadget`].
 /// * `#[ragu(phantom)]` for `PhantomData` fields.
 ///
 /// The macro assumes by default that the driver type is `D` and determines the

@@ -68,6 +68,6 @@ impl<'dr, D: Driver<'dr>> FromDriver<'dr, 'dr, D> for WireExtractor<'dr, D> {
 
 pub fn wires<'dr, D: Driver<'dr>, G: Gadget<'dr, D>>(gadget: &G) -> Result<Vec<D::Wire>> {
     let mut collector: WireExtractor<'_, D> = WireExtractor::new();
-    <G::Kind as GadgetKind<D::F>>::map(gadget, &mut collector)?;
+    <G::Kind as GadgetKind<D::F>>::map_gadget(gadget, &mut collector)?;
     Ok(collector.wires)
 }

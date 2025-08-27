@@ -20,14 +20,14 @@ mod unit_impl {
     unsafe impl<F: Field> GadgetKind<F> for () {
         type Rebind<'dr, D: Driver<'dr, F = F>> = ();
 
-        fn map<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
+        fn map_gadget<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
             _: &Self::Rebind<'dr, D>,
             _: &mut ND,
         ) -> Result<Self::Rebind<'new_dr, ND::NewDriver>> {
             Ok(())
         }
 
-        fn enforce_equal<
+        fn enforce_equal_gadget<
             'dr,
             D1: Driver<'dr, F = F>,
             D2: Driver<'dr, F = F, Wire = <D1 as Driver<'dr>>::Wire>,
@@ -51,7 +51,7 @@ mod array_impl {
     unsafe impl<F: Field, G: GadgetKind<F>, const N: usize> GadgetKind<F> for [PhantomData<G>; N] {
         type Rebind<'dr, D: Driver<'dr, F = F>> = [G::Rebind<'dr, D>; N];
 
-        fn map<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
+        fn map_gadget<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
             this: &Self::Rebind<'dr, D>,
             ndr: &mut ND,
         ) -> Result<Self::Rebind<'new_dr, ND::NewDriver>> {
@@ -59,7 +59,7 @@ mod array_impl {
             // stable (see https://github.com/rust-lang/rust/issues/89379)
             let mut result = Vec::with_capacity(N);
             for item in this.iter() {
-                result.push(G::map(item, ndr)?);
+                result.push(G::map_gadget(item, ndr)?);
             }
             match result.try_into() {
                 Ok(arr) => Ok(arr),
@@ -67,7 +67,7 @@ mod array_impl {
             }
         }
 
-        fn enforce_equal<
+        fn enforce_equal_gadget<
             'dr,
             D1: Driver<'dr, F = F>,
             D2: Driver<'dr, F = F, Wire = <D1 as Driver<'dr>>::Wire>,
@@ -77,7 +77,7 @@ mod array_impl {
             b: &Self::Rebind<'dr, D2>,
         ) -> Result<()> {
             for (a, b) in a.iter().zip(b.iter()) {
-                G::enforce_equal(dr, a, b)?;
+                G::enforce_equal_gadget(dr, a, b)?;
             }
             Ok(())
         }
@@ -96,14 +96,14 @@ mod pair_impl {
     {
         type Rebind<'dr, D: Driver<'dr, F = F>> = (G1::Rebind<'dr, D>, G2::Rebind<'dr, D>);
 
-        fn map<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
+        fn map_gadget<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
             this: &Self::Rebind<'dr, D>,
             ndr: &mut ND,
         ) -> Result<Self::Rebind<'new_dr, ND::NewDriver>> {
-            Ok((G1::map(&this.0, ndr)?, G2::map(&this.1, ndr)?))
+            Ok((G1::map_gadget(&this.0, ndr)?, G2::map_gadget(&this.1, ndr)?))
         }
 
-        fn enforce_equal<
+        fn enforce_equal_gadget<
             'dr,
             D1: Driver<'dr, F = F>,
             D2: Driver<'dr, F = F, Wire = <D1 as Driver<'dr>>::Wire>,
@@ -112,8 +112,8 @@ mod pair_impl {
             a: &Self::Rebind<'dr, D2>,
             b: &Self::Rebind<'dr, D2>,
         ) -> Result<()> {
-            G1::enforce_equal(dr, &a.0, &b.0)?;
-            G2::enforce_equal(dr, &a.1, &b.1)?;
+            G1::enforce_equal_gadget(dr, &a.0, &b.0)?;
+            G2::enforce_equal_gadget(dr, &a.1, &b.1)?;
             Ok(())
         }
     }
@@ -129,14 +129,14 @@ mod box_impl {
     unsafe impl<F: Field, G: GadgetKind<F>> GadgetKind<F> for PhantomData<Box<G>> {
         type Rebind<'dr, D: Driver<'dr, F = F>> = Box<G::Rebind<'dr, D>>;
 
-        fn map<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
+        fn map_gadget<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
             this: &Self::Rebind<'dr, D>,
             ndr: &mut ND,
         ) -> Result<Self::Rebind<'new_dr, ND::NewDriver>> {
-            Ok(Box::new(G::map(this, ndr)?))
+            Ok(Box::new(G::map_gadget(this, ndr)?))
         }
 
-        fn enforce_equal<
+        fn enforce_equal_gadget<
             'dr,
             D1: Driver<'dr, F = F>,
             D2: Driver<'dr, F = F, Wire = <D1 as Driver<'dr>>::Wire>,
@@ -145,7 +145,7 @@ mod box_impl {
             a: &Self::Rebind<'dr, D2>,
             b: &Self::Rebind<'dr, D2>,
         ) -> Result<()> {
-            G::enforce_equal(dr, a, b)
+            G::enforce_equal_gadget(dr, a, b)
         }
     }
 }

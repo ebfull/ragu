@@ -93,7 +93,7 @@ impl<'dr, D: Driver<'dr>, G: Gadget<'dr, D>> Demoted<'dr, D, G> {
     /// Strips a gadget of its witness data and returns a demoted version of it.
     pub fn new(gadget: &G) -> Result<Self> {
         Ok(Demoted {
-            gadget: <G::Kind as GadgetKind<D::F>>::map(
+            gadget: <G::Kind as GadgetKind<D::F>>::map_gadget(
                 gadget,
                 &mut DemotedDriver {
                     _marker: core::marker::PhantomData,
@@ -124,16 +124,16 @@ impl<'dr, D: Driver<'dr>, G: Gadget<'dr, D>> Gadget<'dr, D> for Demoted<'dr, D, 
 unsafe impl<F: Field, G: GadgetKind<F>> GadgetKind<F> for DemotedKind<F, G> {
     type Rebind<'dr, D: Driver<'dr, F = F>> = Demoted<'dr, D, G::Rebind<'dr, D>>;
 
-    fn map<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
+    fn map_gadget<'dr, 'new_dr, D: Driver<'dr, F = F>, ND: FromDriver<'dr, 'new_dr, D>>(
         this: &Self::Rebind<'dr, D>,
         ndr: &mut ND,
     ) -> Result<Self::Rebind<'new_dr, ND::NewDriver>> {
         Ok(Demoted {
-            gadget: G::map(&this.gadget, &mut Demoter { driver: ndr })?,
+            gadget: G::map_gadget(&this.gadget, &mut Demoter { driver: ndr })?,
         })
     }
 
-    fn enforce_equal<
+    fn enforce_equal_gadget<
         'dr,
         D1: Driver<'dr, F = F>,
         D2: Driver<'dr, F = F, Wire = <D1 as Driver<'dr>>::Wire>,
@@ -142,6 +142,6 @@ unsafe impl<F: Field, G: GadgetKind<F>> GadgetKind<F> for DemotedKind<F, G> {
         a: &Self::Rebind<'dr, D2>,
         b: &Self::Rebind<'dr, D2>,
     ) -> Result<()> {
-        G::enforce_equal(dr, &a.gadget, &b.gadget)
+        G::enforce_equal_gadget(dr, &a.gadget, &b.gadget)
     }
 }

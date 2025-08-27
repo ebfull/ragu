@@ -112,7 +112,7 @@ impl<
                     alloc_count: 0,
                     _marker: core::marker::PhantomData,
                 };
-                let gadget = Next::witness(&mut dr, witness)?.map_gadget(&mut dr)?;
+                let gadget = Next::witness(&mut dr, witness)?.map(&mut dr)?;
 
                 if dr.alloc_count > Next::values() {
                     return Err(ragu_core::Error::MultiplicationBoundExceeded(
