@@ -32,8 +32,10 @@ version = "2.0.101"
 
 [dev-dependencies]
 
-# These are hacks to ensure that `ragu_core` and `ragu_primitives` crates are
-# visible to `proc-macro-crate` when building doc tests that invoke derive
-# macros inside the derive macro's actual documentation.
+# These are hacks to ensure that these crates are visible to `proc-macro-crate`
+# when building doc tests that invoke derive macros inside the derive macro's
+# actual documentation. Also, this allows us to have compilation errors if paths
+# change where macros are ultimately re-exported downstream.
+ragu_arithmetic = { path = "../ragu_arithmetic", version = "0.0.0" }
 ragu_core = { path = "../ragu_core", version = "0.0.0" }
 ragu_primitives = { path = "../ragu_primitives", version = "0.0.0" }

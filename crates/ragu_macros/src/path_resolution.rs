@@ -1,3 +1,10 @@
+//! Resolving paths for `ragu_core` and `ragu_primitives`.
+//!
+//! If the end-user invoking the procedural macro is using the `ragu` crate and
+//! not importing `ragu_core`, we need to identify the path inside `ragu` that
+//! corresponds to where `ragu_core` traits are re-exported. Also, the end-user
+//! might have renamed the crates, so we must use `proc-macro-crate`.
+
 use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::Span;
 use quote::{ToTokens, format_ident};

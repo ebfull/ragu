@@ -21,6 +21,10 @@ mod substitution;
 
 use helpers::macro_body;
 
+#[cfg(test)]
+#[allow(unused_imports)]
+use ragu_arithmetic::repr256 as _;
+
 // Documentation for the `repr256` macro is in `macro@ragu_arithmetic::repr256`.
 #[allow(missing_docs)]
 #[proc_macro]
@@ -28,6 +32,10 @@ pub fn repr256(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as LitInt);
     macro_body(|| proc::repr::evaluate(input))
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+use ragu_core::gadgets::Kind as _;
 
 // Documentation for the `gadget_kind` macro is in `macro@ragu_core::gadgets::Kind`.
 #[allow(missing_docs)]
@@ -40,6 +48,10 @@ pub fn gadget_kind(input: TokenStream) -> TokenStream {
     })
 }
 
+#[cfg(test)]
+#[allow(unused_imports)]
+use ragu_core::gadgets::Gadget as _;
+
 // Documentation for the `Gadget` derive macro is in `derive@ragu_core::gadgets::Gadget`.
 #[allow(missing_docs)]
 #[proc_macro_derive(Gadget, attributes(ragu))]
@@ -50,6 +62,10 @@ pub fn derive_gadget(input: TokenStream) -> TokenStream {
         derive::gadget::derive(input, ragu_core_path)
     })
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+use ragu_primitives::serialize::GadgetSerialize as _;
 
 // Documentation for the `GadgetSerialize` derive macro is in `derive@ragu_primitives::serialize::GadgetSerialize`.
 #[allow(missing_docs)]

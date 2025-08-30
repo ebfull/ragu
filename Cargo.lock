@@ -383,6 +383,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
+ "ragu_arithmetic",
  "ragu_core",
  "ragu_primitives",
  "syn",
