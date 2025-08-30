@@ -65,9 +65,9 @@ pub fn derive_gadget(input: TokenStream) -> TokenStream {
 
 #[cfg(test)]
 #[allow(unused_imports)]
-use ragu_primitives::serialize::GadgetSerialize as _;
+use ragu_primitives::io::GadgetSerialize as _;
 
-// Documentation for the `GadgetSerialize` derive macro is in `derive@ragu_primitives::serialize::GadgetSerialize`.
+// Documentation for the `GadgetSerialize` derive macro is in `derive@ragu_primitives::io::GadgetSerialize`.
 #[allow(missing_docs)]
 #[proc_macro_derive(GadgetSerialize, attributes(ragu))]
 pub fn derive_gadget_serialize(input: TokenStream) -> TokenStream {

@@ -3,7 +3,7 @@ use ragu_core::{Result, drivers::Driver};
 
 use alloc::boxed::Box;
 
-use crate::serialize::{Buffer, GadgetSerialize};
+use crate::io::{Buffer, GadgetSerialize};
 
 impl<F: Field> GadgetSerialize<F> for () {
     fn serialize_gadget<'dr, D: Driver<'dr, F = F>, B: Buffer<'dr, D>>(

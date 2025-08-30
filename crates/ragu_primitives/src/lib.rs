@@ -19,11 +19,11 @@ mod element;
 mod endoscalar;
 pub mod fixedvec;
 mod foreign;
+pub mod io;
 mod lazy;
 mod point;
 mod poseidon;
 pub mod promotion;
-pub mod serialize;
 mod util;
 
 pub use boolean::{Boolean, multipack};
@@ -35,8 +35,8 @@ pub use poseidon::Sponge;
 
 use ragu_core::{Result, drivers::Driver, gadgets::Gadget};
 
+use io::{Buffer, GadgetSerialize};
 use promotion::Demoted;
-use serialize::{Buffer, GadgetSerialize};
 
 /// Primitive extension trait for all gadgets.
 pub trait GadgetExt<'dr, D: Driver<'dr>>: Gadget<'dr, D> {

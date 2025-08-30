@@ -13,8 +13,8 @@ use core::{marker::PhantomData, panic};
 use crate::{
     Element,
     fixedvec::{FixedVec, Len},
+    io::Buffer,
     multiadd,
-    serialize::Buffer,
 };
 
 pub struct T<F: Field, P: arithmetic::PoseidonPermutation<F>>(F, P);

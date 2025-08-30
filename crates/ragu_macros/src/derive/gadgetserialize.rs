@@ -124,8 +124,8 @@ pub fn derive(
         let driver_lifetime = &driver.lifetime;
         quote! {
             #[automatically_derived]
-            impl #gadget_kind_generic_params #ragu_primitives_path::serialize::GadgetSerialize<#driverfield_ident> for #struct_ident #kind_subst_arguments {
-                fn serialize_gadget<#driver_lifetime, #driver_ident: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident>, B: #ragu_primitives_path::serialize::Buffer<#driver_lifetime, #driver_ident> >(
+            impl #gadget_kind_generic_params #ragu_primitives_path::io::GadgetSerialize<#driverfield_ident> for #struct_ident #kind_subst_arguments {
+                fn serialize_gadget<#driver_lifetime, #driver_ident: #ragu_core_path::drivers::Driver<#driver_lifetime, F = #driverfield_ident>, B: #ragu_primitives_path::io::Buffer<#driver_lifetime, #driver_ident> >(
                     this: &<Self as #ragu_core_path::gadgets::GadgetKind<#driverfield_ident>>::Rebind<#driver_lifetime, #driver_ident>,
                     dr: &mut #driver_ident,
                     buf: &mut B
@@ -163,10 +163,10 @@ fn test_gadget_serialize_derive() {
         result.to_string(),
         quote!(
             #[automatically_derived]
-            impl<C: CurveAffine, const N: usize, DriverField: ::ff::Field> ::ragu_primitives::serialize::GadgetSerialize<DriverField>
+            impl<C: CurveAffine, const N: usize, DriverField: ::ff::Field> ::ragu_primitives::io::GadgetSerialize<DriverField>
                 for MyGadget<'static, ::core::marker::PhantomData< DriverField >, C, N>
             {
-                fn serialize_gadget<'my_dr, MyD: ::ragu_core::drivers::Driver<'my_dr, F = DriverField>, B: ::ragu_primitives::serialize::Buffer<'my_dr, MyD> >(
+                fn serialize_gadget<'my_dr, MyD: ::ragu_core::drivers::Driver<'my_dr, F = DriverField>, B: ::ragu_primitives::io::Buffer<'my_dr, MyD> >(
                     this: &<Self as ::ragu_core::gadgets::GadgetKind<DriverField>>::Rebind<'my_dr, MyD>,
                     dr: &mut MyD,
                     buf: &mut B

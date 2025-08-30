@@ -9,7 +9,7 @@ use ragu_core::{
 
 use core::marker::PhantomData;
 
-use crate::{Boolean, Element, serialize::GadgetSerialize};
+use crate::{Boolean, Element, io::GadgetSerialize};
 
 /// Represents an affine point on a curve defined over the circuit's field.
 #[derive(Gadget, GadgetSerialize)]

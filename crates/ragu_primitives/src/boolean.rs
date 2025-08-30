@@ -11,8 +11,8 @@ use alloc::{vec, vec::Vec};
 
 use crate::{
     Element, GadgetExt,
+    io::{Buffer, GadgetSerialize},
     promotion::{Demoted, Promotion},
-    serialize::{Buffer, GadgetSerialize},
     util::InternalMaybe,
 };
 

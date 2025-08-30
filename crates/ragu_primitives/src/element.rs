@@ -9,7 +9,7 @@ use ragu_core::{
 
 use alloc::vec::Vec;
 
-use crate::serialize::{Buffer, GadgetSerialize};
+use crate::io::{Buffer, GadgetSerialize};
 
 /// Represents a wire and its corresponding field element value, but generally
 /// does not guarantee any particular constraint has been imposed on the wire.

@@ -1,4 +1,4 @@
-//! Traits for serializing gadgets into a sequence of [`Element`]s.
+//! Traits for serializing gadgets into buffers.
 //!
 //! The [`GadgetSerialize`] trait allows compatible [`Gadget`](crate::Gadget)s
 //! to write [`Element`]s to a [`Buffer`] for serialization purposes. Because
@@ -59,7 +59,7 @@ pub trait Buffer<'dr, D: Driver<'dr>> {
 /// ```rust
 /// # use arithmetic::CurveAffine;
 /// # use ragu_core::{drivers::{Driver, Witness}, gadgets::Gadget};
-/// # use ragu_primitives::{Element, serialize::GadgetSerialize};
+/// # use ragu_primitives::{Element, io::GadgetSerialize};
 /// # use core::marker::PhantomData;
 /// #[derive(Gadget, GadgetSerialize)]
 /// pub struct Point<'dr, D: Driver<'dr>, C: CurveAffine> {

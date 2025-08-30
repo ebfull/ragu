@@ -6,7 +6,7 @@ use ragu_core::{
     drivers::{Driver, Simulator, Witness},
     gadgets::GadgetKind,
 };
-use ragu_primitives::serialize::GadgetSerialize;
+use ragu_primitives::io::GadgetSerialize;
 
 use alloc::boxed::Box;
 

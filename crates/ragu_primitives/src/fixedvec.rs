@@ -28,7 +28,7 @@
 //! [`FixedVec::into_inner`].
 //!
 //! Finally, [`FixedVec<G, L>`] implements [`Gadget`] if `G` implements
-//! `Gadget`. [`FixedVec<G, L>`] also can be [serialized](crate::serialize) if
+//! `Gadget`. [`FixedVec<G, L>`] also can be [serialized](crate::io) if
 //! `G::Kind` implements [`GadgetSerialize`].
 
 use ff::Field;
@@ -44,7 +44,7 @@ use core::{
     ops::{Deref, DerefMut},
 };
 
-use crate::serialize::{Buffer, GadgetSerialize};
+use crate::io::{Buffer, GadgetSerialize};
 
 /// A type that statically determines the length of a [`FixedVec`].
 pub trait Len: Send + Sync + 'static {
