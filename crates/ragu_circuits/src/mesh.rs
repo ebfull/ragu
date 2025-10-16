@@ -1,144 +1,137 @@
-//! A [`Mesh`] manages multiple circuits over a field, allowing them to share
-//! a common domain for efficient polynomial evaluation.
+//! Management of polynomials that encode large sets of circuit polynomials for
+//! efficient querying.
+
+use arithmetic::Domain;
+use arithmetic::bitreverse;
+use ff::PrimeField;
+use ragu_core::{Error, Result};
+
+use alloc::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::{
     Circuit, CircuitExt, CircuitObject,
     polynomials::{Rank, structured, unstructured},
 };
-use ahash::RandomState;
-use alloc::{boxed::Box, vec::Vec};
-use arithmetic::Domain;
-use arithmetic::bitreverse;
-use ff::PrimeField;
-use hashbrown::HashMap;
-use ragu_core::{Error, Result};
 
-/// Builder for constructing a mesh of circuits.
-///
-/// Represents a collection of circuits over a particular field,
-/// some of which may make reference to the others or be executed
-/// in similar contexts.
+/// Builder for constructing a new [`Mesh`].
 pub struct MeshBuilder<'params, F: PrimeField, R: Rank> {
     circuits: Vec<Box<dyn CircuitObject<F, R> + 'params>>,
 }
 
+impl<F: PrimeField, R: Rank> Default for MeshBuilder<'_, F, R> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'params, F: PrimeField, R: Rank> MeshBuilder<'params, F, R> {
-    /// Initialize a new mesh object.
-    #[allow(clippy::new_without_default)]
+    /// Creates a new empty [`Mesh`] builder.
     pub fn new() -> Self {
         Self {
             circuits: Vec::new(),
         }
     }
 
-    /// Registers a circuit in the mesh.
+    /// Registers a new circuit.
     pub fn register_circuit<C>(mut self, circuit: C) -> Result<Self>
     where
-        C: Circuit<F> + Send + 'params,
+        C: Circuit<F> + 'params,
     {
-        let id = self.circuits.len();
-        if id >= (R::num_coeffs()) {
-            return Err(Error::CircuitBoundExceeded(id));
-        }
-
         self.circuits.push(circuit.into_object()?);
 
         Ok(self)
     }
 
-    /// Determines minimal power-of-2 domain k and maps circuits from maximal domain 2^S to 2^k.
-    ///
-    /// The domain is "rolling" in the sense that this construction supports incremental
-    /// circuit registration into the mesh, without knowing the final domain size k. When `k`
-    /// is later determined during finalization, bit-reversal automatically maps each
-    /// circuit to its correct position in the finalized domain.
+    /// Registers a new circuit using a bare circuit object.
+    pub fn register_circuit_object<C>(
+        mut self,
+        circuit: Box<dyn CircuitObject<F, R> + 'params>,
+    ) -> Result<Self> {
+        let id = self.circuits.len();
+        if id >= R::num_coeffs() {
+            return Err(Error::CircuitBoundExceeded(id));
+        }
+
+        self.circuits.push(circuit);
+
+        Ok(self)
+    }
+
+    /// Builds the final [`Mesh`].
     pub fn finalize(self) -> Result<Mesh<'params, F, R>> {
         // Compute the smallest power-of-2 domain size that fits all circuits.
         let log2_circuits = self.circuits.len().next_power_of_two().trailing_zeros();
 
         let domain = Domain::<F>::new(log2_circuits);
-        let domain_size = 1 << log2_circuits;
-        let mut reordered = Vec::with_capacity(domain_size);
-        reordered.extend((0..domain_size).map(|_| None));
 
-        let mut omega_lsb_lookup =
-            HashMap::with_capacity_and_hasher(domain_size, RandomState::new());
+        // Build omega^j -> i lookup table.
+        let mut omega_lookup = BTreeMap::new();
 
-        for (id, circuit) in self.circuits.into_iter().enumerate() {
-            // Omega values are precomputed in the maximal field domain 2^S (where S = F::S), independent of final domain 2^k.
-            // The key property is circuit synthesis can compute omega^i for the jth circuit at
-            // compile-time as: "omega^i where i = bit_reverse(j, S)". This is a pure function that doesn't
-            // rely on a mesh construction.
-            //
-            // During finalization, when 'k' is determined, the circuit's position becomes:
-            // "position = bit_reverse(j, S) >> (S - k)".
-            //
-            // We perform a mapping to the actual position in the smaller domain, effectively compressing
-            // the 2^S-slot domain to 2^k-slot domain (where k = log2_circuits).
-            let bit_reversal_id = bitreverse(id as u32, F::S);
-
-            // Cast to u64 to avoid overflow: in a single circuit mesh setting (log2_circuits = 0),
-            // right shifting by (F::S - log2_circuits) = 32 overflows a u32.
-            let position = ((bit_reversal_id as u64) >> (F::S - log2_circuits)) as usize;
-
-            // Builds O(1) omega lookup table.
-            let omega_at_position = domain.omega().pow([position as u64]);
-            let omega_lsb = Mesh::<F, R>::field_to_lsb(&omega_at_position);
-            omega_lsb_lookup.insert(omega_lsb, position);
-
-            // TODO: By virtue of the reindexed vector being typed "Option<Box<_>>", it contains
-            // gaps (that can be collapsed) when # circuits < domain size. These are inherently
-            // sparse indices right now.
-
-            // Shuffle the circuit by moving each circuit to it's bit-reversed position.
-            reordered[position] = Some(circuit);
+        for i in 0..self.circuits.len() {
+            // Rather than assigning the `i`th circuit to `omega^i` in the final
+            // domain, we will assign it to `omega^j` where `j` is the
+            // `log2_circuits` bit-reversal of `i`. This has the property that
+            // `omega^j` = `F::ROOT_OF_UNITY^m` where `m` is the `F::S` bit
+            // reversal of `i`, which can be computed independently of `omega`
+            // and the actual (ideal) choice of `log2_circuits`. In effect, this
+            // is *implicitly* performing domain extensions as smaller domains
+            // become exhausted.
+            let j = bitreverse(i as u32, log2_circuits) as usize;
+            let omega_j = OmegaKey::from(domain.omega().pow([j as u64]));
+            omega_lookup.insert(omega_j, i);
         }
 
         Ok(Mesh {
             domain,
-            circuits: reordered,
-            omega_lsb_lookup,
+            circuits: self.circuits,
+            omega_lookup,
         })
     }
 }
 
-/// A finalized mesh ready for polynomial evaluation.
+/// Represents a collection of circuits over a particular field, some of which
+/// may make reference to the others or be executed in similar contexts. The
+/// circuits are combined together using an interpolation polynomial so that
+/// they can be queried efficiently.
 pub struct Mesh<'params, F: PrimeField, R: Rank> {
     domain: Domain<F>,
-    circuits: Vec<Option<Box<dyn CircuitObject<F, R> + 'params>>>,
-    omega_lsb_lookup: HashMap<u64, usize, RandomState>,
+    circuits: Vec<Box<dyn CircuitObject<F, R> + 'params>>,
+
+    // Maps from the OmegaKey (which represents some `omega^j`) to the index `i`
+    // of the circuits vector.
+    omega_lookup: BTreeMap<OmegaKey, usize>,
 }
 
-impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
-    /// Computes a hash key from a field element for omega lookups.
-    ///
-    /// For field elements of multiplicative order 2^k (omega values),
-    /// this uniquely identifies each element.
-    fn field_to_lsb(f: &F) -> u64 {
+/// Represents a key for identifying a unique $\omega^j$ value where $\omega$ is
+/// a $2^k$-th root of unity.
+#[derive(Ord, PartialOrd, PartialEq, Eq)]
+struct OmegaKey(u64);
+
+impl<F: PrimeField> From<F> for OmegaKey {
+    fn from(f: F) -> Self {
+        // Multiplication by 5 ensures the least significant 64 bits of the
+        // field element can be used as a key for all elements of order 2^k.
+        // TODO: This only holds for the Pasta curves. See issue #51
         let product = f.double().double() + f;
+
         let bytes = product.to_repr();
         let byte_slice = bytes.as_ref();
 
-        u64::from_le_bytes(
+        OmegaKey(u64::from_le_bytes(
             byte_slice[..8]
                 .try_into()
                 .expect("field representation is at least 8 bytes"),
-        )
+        ))
     }
+}
 
-    /// Returns the index of the circuit for the provided omega^{i} value using constant lookup.
-    fn get_circuit_from_omega(&self, w: F) -> Option<usize> {
-        let w_lsb = Self::field_to_lsb(&w);
-        self.omega_lsb_lookup.get(&w_lsb).copied()
-    }
-
+impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
     /// Evaluate the mesh polynomial unrestricted at $W$.
     pub fn xy(&self, x: F, y: F) -> unstructured::Polynomial<F, R> {
         let mut coeffs = unstructured::Polynomial::default();
-        for (circuit_opt, lc) in self.circuits.iter().zip(coeffs.iter_mut()) {
-            if let Some(circuit) = circuit_opt {
-                *lc = circuit.sxy(x, y);
-            }
+        for (i, circuit) in self.circuits.iter().enumerate() {
+            let j = bitreverse(i as u32, self.domain.log2_n()) as usize;
+            coeffs[j] = circuit.sxy(x, y);
         }
         // Convert from the Lagrange basis.
         let domain = &self.domain;
@@ -201,13 +194,14 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
             // The provided `w` was not in the domain, and `ell` are the
             // coefficients we need to use to separate each (partial) circuit
             // evaluation.
-            for (circuit_opt, circuit_coeff) in self.circuits.iter().zip(ell) {
-                if let Some(circuit) = circuit_opt {
-                    add_poly(&**circuit, circuit_coeff, &mut result);
+            for (j, coeff) in ell.iter().enumerate() {
+                let i = bitreverse(j as u32, self.domain.log2_n()) as usize;
+                if let Some(circuit) = self.circuits.get(i) {
+                    add_poly(&**circuit, *coeff, &mut result);
                 }
             }
-        } else if let Some(i) = self.get_circuit_from_omega(w) {
-            if let Some(circuit) = &self.circuits[i] {
+        } else if let Some(i) = self.omega_lookup.get(&OmegaKey::from(w)) {
+            if let Some(circuit) = self.circuits.get(*i) {
                 add_poly(&**circuit, F::ONE, &mut result);
             }
         } else {
@@ -218,25 +212,20 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
     }
 }
 
-/// Returns the omega value for a given circuit ID in the maximal field domain.    
-pub fn compute_circuit_omega<F: PrimeField>(id: u32) -> F {
+/// Returns $\omega^j$ that corresponds to the $i$th circuit added to a Mesh.
+pub fn omega_j<F: PrimeField>(id: u32) -> F {
     let bit_reversal_id = bitreverse(id, F::S);
     F::ROOT_OF_UNITY.pow([bit_reversal_id as u64])
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::mesh::compute_circuit_omega;
-    use crate::{
-        Circuit,
-        mesh::{Mesh, MeshBuilder},
-        polynomials::R,
-    };
-    use ahash::RandomState;
+    use super::{MeshBuilder, OmegaKey, omega_j};
+    use crate::{Circuit, polynomials::R};
+    use alloc::collections::btree_map::BTreeMap;
     use arithmetic::{Domain, bitreverse};
     use ff::Field;
     use ff::PrimeField;
-    use hashbrown::HashMap;
     use ragu_core::{
         Result,
         drivers::{Driver, DriverValue},
@@ -335,20 +324,17 @@ mod tests {
         let domain = Domain::<Fp>::new(log2_circuits);
         let domain_size = 1 << log2_circuits;
 
-        let mut omega_lsb_lookup =
-            HashMap::with_capacity_and_hasher(domain_size, RandomState::new());
+        let mut omega_lookup = BTreeMap::new();
         let mut omega_power = Fp::ONE;
 
         for i in 0..domain_size {
-            let hash = Mesh::<Fp, R<8>>::field_to_lsb(&omega_power);
-            omega_lsb_lookup.insert(hash, i);
+            omega_lookup.insert(OmegaKey::from(omega_power), i);
             omega_power *= domain.omega();
         }
 
         omega_power = Fp::ONE;
         for i in 0..domain_size {
-            let hash = Mesh::<Fp, R<10>>::field_to_lsb(&omega_power);
-            let looked_up_index = omega_lsb_lookup.get(&hash).copied();
+            let looked_up_index = omega_lookup.get(&OmegaKey::from(omega_power)).copied();
 
             assert_eq!(
                 looked_up_index,
@@ -374,13 +360,13 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_circuit_omega_consistency() -> Result<()> {
+    fn test_omega_j_consistency() -> Result<()> {
         for num_circuits in [2usize, 3, 7, 8, 15, 16, 32] {
             let log2_circuits = num_circuits.next_power_of_two().trailing_zeros();
             let domain = Domain::<Fp>::new(log2_circuits);
 
             for id in 0..num_circuits {
-                let omega_from_function = compute_circuit_omega::<Fp>(id as u32);
+                let omega_from_function = omega_j::<Fp>(id as u32);
 
                 let bit_reversal_id = bitreverse(id as u32, Fp::S);
                 let position = ((bit_reversal_id as u64) >> (Fp::S - log2_circuits)) as usize;
