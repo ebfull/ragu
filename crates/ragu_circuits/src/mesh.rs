@@ -233,6 +233,29 @@ mod tests {
     use ragu_primitives::Element;
     use rand::thread_rng;
 
+    #[test]
+    fn test_omega_j_multiplicative_order() {
+        /// Return the 2^k multiplicative order of f (assumes f is a 2^k root of unity).
+        fn order<F: Field>(mut f: F) -> usize {
+            let mut order = 0;
+            while f != F::ONE {
+                f = f.square();
+                order += 1;
+            }
+            1 << order
+        }
+        assert_eq!(omega_j::<Fp>(0), Fp::ONE);
+        assert_eq!(omega_j::<Fp>(1), -Fp::ONE);
+        assert_eq!(order(omega_j::<Fp>(0)), 1);
+        assert_eq!(order(omega_j::<Fp>(1)), 2);
+        assert_eq!(order(omega_j::<Fp>(2)), 4);
+        assert_eq!(order(omega_j::<Fp>(3)), 4);
+        assert_eq!(order(omega_j::<Fp>(4)), 8);
+        assert_eq!(order(omega_j::<Fp>(5)), 8);
+        assert_eq!(order(omega_j::<Fp>(6)), 8);
+        assert_eq!(order(omega_j::<Fp>(7)), 8);
+    }
+
     struct SquareCircuit {
         times: usize,
     }
