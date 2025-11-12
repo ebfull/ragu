@@ -70,10 +70,7 @@ impl<'params, F: PrimeField, R: Rank> MeshBuilder<'params, F, R> {
     }
 
     /// Builds the final [`Mesh`].
-    pub fn finalize<P: PoseidonPermutation<F>>(self, poseidon: &P) -> Result<Mesh<'params, F, R>>
-    where
-        F: PrimeField<Repr = [u8; 32]>,
-    {
+    pub fn finalize<P: PoseidonPermutation<F>>(self, poseidon: &P) -> Result<Mesh<'params, F, R>> {
         // Compute the smallest power-of-2 domain size that fits all circuits.
         let log2_circuits = self.circuits.len().next_power_of_two().trailing_zeros();
         let domain = Domain::<F>::new(log2_circuits);
@@ -104,42 +101,12 @@ impl<'params, F: PrimeField, R: Rank> MeshBuilder<'params, F, R> {
         };
 
         // Compute K = H(M(w, x, y)) which creates binding commitment to mesh structure.
-        let mesh_key = Self::compute_mesh_key(&provisional_mesh, poseidon);
+        let mesh_key = provisional_mesh.compute_mesh_key(poseidon);
         assert_ne!(mesh_key, F::ZERO);
 
         provisional_mesh.mesh_key = Some(mesh_key);
 
         Ok(provisional_mesh)
-    }
-
-    /// Compute mesh binding key K through iterative hashing.
-    pub fn compute_mesh_key<P: PoseidonPermutation<F>>(
-        mesh: &Mesh<'params, F, R>,
-        poseidon: &P,
-    ) -> F {
-        let mut result = None;
-        Simulator::simulate((), |dr, _| {
-            // Placeholder "nothing-up-my-sleeve challenges" (small primes).
-            let mut w = F::from(2u64);
-            let mut x = F::from(3u64);
-            let mut y = F::from(5u64);
-
-            let mut sponge = Sponge::<'_, _, P>::new(dr, poseidon);
-            for _ in 0..6 {
-                let eval = Element::constant(dr, mesh.wxy(w, x, y));
-                sponge.absorb(dr, &eval)?;
-                w = *sponge.squeeze(dr)?.wire();
-                x = *sponge.squeeze(dr)?.wire();
-                y = *sponge.squeeze(dr)?.wire();
-            }
-
-            result = Some(*sponge.squeeze(dr).unwrap().wire());
-
-            Ok(())
-        })
-        .unwrap();
-
-        result.unwrap()
     }
 }
 
@@ -269,6 +236,33 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
         }
 
         result
+    }
+
+    /// Compute mesh binding key K through iterative hashing.
+    fn compute_mesh_key<P: PoseidonPermutation<F>>(&self, poseidon: &P) -> F {
+        let mut result = None;
+        Simulator::simulate((), |dr, _| {
+            // Placeholder "nothing-up-my-sleeve challenges" (small primes).
+            let mut w = F::from(2u64);
+            let mut x = F::from(3u64);
+            let mut y = F::from(5u64);
+
+            let mut sponge = Sponge::<'_, _, P>::new(dr, poseidon);
+            for _ in 0..6 {
+                let eval = Element::constant(dr, self.wxy(w, x, y));
+                sponge.absorb(dr, &eval)?;
+                w = *sponge.squeeze(dr)?.wire();
+                x = *sponge.squeeze(dr)?.wire();
+                y = *sponge.squeeze(dr)?.wire();
+            }
+
+            result = Some(*sponge.squeeze(dr).unwrap().wire());
+
+            Ok(())
+        })
+        .unwrap();
+
+        result.unwrap()
     }
 }
 

@@ -22,7 +22,7 @@ use crate::{
 fn consistency_checks<R: Rank>(circuit: &Box<dyn CircuitObject<Fp, R>>) {
     let x = Fp::random(thread_rng());
     let y = Fp::random(thread_rng());
-    let k = Fp::one();
+    let k = Fp::random(thread_rng());
 
     let sxy_eval = circuit.sxy(x, y, k);
     let s0y_eval = circuit.sxy(Fp::ZERO, y, k);

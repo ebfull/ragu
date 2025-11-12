@@ -383,7 +383,7 @@ mod tests {
 
         let z = Fp::random(thread_rng());
         let y = Fp::random(thread_rng());
-        let k = Fp::one();
+        let k = Fp::random(thread_rng());
 
         {
             let rhs = circ1.sy(y, k);
@@ -414,7 +414,7 @@ mod tests {
 
         let x = Fp::random(thread_rng());
         let y = Fp::random(thread_rng());
-        let k = Fp::one();
+        let k = Fp::random(thread_rng());
 
         let sxy = stage_object.sxy(x, y, k);
         let sx = stage_object.sx(x, k);
@@ -430,7 +430,7 @@ mod tests {
         let stage = StageObject::<R>::new(0, R::n() - 1).unwrap();
         let x = Fp::random(thread_rng());
         let y = Fp::random(thread_rng());
-        let k = Fp::one();
+        let k = Fp::random(thread_rng());
 
         let comparison = stage.clone().into_object::<R>().unwrap();
 
@@ -464,7 +464,7 @@ mod tests {
         // Attempt to create a circuit with num_linear_constraints = 0.
         let circuit = SquareCircuit { times: 2 };
         let y = Fp::random(thread_rng());
-        let k = Fp::one();
+        let k = Fp::random(thread_rng());
 
         let result = sy::eval::<_, _, R>(&circuit, y, k, 0);
 
@@ -478,7 +478,7 @@ mod tests {
     fn test_minimum_linear_constraints() {
         let circuit = SquareCircuit { times: 2 };
         let y = Fp::random(thread_rng());
-        let k = Fp::one();
+        let k = Fp::random(thread_rng());
 
         let metrics = metrics::eval(&circuit).expect("metrics should succeed");
         let mut sy = sy::eval::<_, _, R>(&circuit, y, k, metrics.num_linear_constraints)
@@ -512,7 +512,7 @@ mod tests {
 
         let x = Fp::random(thread_rng());
         let y = Fp::random(thread_rng());
-        let k = Fp::one();
+        let k = Fp::random(thread_rng());
 
         let sxy = stage.sxy(x, y, k);
         let sx = stage.sx(x, k);
@@ -547,7 +547,7 @@ mod tests {
             let stage_object = StageObject::<R>::new(skip, num).unwrap();
             let comparison_object = stage_object.clone().into_object::<R>().unwrap();
 
-            let k = Fp::one();
+            let k = Fp::random(thread_rng());
 
             let check = |x: Fp, y: Fp| {
                 let xn_minus_1 = x.pow_vartime([(4 * R::n() - 1) as u64]);
