@@ -2,7 +2,7 @@ use arithmetic::Coeff;
 use ff::Field;
 use ragu_core::{
     Result,
-    drivers::{Driver, DriverTypes, Emulator},
+    drivers::{Driver, DriverTypes, emulator::Emulator},
     gadgets::GadgetKind,
     maybe::Empty,
     routines::{Prediction, Routine},

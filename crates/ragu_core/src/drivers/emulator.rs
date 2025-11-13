@@ -1,3 +1,5 @@
+//! TODO(ebfull): Emulator documentation.
+
 use core::marker::PhantomData;
 use ff::Field;
 

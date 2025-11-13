@@ -54,12 +54,11 @@ use crate::{
     routines::{Prediction, Routine},
 };
 
-mod emulator;
+pub mod emulator;
 mod linexp;
 mod phantom;
 mod simulator;
 
-pub use emulator::Emulator;
 pub use linexp::{DirectSum, LinearExpression};
 pub use simulator::Simulator;
 
@@ -200,7 +199,7 @@ pub trait Driver<'dr>: DriverTypes<ImplWire = Self::Wire, ImplField = Self::F> +
         routine: R,
         input: <R::Input as GadgetKind<Self::F>>::Rebind<'dr, Self>,
     ) -> Result<<R::Output as GadgetKind<Self::F>>::Rebind<'dr, Self>> {
-        let mut dummy = Emulator::wireless();
+        let mut dummy = emulator::Emulator::wireless();
         let dummy_input = R::Input::map_gadget(&input, &mut dummy)?;
         match routine.predict(&mut dummy, &dummy_input)? {
             Prediction::Known(_, aux) | Prediction::Unknown(aux) => {
