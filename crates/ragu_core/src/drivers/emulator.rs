@@ -171,6 +171,15 @@ impl<F: Field> Emulator<Wireless<Always<()>, F>> {
     pub fn execute() -> Self {
         Self::wireless()
     }
+
+    /// Execute the provided closure with a fresh `Emulator` driver in `Wireless` mode.
+    pub fn emulate_wireless<R, W: Send>(
+        witness: W,
+        f: impl FnOnce(&mut Self, Always<W>) -> Result<R>,
+    ) -> Result<R> {
+        let mut dr = Self::execute();
+        dr.with(witness, f)
+    }
 }
 
 impl<F: Field> Emulator<Wired<Always<()>, F>> {
@@ -183,6 +192,15 @@ impl<F: Field> Emulator<Wired<Always<()>, F>> {
     /// driver.
     pub fn extractor() -> Self {
         Emulator(PhantomData)
+    }
+
+    /// Execute the provided closure with a fresh `Emulator` driver in `Wired` mode.
+    pub fn emulate_wired<R, W: Send>(
+        witness: W,
+        f: impl FnOnce(&mut Self, Always<W>) -> Result<R>,
+    ) -> Result<R> {
+        let mut dr = Self::extractor();
+        dr.with(witness, f)
     }
 
     /// Extract the raw wire values from a gadget.

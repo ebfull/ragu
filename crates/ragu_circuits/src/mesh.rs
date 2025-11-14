@@ -15,17 +15,17 @@
 //! to compile the added circuits into a mesh polynomial representation that can
 //! be efficiently evaluated at different restrictions.
 
-use arithmetic::Domain;
-use arithmetic::bitreverse;
-use ff::PrimeField;
-use ragu_core::{Error, Result};
-
-use alloc::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
-
 use crate::{
     Circuit, CircuitExt, CircuitObject,
     polynomials::{Rank, structured, unstructured},
 };
+use alloc::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
+use arithmetic::Domain;
+use arithmetic::PoseidonPermutation;
+use arithmetic::bitreverse;
+use ff::PrimeField;
+use ragu_core::{Error, Result, drivers::emulator::Emulator};
+use ragu_primitives::{Element, Sponge};
 
 /// Builder for constructing a new [`Mesh`].
 pub struct MeshBuilder<'params, F: PrimeField, R: Rank> {
@@ -70,10 +70,9 @@ impl<'params, F: PrimeField, R: Rank> MeshBuilder<'params, F, R> {
     }
 
     /// Builds the final [`Mesh`].
-    pub fn finalize(self) -> Result<Mesh<'params, F, R>> {
+    pub fn finalize<P: PoseidonPermutation<F>>(self, poseidon: &P) -> Result<Mesh<'params, F, R>> {
         // Compute the smallest power-of-2 domain size that fits all circuits.
         let log2_circuits = self.circuits.len().next_power_of_two().trailing_zeros();
-
         let domain = Domain::<F>::new(log2_circuits);
 
         // Build omega^j -> i lookup table.
@@ -93,11 +92,18 @@ impl<'params, F: PrimeField, R: Rank> MeshBuilder<'params, F, R> {
             omega_lookup.insert(omega_j, i);
         }
 
-        Ok(Mesh {
+        // Create provisional mesh (circuits still have placeholder K).
+        let mut mesh = Mesh {
             domain,
             circuits: self.circuits,
             omega_lookup,
-        })
+            key: F::ONE,
+        };
+
+        // Set mesh key to H(M(w, x, y))
+        mesh.key = mesh.compute_mesh_digest(poseidon);
+
+        Ok(mesh)
     }
 }
 
@@ -109,9 +115,13 @@ pub struct Mesh<'params, F: PrimeField, R: Rank> {
     domain: Domain<F>,
     circuits: Vec<Box<dyn CircuitObject<F, R> + 'params>>,
 
-    // Maps from the OmegaKey (which represents some `omega^j`) to the index `i`
-    // of the circuits vector.
+    /// Maps from the OmegaKey (which represents some `omega^j`) to the index `i`
+    /// of the circuits vector.
     omega_lookup: BTreeMap<OmegaKey, usize>,
+
+    /// Key used to unpredictably change the mesh polynomial's evaluation at
+    /// non-trivial points.
+    key: F,
 }
 
 /// Represents a key for identifying a unique $\omega^j$ value where $\omega$ is
@@ -143,7 +153,7 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
         let mut coeffs = unstructured::Polynomial::default();
         for (i, circuit) in self.circuits.iter().enumerate() {
             let j = bitreverse(i as u32, self.domain.log2_n()) as usize;
-            coeffs[j] = circuit.sxy(x, y);
+            coeffs[j] = circuit.sxy(x, y, self.key);
         }
         // Convert from the Lagrange basis.
         let domain = &self.domain;
@@ -158,7 +168,7 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
             w,
             structured::Polynomial::default,
             |circuit, circuit_coeff, poly| {
-                let mut tmp = circuit.sy(y);
+                let mut tmp = circuit.sy(y, self.key);
                 tmp.scale(circuit_coeff);
                 poly.add_assign(&tmp);
             },
@@ -171,7 +181,7 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
             w,
             unstructured::Polynomial::default,
             |circuit, circuit_coeff, poly| {
-                let mut tmp = circuit.sx(x);
+                let mut tmp = circuit.sx(x, self.key);
                 tmp.scale(circuit_coeff);
                 poly.add_assign(&tmp);
             },
@@ -184,7 +194,7 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
             w,
             || F::ZERO,
             |circuit, circuit_coeff, poly| {
-                *poly += circuit.sxy(x, y) * circuit_coeff;
+                *poly += circuit.sxy(x, y, self.key) * circuit_coeff;
             },
         )
     }
@@ -222,6 +232,28 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
 
         result
     }
+
+    /// Compute a digest of this mesh.
+    fn compute_mesh_digest<P: PoseidonPermutation<F>>(&self, poseidon: &P) -> F {
+        Emulator::emulate_wired((), |dr, _| {
+            // Placeholder "nothing-up-my-sleeve challenges" (small primes).
+            let mut w = F::from(2u64);
+            let mut x = F::from(3u64);
+            let mut y = F::from(5u64);
+
+            let mut sponge = Sponge::<'_, _, P>::new(dr, poseidon);
+            for _ in 0..6 {
+                let eval = Element::constant(dr, self.wxy(w, x, y));
+                sponge.absorb(dr, &eval)?;
+                w = sponge.squeeze(dr)?.wire().clone().value();
+                x = sponge.squeeze(dr)?.wire().clone().value();
+                y = sponge.squeeze(dr)?.wire().clone().value();
+            }
+
+            Ok(sponge.squeeze(dr)?.wire().clone().value())
+        })
+        .expect("mesh digest computation should always succeed")
+    }
 }
 
 /// Returns $\omega^j$ that corresponds to the $i$th circuit added to a
@@ -244,18 +276,15 @@ pub fn omega_j<F: PrimeField>(id: u32) -> F {
 #[cfg(test)]
 mod tests {
     use super::{MeshBuilder, OmegaKey, omega_j};
-    use crate::{Circuit, polynomials::R};
+    use crate::polynomials::R;
+    use crate::tests::SquareCircuit;
+    use alloc::collections::BTreeSet;
     use alloc::collections::btree_map::BTreeMap;
-    use arithmetic::{Domain, bitreverse};
+    use arithmetic::{Cycle, Domain, bitreverse};
     use ff::Field;
     use ff::PrimeField;
-    use ragu_core::{
-        Result,
-        drivers::{Driver, DriverValue},
-        gadgets::{GadgetKind, Kind},
-    };
-    use ragu_pasta::Fp;
-    use ragu_primitives::Element;
+    use ragu_core::Result;
+    use ragu_pasta::{Fp, Pasta};
     use rand::thread_rng;
 
     #[test]
@@ -281,46 +310,12 @@ mod tests {
         assert_eq!(order(omega_j::<Fp>(7)), 8);
     }
 
-    struct SquareCircuit {
-        times: usize,
-    }
-
-    impl Circuit<Fp> for SquareCircuit {
-        type Instance<'instance> = Fp;
-        type Output = Kind![Fp; Element<'_, _>];
-        type Witness<'witness> = Fp;
-        type Aux<'witness> = ();
-
-        fn instance<'dr, 'instance: 'dr, D: Driver<'dr, F = Fp>>(
-            &self,
-            dr: &mut D,
-            instance: DriverValue<D, Self::Instance<'instance>>,
-        ) -> Result<<Self::Output as GadgetKind<Fp>>::Rebind<'dr, D>> {
-            Element::alloc(dr, instance)
-        }
-
-        fn witness<'dr, 'witness: 'dr, D: Driver<'dr, F = Fp>>(
-            &self,
-            dr: &mut D,
-            witness: DriverValue<D, Self::Witness<'witness>>,
-        ) -> Result<(
-            <Self::Output as GadgetKind<Fp>>::Rebind<'dr, D>,
-            DriverValue<D, Self::Aux<'witness>>,
-        )> {
-            let mut a = Element::alloc(dr, witness)?;
-
-            for _ in 0..self.times {
-                a = a.square(dr)?;
-            }
-
-            Ok((a, D::just(|| ())))
-        }
-    }
-
     type TestRank = R<8>;
 
     #[test]
     fn test_mesh_circuit_consistency() -> Result<()> {
+        let poseidon = Pasta::baked().circuit_poseidon();
+
         let mesh = MeshBuilder::<Fp, TestRank>::new()
             .register_circuit(SquareCircuit { times: 2 })?
             .register_circuit(SquareCircuit { times: 5 })?
@@ -330,7 +325,7 @@ mod tests {
             .register_circuit(SquareCircuit { times: 19 })?
             .register_circuit(SquareCircuit { times: 19 })?
             .register_circuit(SquareCircuit { times: 19 })?
-            .finalize()?;
+            .finalize(poseidon)?;
 
         let w = Fp::random(thread_rng());
         let x = Fp::random(thread_rng());
@@ -397,10 +392,12 @@ mod tests {
 
     #[test]
     fn test_single_circuit_mesh() -> Result<()> {
+        let poseidon = Pasta::baked().circuit_poseidon();
+
         // Checks that a single circuit can be finalized without bit-shift overflows.
         let _mesh = MeshBuilder::<Fp, TestRank>::new()
             .register_circuit(SquareCircuit { times: 1 })?
-            .finalize()?;
+            .finalize(poseidon)?;
 
         Ok(())
     }
@@ -430,7 +427,27 @@ mod tests {
     }
 
     #[test]
+    fn test_omega_key_uniqueness() {
+        let max_circuits = 1024;
+        let mut seen_keys = BTreeSet::new();
+
+        for i in 0..max_circuits {
+            let omega = omega_j::<Fp>(i);
+            let key = OmegaKey::from(omega);
+
+            assert!(
+                !seen_keys.contains(&key),
+                "OmegaKey collision at index {}",
+                i
+            );
+            seen_keys.insert(key);
+        }
+    }
+
+    #[test]
     fn test_non_power_of_two_mesh_sizes() -> Result<()> {
+        let poseidon = Pasta::baked().circuit_poseidon();
+
         type TestRank = crate::polynomials::R<8>;
         for num_circuits in 0..21 {
             let mut builder = MeshBuilder::<Fp, TestRank>::new();
@@ -439,7 +456,7 @@ mod tests {
                 builder = builder.register_circuit(SquareCircuit { times: i })?;
             }
 
-            let mesh = builder.finalize()?;
+            let mesh = builder.finalize(poseidon)?;
 
             // Verify domain size is next power of 2
             let expected_domain_size = num_circuits.next_power_of_two();

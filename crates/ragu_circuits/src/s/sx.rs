@@ -122,6 +122,7 @@ impl<'dr, F: Field, R: Rank> Driver<'dr> for Collector<F, R> {
 pub fn eval<F: Field, C: Circuit<F>, R: Rank>(
     circuit: &C,
     x: F,
+    key: F,
 ) -> Result<unstructured::Polynomial<F, R>> {
     if x == F::ZERO {
         // The polynomial is zero if x is zero.
@@ -151,7 +152,14 @@ pub fn eval<F: Field, C: Circuit<F>, R: Rank>(
         available_b: None,
         _marker: core::marker::PhantomData,
     };
-    let one = collector.mul(|| unreachable!())?.2;
+    let (key_wire, _, one) = collector.mul(|| unreachable!())?;
+
+    // Enforce linear constraint key_wire = key to randomize non-trivial
+    // evaluations of this circuit polynomial.
+    collector.enforce_zero(|lc| {
+        lc.add(&key_wire)
+            .add_term(&one, Coeff::NegativeArbitrary(key))
+    })?;
 
     let mut outputs = vec![];
     let (io, _) = circuit.witness(&mut collector, Empty)?;
