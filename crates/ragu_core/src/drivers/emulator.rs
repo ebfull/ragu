@@ -365,7 +365,7 @@ impl<'dr, M: MaybeKind, F: Field> Driver<'dr> for Emulator<Wired<M, F>> {
     }
 
     fn add(&mut self, lc: impl Fn(Self::LCadd) -> Self::LCadd) -> Self::Wire {
-        let lc = lc(MaybeDirectSum(M::maybe_just(|| DirectSum::default())));
+        let lc = lc(MaybeDirectSum(M::maybe_just(DirectSum::default)));
         MaybeWired::Arbitrary(lc.0.map(|sum| sum.value))
     }
 
