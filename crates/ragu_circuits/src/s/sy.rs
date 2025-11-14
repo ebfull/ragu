@@ -295,11 +295,6 @@ pub fn eval<F: Field, C: Circuit<F>, R: Rank>(
     key: F,
     num_linear_constraints: usize,
 ) -> Result<structured::Polynomial<F, R>> {
-    // Underflow protection.
-    if num_linear_constraints == 0 {
-        return Err(Error::LinearBoundExceeded(0));
-    }
-
     let mut sy = structured::Polynomial::<F, R>::new();
 
     if y == F::ZERO {

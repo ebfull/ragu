@@ -126,7 +126,7 @@ pub struct Mesh<'params, F: PrimeField, R: Rank> {
 
 /// Represents a key for identifying a unique $\omega^j$ value where $\omega$ is
 /// a $2^k$-th root of unity.
-#[derive(Ord, PartialOrd, PartialEq, Eq, Hash)]
+#[derive(Ord, PartialOrd, PartialEq, Eq)]
 struct OmegaKey(u64);
 
 impl<F: PrimeField> From<F> for OmegaKey {
@@ -278,6 +278,7 @@ mod tests {
     use super::{MeshBuilder, OmegaKey, omega_j};
     use crate::polynomials::R;
     use crate::tests::SquareCircuit;
+    use alloc::collections::BTreeSet;
     use alloc::collections::btree_map::BTreeMap;
     use arithmetic::{Cycle, Domain, bitreverse};
     use ff::Field;
@@ -428,7 +429,7 @@ mod tests {
     #[test]
     fn test_omega_key_uniqueness() {
         let max_circuits = 1024;
-        let mut seen_keys = std::collections::HashSet::new();
+        let mut seen_keys = BTreeSet::new();
 
         for i in 0..max_circuits {
             let omega = omega_j::<Fp>(i);

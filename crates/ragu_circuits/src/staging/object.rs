@@ -56,7 +56,7 @@ impl<R: Rank> StageObject<R> {
 }
 
 impl<F: Field, R: Rank> CircuitObject<F, R> for StageObject<R> {
-    fn sxy(&self, x: F, y: F, k: F) -> F {
+    fn sxy(&self, x: F, y: F, key: F) -> F {
         // Bound is enforced in `StageObject::new`.
         assert!(self.skip_multiplications + self.num_multiplications < R::n());
         let reserved: usize = R::n() - self.skip_multiplications - self.num_multiplications - 1;
@@ -79,7 +79,7 @@ impl<F: Field, R: Rank> CircuitObject<F, R> for StageObject<R> {
         let y_power = y.pow_vartime([(num_linear_from_gates + 1) as u64]);
         let x_2n_minus_1 = x.pow_vartime([(2 * R::n() - 1) as u64]);
         let x_4n_minus_1 = x.pow_vartime([(4 * R::n() - 1) as u64]);
-        let placeholder = y_power * (x_2n_minus_1 - k * x_4n_minus_1);
+        let placeholder = y_power * (x_2n_minus_1 - key * x_4n_minus_1);
 
         let block = |end: usize, len: usize| -> F {
             let w = y * x.pow_vartime([(4 * R::n() - 2 - end) as u64]);
@@ -103,7 +103,7 @@ impl<F: Field, R: Rank> CircuitObject<F, R> for StageObject<R> {
         placeholder + y.pow_vartime([(3 * reserved) as u64]) * c1 + c2
     }
 
-    fn sx(&self, x: F, k: F) -> unstructured::Polynomial<F, R> {
+    fn sx(&self, x: F, key: F) -> unstructured::Polynomial<F, R> {
         // Bound is enforced in `StageObject::new`.
         assert!(self.skip_multiplications + self.num_multiplications < R::n());
         let reserved: usize = R::n() - self.skip_multiplications - self.num_multiplications - 1;
@@ -131,8 +131,8 @@ impl<F: Field, R: Rank> CircuitObject<F, R> for StageObject<R> {
             };
 
             // Placeholder contribution: x^(2n-1) - k * x^(4n-1).
-            let (a_0, _b_0, c_0) = alloc();
-            coeffs.push(a_0 - k * c_0);
+            let (key_wire, _, one) = alloc();
+            coeffs.push(key_wire - key * one);
 
             let mut enforce_zero = |out: (F, F, F)| {
                 coeffs.push(out.0);
@@ -157,7 +157,7 @@ impl<F: Field, R: Rank> CircuitObject<F, R> for StageObject<R> {
         unstructured::Polynomial::from_coeffs(coeffs)
     }
 
-    fn sy(&self, y: F, k: F) -> structured::Polynomial<F, R> {
+    fn sy(&self, y: F, key: F) -> structured::Polynomial<F, R> {
         // Bound is enforced in `StageObject::new`.
         assert!(self.skip_multiplications + self.num_multiplications < R::n());
         let reserved: usize = R::n() - self.skip_multiplications - self.num_multiplications - 1;
@@ -177,7 +177,7 @@ impl<F: Field, R: Rank> CircuitObject<F, R> for StageObject<R> {
             // Placeholder contribution: Y^q - k * Y^q.
             poly.a.push(yq);
             poly.b.push(F::ZERO);
-            poly.c.push(-k * yq);
+            poly.c.push(-key * yq);
             yq *= y_inv;
 
             for _ in 0..self.skip_multiplications {
@@ -421,21 +421,6 @@ mod tests {
         assert_eq!(
             sxy_result, sxy_direct,
             "sy.eval(x) should match sxy(x, y, k) even with k = 0"
-        );
-    }
-
-    #[test]
-    fn test_zero_linear_constraints_underflow() {
-        // Attempt to create a circuit with num_linear_constraints = 0.
-        let circuit = SquareCircuit { times: 2 };
-        let y = Fp::random(thread_rng());
-        let k = Fp::random(thread_rng());
-
-        let result = sy::eval::<_, _, R>(&circuit, y, k, 0);
-
-        assert!(
-            result.is_err(),
-            "Reject num_linear_constraints = 0 to prevent underflow"
         );
     }
 
