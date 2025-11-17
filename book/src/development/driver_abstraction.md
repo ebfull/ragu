@@ -19,9 +19,9 @@ There are different kinds of execution we're particularly interested in distingu
 
     **RX Driver**: Generates witness values without tracking circuit structure. Sets `MaybeKind = Always<T>` (witness closures are always called to compute field element values), and `Wire = ()` (no wire tracking needed). Each operation invokes its witness closure and stores the resulting field elements in arrays, constructing the witness polynomial *R(X)*.
 
-    The type-level parameterization affords that witness computation is only executed when the driver's `MaybeKind` requires it.
+    This type-level parameterization affords that witness computation is only executed when the driver's `MaybeKind` requires it.
 
-3. **Different synthesis contexts**: Beyond SXY and RX drivers, the **Emulator*** driver executes circuit code directly without enforcing constraints, and the **Simulator** driver fully simulates synthesis and validates constraints for testing purposes. 
+3. **Different synthesis contexts**: Beyond SXY and RX drivers, the **Emulator** driver executes circuit code directly without enforcing constraints, and the **Simulator** driver fully simulates synthesis and validates constraints for testing purposes. 
 
     The **Emulator** driver is particularly flexible because it's parameterized on a *mode* that determines whether it tracks wire assignments:
 
@@ -33,7 +33,7 @@ There are different kinds of execution we're particularly interested in distingu
 
 The `Maybe<T>` monad separates witness existence from constraint synthesis, allowing the same code to work whether witness values are present or not.
 
-Traditionally, most zkSNARK toolkits bundle witness generation and constraint synthesis. This means every time you synthesize constraints, witness computation code executes even when witness values aren't needed. Ragu maintains separation of concerns through the `Maybe<T>` abstraction. In some frameworks, circuit synthesis alone accounts for 25-30% of the proof generation time (specifically constraint synthesis and inlining linear combinations; the R1CS to QAP reduction is an additional smaller cost). 
+Traditionally, most zkSNARK toolkits bundle witness generation and constraint synthesis. This means every time you synthesize constraints, witness computation code executes even when witness values aren't needed, or vice versa. Ragu maintains separation of concerns through the `Maybe<T>` abstraction. In some frameworks, circuit synthesis alone accounts for 25-30% of the proof generation time (specifically constraint synthesis and inlining linear combinations; the R1CS to QAP reduction is an additional smaller cost). 
 
 Ragu supports non-uniform circuits without a traditional pre-processing step, so circuit synthesis is frequently invoked and becomes a performance-critical hot path. We need to optimize polynomial reductions, but without storing gigantic polynomials with all coefficients and indeterminates in memory. Instead, we use a [structured](../design/structured.md) representation that can be efficiently computed and memoized.
 
