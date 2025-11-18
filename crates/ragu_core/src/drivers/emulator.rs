@@ -88,17 +88,17 @@ pub enum MaybeWired<M: MaybeKind, F: Field> {
     /// The special wire representing the constant $1$.
     One,
 
-    /// A wire with an arbitrary assignment.
-    Arbitrary(M::Rebind<F>),
+    /// A wire with an assigned value.
+    Assigned(M::Rebind<F>),
 }
 
 impl<M: MaybeKind, F: Field> MaybeWired<M, F> {
-    /// Retrieves the underlying wire value. This should be only called when
+    /// Retrieves the underlying wire value. This should only be called when
     /// [`M` = `Always`], otherwise it will cause a compile-time failure.
     pub fn value(self) -> F {
         match self {
             MaybeWired::One => F::ONE,
-            MaybeWired::Arbitrary(value) => value.take(),
+            MaybeWired::Assigned(value) => value.take(),
         }
     }
 
@@ -106,7 +106,7 @@ impl<M: MaybeKind, F: Field> MaybeWired<M, F> {
     fn snag<'a>(&'a self, one: &'a F) -> &'a F {
         match self {
             MaybeWired::One => one,
-            MaybeWired::Arbitrary(value) => value.snag(),
+            MaybeWired::Assigned(value) => value.snag(),
         }
     }
 }
@@ -115,7 +115,7 @@ impl<M: MaybeKind, F: Field> Clone for MaybeWired<M, F> {
     fn clone(&self) -> Self {
         match self {
             MaybeWired::One => MaybeWired::One,
-            MaybeWired::Arbitrary(value) => MaybeWired::Arbitrary(value.clone()),
+            MaybeWired::Assigned(value) => MaybeWired::Assigned(value.clone()),
         }
     }
 }
@@ -169,7 +169,7 @@ impl<M: MaybeKind, F: Field> Mode for Wireless<M, F> {
 }
 
 /// A driver used to natively execute circuit code without enforcing
-/// constraints. This driver also short-circuit executes [`Routine`]s using
+/// constraints. This driver also short-circuit [`Routine`] execution using
 /// their provided [`Routine::predict`] method when possible.
 ///
 /// See the [module level documentation](self) for more information.
@@ -324,12 +324,7 @@ impl<'dr, M: MaybeKind, F: Field> Driver<'dr> for Emulator<Wireless<M, F>> {
         routine: R,
         input: <R::Input as GadgetKind<Self::F>>::Rebind<'dr, Self>,
     ) -> Result<<R::Output as GadgetKind<Self::F>>::Rebind<'dr, Self>> {
-        // Emulator will short-circuit execution if the routine can predict its
-        // output, as the emulator is not involved in enforcing any constraints.
-        match routine.predict(self, &input)? {
-            Prediction::Known(output, _) => Ok(output),
-            Prediction::Unknown(aux) => routine.execute(self, input, aux),
-        }
+        short_circuit_routine(self, routine, input)
     }
 }
 
@@ -339,11 +334,11 @@ impl<'dr, M: MaybeKind, F: Field> Driver<'dr> for Emulator<Wired<M, F>> {
     const ONE: Self::Wire = MaybeWired::One;
 
     fn alloc(&mut self, f: impl Fn() -> Result<Coeff<Self::F>>) -> Result<Self::Wire> {
-        f().map(|coeff| MaybeWired::Arbitrary(M::maybe_just(|| coeff.value())))
+        f().map(|coeff| MaybeWired::Assigned(M::maybe_just(|| coeff.value())))
     }
 
     fn constant(&mut self, coeff: Coeff<Self::F>) -> Self::Wire {
-        MaybeWired::Arbitrary(M::maybe_just(|| coeff.value()))
+        MaybeWired::Assigned(M::maybe_just(|| coeff.value()))
     }
 
     fn mul(
@@ -356,15 +351,15 @@ impl<'dr, M: MaybeKind, F: Field> Driver<'dr> for Emulator<Wired<M, F>> {
         // constraints.
 
         Ok((
-            MaybeWired::Arbitrary(M::maybe_just(|| a.value())),
-            MaybeWired::Arbitrary(M::maybe_just(|| b.value())),
-            MaybeWired::Arbitrary(M::maybe_just(|| c.value())),
+            MaybeWired::Assigned(M::maybe_just(|| a.value())),
+            MaybeWired::Assigned(M::maybe_just(|| b.value())),
+            MaybeWired::Assigned(M::maybe_just(|| c.value())),
         ))
     }
 
     fn add(&mut self, lc: impl Fn(Self::LCadd) -> Self::LCadd) -> Self::Wire {
         let lc = lc(MaybeDirectSum(M::maybe_just(DirectSum::default)));
-        MaybeWired::Arbitrary(lc.0.map(|sum| sum.value))
+        MaybeWired::Assigned(lc.0.map(|sum| sum.value))
     }
 
     fn enforce_zero(&mut self, _: impl Fn(Self::LCenforce) -> Self::LCenforce) -> Result<()> {
@@ -379,12 +374,21 @@ impl<'dr, M: MaybeKind, F: Field> Driver<'dr> for Emulator<Wired<M, F>> {
         routine: R,
         input: <R::Input as GadgetKind<Self::F>>::Rebind<'dr, Self>,
     ) -> Result<<R::Output as GadgetKind<Self::F>>::Rebind<'dr, Self>> {
-        // Emulator will short-circuit execution if the routine can predict its
-        // output, as the emulator is not involved in enforcing any constraints.
-        match routine.predict(self, &input)? {
-            Prediction::Known(output, _) => Ok(output),
-            Prediction::Unknown(aux) => routine.execute(self, input, aux),
-        }
+        short_circuit_routine(self, routine, input)
+    }
+}
+
+/// The [`Emulator`] will short-circuit execution if the [`Routine`] can predict
+/// its output, as the [`Emulator`] is not involved in enforcing any
+/// constraints.
+fn short_circuit_routine<'dr, D: Driver<'dr>, R: Routine<D::F> + 'dr>(
+    dr: &mut D,
+    routine: R,
+    input: <R::Input as GadgetKind<D::F>>::Rebind<'dr, D>,
+) -> Result<<R::Output as GadgetKind<D::F>>::Rebind<'dr, D>> {
+    match routine.predict(dr, &input)? {
+        Prediction::Known(output, _) => Ok(output),
+        Prediction::Unknown(aux) => routine.execute(dr, input, aux),
     }
 }
 
