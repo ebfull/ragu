@@ -22,6 +22,6 @@
     - [Drivers](development/drivers/index.md)
       - [Emulator](development/drivers/emulator.md)
     - [Routines](development/routines.md)
-    - [Gadget System](design/gadgets.md)
+    - [Gadget System](development/gadgets.md)
     - [Circuit Polynomials](development/circuit_polynomials.md)
   - [Notation](notation.md)
