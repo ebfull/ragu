@@ -21,9 +21,11 @@ use core::{any::TypeId, marker::PhantomData};
 
 use header::Header;
 use step::{Step, adapter::Adapter};
+pub use proof::{Proof, Pcd};
 
 pub mod header;
 pub mod step;
+mod proof;
 
 /// Builder for an [`Application`](crate::Application) for proof-carrying data.
 pub struct ApplicationBuilder<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize> {
