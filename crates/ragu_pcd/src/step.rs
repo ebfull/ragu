@@ -1,3 +1,5 @@
+//! Merging operations defined for the proof-carrying data computational graph.
+
 use arithmetic::Cycle;
 use ragu_core::{
     Result,

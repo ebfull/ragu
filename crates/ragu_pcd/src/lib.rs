@@ -11,15 +11,21 @@ extern crate alloc;
 
 use arithmetic::Cycle;
 use ragu_circuits::polynomials::Rank;
-use ragu_core::Result;
+use ragu_core::{Error, Result};
 
-use core::marker::PhantomData;
+use alloc::collections::BTreeMap;
+use core::{any::TypeId, marker::PhantomData};
+
+pub use header::{Header, Prefix};
+use step::Step;
 
 mod header;
-mod step;
+pub mod step;
 
 /// Builder for an [`Application`](crate::Application) for proof-carrying data.
 pub struct ApplicationBuilder<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize> {
+    num_application_steps: usize,
+    header_map: BTreeMap<header::Prefix, TypeId>,
     _marker: PhantomData<(C, R, [(); HEADER_SIZE], &'params ())>,
 }
 
@@ -37,8 +43,45 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
     /// Create an empty [`ApplicationBuilder`] for proof-carrying data.
     pub fn new() -> Self {
         ApplicationBuilder {
+            num_application_steps: 0,
+            header_map: BTreeMap::new(),
             _marker: PhantomData,
         }
+    }
+
+    /// Register a new application-defined [`Step`] in this context. The
+    /// provided [`Step`]'s [`INDEX`](Step::INDEX) should be the next sequential
+    /// index that has not been inserted yet.
+    pub fn register<S: Step<C> + 'params>(mut self, _step: S) -> Result<Self> {
+        // NB: all internal steps are registered after application steps, and so
+        // we can pass 0 to this function.
+        if S::INDEX.circuit_index(0) != self.num_application_steps {
+            return Err(Error::Initialization(
+                "steps must be registered in sequential order".into(),
+            ));
+        }
+
+        match self
+            .header_map
+            .get(&<S::Output as Header<C::CircuitField>>::PREFIX)
+        {
+            Some(ty) => {
+                if *ty != TypeId::of::<S::Output>() {
+                    return Err(Error::Initialization(
+                        "two different Header implementations using the same prefix".into(),
+                    ));
+                }
+            }
+            None => {
+                self.header_map.insert(
+                    <S::Output as Header<C::CircuitField>>::PREFIX,
+                    TypeId::of::<S::Output>(),
+                );
+            }
+        }
+        self.num_application_steps += 1;
+
+        Ok(self)
     }
 
     /// Perform finalization and optimization steps to produce the
