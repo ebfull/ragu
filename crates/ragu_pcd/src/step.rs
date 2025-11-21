@@ -1,3 +1,7 @@
+use super::header::Header;
+
+mod padded;
+
 /// Internal representation of a [`Step`] index distinguishing internal vs.
 /// application steps.
 enum StepIndex {
