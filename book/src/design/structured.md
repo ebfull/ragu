@@ -72,19 +72,19 @@ for specially-constructed polynomials $p, q \in \F[X]$ of maximal degree $n - 1$
 and the verifier can test at a random point to ensure correctness. The claim is
 then reduced to the equality $p(0) = c$.
 
-Observe:
+To construct $p$ and $q$, observe:
 
 $$
 c(X) = \underbrace{c_{0} + c_{1}X + \dots + c_{n}X^{n-1}}_{\text{lower half}} + \underbrace{c_{n+1}X^{n} + \dots + c_{2n-2}X^{2n-2}}_{\text{upper half}}
 $$
 
-Recall from above that the $n - 1$ degree coefficient, $c_{n}$, equals the mirrored dot product of the vectors, $\revdot{\v{a}}{\v{b}}$. To construct $p$, we take the lower half of $c$ and reverse its coefficients, so the $c_{n}$ coefficient becomes the constant term:
+Recall from above that the $n - 1$ degree coefficient, $c_{n}$, equals the mirrored dot product of the vectors, $\revdot{\v{a}}{\v{b}}$. To construct $p$, we take the lower half of $c$ and reverse its coefficients, so the $c_{n}$ coefficient becomes the constant term (and thus, $p(0)=c$):
 
 $$
 p(X) = c_{n} + c_{n-1}X + \dots + c_{0}X^{n-1}
 $$
 
-And $q(x)$ is constructed from the coefficients of the upper half.
+$q(x)$ is constructed from the coefficients of the upper half.
 
 > This reduction requires the prover to compute $a \cdot b$, which can be done
 > efficiently with an FFT, but should still be performed as infrequently as
