@@ -49,7 +49,6 @@ impl Prefix {
     pub(crate) fn get(&self) -> u64 {
         match self.prefix {
             HeaderPrefix::Internal(i) => i as u64,
-            // TODO(ebfull): overflows
             HeaderPrefix::Application(i) => (i + NUM_INTERNAL_PREFIXES as usize) as u64,
         }
     }

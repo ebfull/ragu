@@ -1,12 +1,17 @@
 use arithmetic::Cycle;
-use ragu_circuits::polynomials::Rank;
+use ragu_circuits::polynomials::{Rank, structured};
 
+use alloc::vec::Vec;
 use core::marker::PhantomData;
 
 use super::header::Header;
 
 /// Represents a recursive proof for the correctness of some computation.
 pub struct Proof<C: Cycle, R: Rank> {
+    pub(crate) circuit_id: usize,
+    pub(crate) left_header: Vec<C::CircuitField>,
+    pub(crate) right_header: Vec<C::CircuitField>,
+    pub(crate) rx: structured::Polynomial<C::CircuitField, R>,
     pub(crate) _marker: PhantomData<(C, R)>,
 }
 

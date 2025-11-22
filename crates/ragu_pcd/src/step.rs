@@ -11,7 +11,7 @@ pub use encoder::{Encoded, Encoder};
 
 pub(crate) mod adapter;
 mod encoder;
-mod padded;
+pub(crate) mod padded;
 pub(crate) mod rerandomize;
 
 /// Internal representation of a [`Step`] index distinguishing internal vs.
