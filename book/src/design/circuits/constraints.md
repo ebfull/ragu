@@ -13,36 +13,47 @@ for some (sparse) public input vector $\v{k} \in \F^{4n}$ and fixed matrices $\v
 
 ## Multiplication Constraints
 
-The multiplication constraints over the witness can be rewritten as $\v{a} \circ \v{b} = \v{c}$. It is possible to probabilistically reduce this to a dot product claim using a random challenge $z \in \F$, using the "folded" claim
+The multiplication constraints over the witness can be rewritten as $\v{a} \circ \v{b} = \v{c}$. It is possible to _probabilistically_ reduce this to a dot product claim using a random challenge $z \in \F$:
 
 $$
-\sum_{i=0}^{n-1} z^{i}\,\big(\mathbf a_i \mathbf b_i - \mathbf c_i\big) = 0 \;\Longleftrightarrow\; \dot{\v{a}}{\v{z^{n}} \circ \v{b}} - \dot{\v{c}}{\v{z^{n}}} = 0.
+\boxed{\v{a} \circ \v{b} = \v{c}} \;\Longleftrightarrow\; \boxed{\sum_{i=0}^{n-1} z^{i}\,\big(\mathbf a_i \mathbf b_i - \mathbf c_i\big) = 0} \;\Longleftrightarrow\; \boxed{\dot{\v{a}}{\v{z^{n}} \circ \v{b}} - \dot{\v{c}}{\v{z^{n}}} = 0}.
 $$
 
-By the definition of $\v{r}$ (as a [structured vector](../structured.md)) we can do something mathematically identical. Observe the expansion
+By the definition of $\v{r}$ (as a [structured vector](../structured.md)) we can
+do something identical. Observe the expansion
 
 $$\revdot{\v{r}}{\v{r} \circ \v{z^{4n}}} =
 
-\sum\limits_{i = 0}^{n - 1} \left(
-  \v{a}_i \v{b}_i  \big( \underline{z^{2n - 1 - i} + z^{2n + i} } \big)
-+ \v{c}_i \v{d}_i  \big( z^{i} + z^{4n - 1 - i} \big)
-\right)
+\sum\limits_{i = 0}^{n - 1} \Big(
+  \v{a}_i \v{b}_i  \big( \textcolor{green}{z^{2n - 1 - i} + z^{2n + i} } \big)
++ {\v{c}_i \v{d}_i}  \big( {z^{i} + z^{4n - 1 - i}} \big)
+\Big)
 
 $$
 
-and notice that for all $z \in \F$ and for any choice of $\v{r}$ there exists a unique vector $\v{t}$ such that
+and notice that for all $z \in \F$ and for any choice of $\v{r}$ there exists a unique vector[^tvectorcomputation] $\v{t} \in \F^{4n}$ such that
 
 $$
-\revdot{\v{r}}{\v{t}} = -\sum_{i = 0}^{n - 1} \v{c}_i \big( \underline{ z^{2n - 1 - i} + z^{2n + i} } \big).
+\revdot{\v{r}}{\v{t}} = -\sum_{i = 0}^{n - 1} \v{c}_i \Big( \textcolor{green}{ z^{2n - 1 - i} + z^{2n + i} } \Big)
 $$
 
-and so if for a random challenge $z$
+and so by adding the two equalities, we get
+
+$$
+\revdot{\v{r}}{\v{r} \circ{\v{z^{4n}}} + \v{t}} = 
+\sum\limits_{i = 0}^{n - 1} \Big(
+  (\textcolor{blue}{\v{a}_i \v{b}_i - \v{c}_i})  \big( \textcolor{green}{z^{2n - 1 - i} + z^{2n + i} } \big)
+ + {\v{c}_i \v{d}_i}  \big( {z^{i} + z^{4n - 1 - i}} \big)
+\Big).
+$$
+
+Therefore, if the expression
 
 $$
 \revdot{\v{r}}{\v{r} \circ{\v{z^{4n}}} + \v{t}} = 0
 $$
 
-holds, then $\v{a} \circ \v{b} = \v{c}$ holds with high probability.
+holds for a random $z$, then $\textcolor{blue}{\v{a} \circ \v{b} = \v{c}}$ and ${\v{c} \circ \v{d} = \v{0^n}}$ each hold with high probability. (The latter claim is useless and redundant for our purposes, since $\v{d} = \v{0^n}$ for [witness vectors](witness.md) anyway.)
 
 ## Linear Constraints
 
@@ -75,3 +86,4 @@ $$
 
 because $\v{r} \circ \v{z^{4n}} - \v{t}$ is made independent of $\v{s}$ by random $z$ except at $\v{r}_0$, where $\v{s}_0 = 0$.
 
+[^tvectorcomputation]: $\v{t} \in \F^{4n}$ is defined such that $\v{t}_i = 0$ for all $i$ except that $\v{t}_{4n - 1 - i} = - (z^{2n - 1 - i} + z^{2n + i} )$ for $i$ between $0$ and $n -1$ inclusive.
