@@ -49,10 +49,11 @@ impl<C: CurveAffine, R: Rank, const NUM_SLOTS: usize> Stage<C::Base, R>
     type Parent = EndoscalarStage;
 
     fn values() -> usize {
-        2 * NUM_SLOTS // x and y coordinates for each slot
+        // (x, y) coordinates for each slot.
+        2 * NUM_SLOTS
     }
 
-    type Witness<'source> = [C; NUM_SLOTS];
+    type Witness<'source> = FixedVec<C, ConstLen<NUM_SLOTS>>;
     type OutputKind = Kind![C::Base; FixedVec<Point<'_, _, C>, ConstLen<NUM_SLOTS>>];
 
     fn witness<'dr, 'source: 'dr, D: Driver<'dr, F = C::Base>>(
@@ -94,7 +95,7 @@ pub struct Endoscaling<C: CurveAffine, R: Rank, const NUM_SLOTS: usize> {
 
 pub struct EndoscalingWitness<C: CurveAffine, const NUM_SLOTS: usize> {
     pub endoscalar: Uendo,
-    pub slots: [C; NUM_SLOTS],
+    pub slots: FixedVec<C, ConstLen<NUM_SLOTS>>,
     pub input: C,
 }
 
@@ -141,7 +142,7 @@ impl<C: CurveAffine, R: Rank, const NUM_SLOTS: usize> StagedCircuit<C::Base, R>
         let (endoscalar, dr) =
             dr.add_stage::<EndoscalarStage>(witness.view().map(|w| w.endoscalar))?;
         let (slots, dr) =
-            dr.add_stage::<SlotStage<C, NUM_SLOTS>>(witness.view().map(|w| w.slots))?;
+            dr.add_stage::<SlotStage<C, NUM_SLOTS>>(witness.view().map(|w| w.slots.clone()))?;
         let dr = dr.finish();
 
         let input = Point::alloc(dr, witness.view().map(|w| w.input))?;
@@ -208,6 +209,7 @@ mod tests {
     use group::prime::PrimeCurveAffine;
     use ragu_core::Result;
     use ragu_pasta::{EpAffine, EqAffine, Fp, Fq};
+    use ragu_primitives::vec::FixedVec;
     use rand::{Rng, thread_rng};
 
     type R = polynomials::R<13>;
@@ -218,7 +220,10 @@ mod tests {
 
         let endoscalar: Uendo = thread_rng().r#gen();
         let input = (EpAffine::generator() * Fq::random(thread_rng())).to_affine();
-        let values = [(EpAffine::generator() * Fq::random(thread_rng())).to_affine(); NUM_SLOTS];
+        let values: Vec<_> = (0..NUM_SLOTS)
+            .map(|_| (EpAffine::generator() * Fq::random(thread_rng())).to_affine())
+            .collect();
+        let values = FixedVec::try_from(values).unwrap();
 
         let stage_circuit = Endoscaling::<EpAffine, R, NUM_SLOTS> {
             a: Read::Input,
@@ -236,7 +241,7 @@ mod tests {
         let final_s = SlotStage::<EpAffine, NUM_SLOTS>::final_into_object()?;
 
         let endoscalar_rx = <EndoscalarStage as StageExt<Fp, R>>::rx(endoscalar)?;
-        let slot_rx = <SlotStage<EpAffine, NUM_SLOTS> as StageExt<Fp, R>>::rx(values)?;
+        let slot_rx = <SlotStage<EpAffine, NUM_SLOTS> as StageExt<Fp, R>>::rx(values.clone())?;
         let key = Fp::ONE;
         let (final_rx, output) = staged_circuit.rx::<R>(
             EndoscalingWitness {
@@ -277,7 +282,10 @@ mod tests {
 
         let endoscalar: Uendo = thread_rng().r#gen();
         let input = (EqAffine::generator() * Fp::random(thread_rng())).to_affine();
-        let values = [(EqAffine::generator() * Fp::random(thread_rng())).to_affine(); NUM_SLOTS];
+        let values: Vec<_> = (0..NUM_SLOTS)
+            .map(|_| (EqAffine::generator() * Fp::random(thread_rng())).to_affine())
+            .collect();
+        let values = FixedVec::try_from(values).unwrap();
 
         let stage_circuit = EndoFq::<NUM_SLOTS, R> {
             a: Read::Input,
@@ -318,7 +326,10 @@ mod tests {
 
         let endoscalar: Uendo = thread_rng().r#gen();
         let input = (EpAffine::generator() * Fq::random(thread_rng())).to_affine();
-        let values = [(EpAffine::generator() * Fq::random(thread_rng())).to_affine(); NUM_SLOTS];
+        let values: Vec<_> = (0..NUM_SLOTS)
+            .map(|_| (EpAffine::generator() * Fq::random(thread_rng())).to_affine())
+            .collect();
+        let values = FixedVec::try_from(values).unwrap();
 
         let stage_circuit = EndoFp::<NUM_SLOTS, R> {
             a: Read::Input,
