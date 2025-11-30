@@ -222,15 +222,19 @@ impl<'a, 'dr, D: Driver<'dr>, R: Rank, Current: Stage<D::F, R>, Target: Stage<D:
             ));
         };
 
-        while allocator.stage_wires.len() < Next::values() {
+        let mut alloc_count = allocator.stage_wires.len();
+
+        while alloc_count < Next::values() {
             allocator.underlying.alloc(|| Ok(Coeff::Zero))?;
+            alloc_count += 1;
         }
 
-        if allocator.stage_wires.len() % 2 == 1 {
+        if alloc_count % 2 == 1 {
             allocator.underlying.alloc(|| Ok(Coeff::Zero))?;
+            alloc_count += 1;
         };
 
-        assert_eq!(allocator.stage_wires.len() / 2, Next::num_multiplications());
+        assert_eq!(alloc_count / 2, Next::num_multiplications());
 
         Ok((
             StageGuard {
