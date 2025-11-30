@@ -1,10 +1,33 @@
 use arithmetic::Cycle;
-use ragu_circuits::polynomials::{Rank, structured};
+use ff::Field;
+use ragu_circuits::{
+    CircuitExt,
+    mesh::Mesh,
+    polynomials::{Rank, structured},
+};
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use core::marker::PhantomData;
 
-use super::header::Header;
+use super::{
+    circuits::{DUMMY_CIRCUIT_ID, dummy::Dummy, internal_circuit_index},
+    header::Header,
+};
+
+pub fn trivial<C: Cycle, R: Rank, const HEADER_SIZE: usize>(
+    num_application_steps: usize,
+    mesh: &Mesh<'_, C::CircuitField, R>,
+) -> Proof<C, R> {
+    let rx = Dummy.rx((), mesh.get_key()).expect("should not fail").0;
+
+    Proof {
+        rx,
+        circuit_id: internal_circuit_index(num_application_steps, DUMMY_CIRCUIT_ID),
+        left_header: vec![C::CircuitField::ZERO; HEADER_SIZE],
+        right_header: vec![C::CircuitField::ZERO; HEADER_SIZE],
+        _marker: PhantomData,
+    }
+}
 
 /// Represents a recursive proof for the correctness of some computation.
 pub struct Proof<C: Cycle, R: Rank> {

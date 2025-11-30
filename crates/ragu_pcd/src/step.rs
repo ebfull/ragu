@@ -13,7 +13,6 @@ pub(crate) mod adapter;
 mod encoder;
 pub(crate) mod padded;
 pub(crate) mod rerandomize;
-pub(crate) mod verify_adapter;
 
 /// Internal representation of a [`Step`] index distinguishing internal vs.
 /// application steps.
@@ -45,21 +44,30 @@ impl Index {
         }
     }
 
-    /// Obtain the circuit index of a [`Step`] based on whether this represents
-    /// an internal or application [`Step`]'s index.
+    /// Returns the circuit index for this step.
     ///
-    /// Requires the number of application steps that were registered in order
-    /// to index properly. Do not call this and then later register more
-    /// application steps.
+    /// Pass `None` when the number of application steps is not yet known, or
+    /// `Some(n)` to validate and compute the final index. Returns an error if
+    /// an application step index exceeds `n`.
     ///
     /// ## Panics
     ///
-    /// This will panic of called on an internal step without a provided
-    /// `num_application_steps` value.
-    pub(crate) fn circuit_index(&self, num_application_steps: Option<usize>) -> usize {
+    /// Panics if called on an internal step with `None`, since internal steps
+    /// are indexed after application steps.
+    pub(crate) fn circuit_index(&self, num_application_steps: Option<usize>) -> Result<usize> {
         match self.index {
-            StepIndex::Internal(i) => num_application_steps.unwrap() + i,
-            StepIndex::Application(i) => i,
+            StepIndex::Internal(i) => Ok(num_application_steps.unwrap() + i),
+            StepIndex::Application(i) => {
+                if let Some(num_application_steps) = num_application_steps {
+                    if i >= num_application_steps {
+                        return Err(ragu_core::Error::Initialization(
+                            "attempted to use application Step index that exceeds Application registered steps".into(),
+                        ));
+                    }
+                }
+
+                Ok(i)
+            }
         }
     }
 
@@ -74,22 +82,22 @@ impl Index {
             index: StepIndex::Internal(value),
         }
     }
-
-    pub(crate) fn get_application_index(&self) -> Option<usize> {
-        match self.index {
-            StepIndex::Internal(_) => None,
-            StepIndex::Application(i) => Some(i),
-        }
-    }
 }
 
 #[test]
-fn test_index_map() {
+fn test_index_map() -> Result<()> {
     let num_application_steps = Some(10);
 
-    assert_eq!(Index::internal(0).circuit_index(num_application_steps), 10);
-    assert_eq!(Index::new(0).circuit_index(num_application_steps), 0);
-    assert_eq!(Index::new(1).circuit_index(num_application_steps), 1);
+    assert_eq!(Index::internal(0).circuit_index(num_application_steps)?, 10);
+    assert_eq!(Index::new(0).circuit_index(num_application_steps)?, 0);
+    assert_eq!(Index::new(1).circuit_index(num_application_steps)?, 1);
+    assert_eq!(Index::new(999).circuit_index(None)?, 999);
+    assert_eq!(
+        Index::new(10).circuit_index(num_application_steps).is_err(),
+        true
+    );
+
+    Ok(())
 }
 
 /// Represents a node in the computational graph (or the proof-carrying data
