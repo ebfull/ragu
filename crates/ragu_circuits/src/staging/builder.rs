@@ -158,6 +158,13 @@ impl<'a, 'dr, D: Driver<'dr>, R: Rank, Current: Stage<D::F, R>, Target: Stage<D:
         let mut emulator = Emulator::<Wireless<Empty, D::F>>::wireless();
         let mut num_wires = Next::witness(&mut emulator, Empty)?.num_wires();
 
+        // Check bounds
+        if num_wires > Next::values() {
+            return Err(ragu_core::Error::MultiplicationBoundExceeded(
+                Next::num_multiplications(),
+            ));
+        }
+
         // Collect stage wires
         let mut wires = Vec::with_capacity(num_wires);
         for _ in 0..num_wires {
@@ -168,13 +175,6 @@ impl<'a, 'dr, D: Driver<'dr>, R: Rank, Current: Stage<D::F, R>, Target: Stage<D:
         while (num_wires / 2) < Next::num_multiplications() {
             self.driver.alloc(|| Ok(Coeff::Zero))?;
             num_wires += 1;
-        }
-
-        // Check bounds
-        if num_wires > Next::values() {
-            return Err(ragu_core::Error::MultiplicationBoundExceeded(
-                Next::num_multiplications(),
-            ));
         }
 
         Ok((
