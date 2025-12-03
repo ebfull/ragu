@@ -16,7 +16,7 @@ use super::{
 
 /// Represents a recursive proof for the correctness of some computation.
 pub struct Proof<C: Cycle, R: Rank> {
-    pub(crate) circuit_id: usize,
+    pub(crate) application_circuit_id: usize,
     pub(crate) left_header: Vec<C::CircuitField>,
     pub(crate) right_header: Vec<C::CircuitField>,
     pub(crate) application_rx: structured::Polynomial<C::CircuitField, R>,
@@ -26,7 +26,7 @@ pub struct Proof<C: Cycle, R: Rank> {
 impl<C: Cycle, R: Rank> Clone for Proof<C, R> {
     fn clone(&self) -> Self {
         Proof {
-            circuit_id: self.circuit_id,
+            application_circuit_id: self.application_circuit_id,
             left_header: self.left_header.clone(),
             right_header: self.right_header.clone(),
             application_rx: self.application_rx.clone(),
@@ -72,7 +72,7 @@ pub fn trivial<C: Cycle, R: Rank, const HEADER_SIZE: usize>(
 
     Proof {
         application_rx,
-        circuit_id: internal_circuits::index(num_application_steps, dummy::CIRCUIT_ID),
+        application_circuit_id: internal_circuits::index(num_application_steps, dummy::CIRCUIT_ID),
         left_header: vec![C::CircuitField::ZERO; HEADER_SIZE],
         right_header: vec![C::CircuitField::ZERO; HEADER_SIZE],
         _marker: PhantomData,

@@ -23,7 +23,7 @@ pub fn verify<C: Cycle, R: Rank, RNG: Rng, H: Header<C::CircuitField>, const HEA
     mut rng: RNG,
 ) -> Result<bool> {
     let application_rx = &pcd.proof.application_rx;
-    let circuit_id = omega_j(pcd.proof.circuit_id as u32);
+    let circuit_id = omega_j(pcd.proof.application_circuit_id as u32);
     let y = C::CircuitField::random(&mut rng);
     let z = C::CircuitField::random(&mut rng);
     let sy = circuit_mesh.wy(circuit_id, y);
