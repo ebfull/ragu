@@ -67,20 +67,34 @@ pub fn merge<'source, C: Cycle, R: Rank, RNG: Rng, S: Step<C>, const HEADER_SIZE
     let (internal_circuit_c_rx, _) =
         internal_circuit_c.rx::<R>(internal_circuit_c_witness, circuit_mesh.get_key())?;
 
-    let ky = internal_circuit_c.ky(unified_instance)?;
-
+    // Debugging
     {
-        let mut combined_rx = preamble_rx.clone();
-        combined_rx.add_assign(&internal_circuit_c_rx);
+        // Check preamble stage well-formedness
+        {
+            debug_assert_rx_valid::<C, R, _>(
+                &preamble_rx,
+                &[],
+                circuit_mesh,
+                num_application_steps,
+                internal_circuits::stages::native::preamble::CIRCUIT_ID,
+                rng,
+            );
+        }
 
-        debug_assert_rx_valid::<C, R, _>(
-            &combined_rx,
-            &ky,
-            circuit_mesh,
-            num_application_steps,
-            internal_circuits::c::CIRCUIT_ID,
-            rng,
-        );
+        let ky = internal_circuit_c.ky(unified_instance)?;
+        {
+            let mut combined_rx = preamble_rx.clone();
+            combined_rx.add_assign(&internal_circuit_c_rx);
+
+            debug_assert_rx_valid::<C, R, _>(
+                &combined_rx,
+                &ky,
+                circuit_mesh,
+                num_application_steps,
+                internal_circuits::c::CIRCUIT_ID,
+                rng,
+            );
+        }
     }
 
     // Application
