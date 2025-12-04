@@ -18,6 +18,7 @@ use super::{
 };
 
 pub const CIRCUIT_ID: usize = super::C_CIRCUIT_ID;
+pub const STAGED_ID: usize = super::C_STAGED_ID;
 
 pub struct Circuit<'a, C: Cycle, R> {
     circuit_poseidon: &'a C::CircuitPoseidon,

@@ -81,6 +81,18 @@ pub fn merge<'source, C: Cycle, R: Rank, RNG: Rng, S: Step<C>, const HEADER_SIZE
             );
         }
 
+        // Check internal circuit c well-formedness
+        {
+            debug_assert_rx_valid::<C, R, _>(
+                &internal_circuit_c_rx,
+                &[],
+                circuit_mesh,
+                num_application_steps,
+                internal_circuits::c::STAGED_ID,
+                rng,
+            );
+        }
+
         let ky = internal_circuit_c.ky(unified_instance)?;
         {
             let mut combined_rx = preamble_rx.clone();
