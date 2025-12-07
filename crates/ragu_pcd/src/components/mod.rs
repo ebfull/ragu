@@ -1,6 +1,6 @@
 use ragu_primitives::vec::Len;
 
-pub mod compute_c;
+pub mod fold_revdot;
 
 /// Number of error terms.
 ///

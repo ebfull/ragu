@@ -21,7 +21,7 @@ use crate::{
     Application,
     components::{
         ErrorTermsLen,
-        compute_c::{ComputeRevdotClaim, ErrorMatrix, RevdotClaimInput},
+        fold_revdot::{ComputeRevdotClaim, ErrorMatrix, RevdotClaimInput},
     },
     header::Header,
     internal_circuits::{self, NUM_REVDOT_CLAIMS, dummy},

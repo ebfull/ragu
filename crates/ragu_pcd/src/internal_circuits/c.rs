@@ -21,7 +21,7 @@ use super::{
 };
 use crate::components::{
     ErrorTermsLen,
-    compute_c::{ComputeRevdotClaim, ErrorMatrix, RevdotClaimInput},
+    fold_revdot::{ComputeRevdotClaim, ErrorMatrix, RevdotClaimInput},
 };
 
 pub const CIRCUIT_ID: usize = super::C_CIRCUIT_ID;
