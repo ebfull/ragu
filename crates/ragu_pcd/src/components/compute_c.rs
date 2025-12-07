@@ -18,14 +18,14 @@ use super::ErrorTermsLen;
 
 /// Off-diagonal error terms.
 #[derive(Gadget)]
-pub struct ErrorMatrix<'dr, D: Driver<'dr>, const N: usize> {
+pub struct ErrorMatrix<'dr, D: Driver<'dr>, const NUM_REVDOT_CLAIMS: usize> {
     #[ragu(gadget)]
-    elements: FixedVec<Element<'dr, D>, ErrorTermsLen<N>>,
+    elements: FixedVec<Element<'dr, D>, ErrorTermsLen<NUM_REVDOT_CLAIMS>>,
 }
 
-impl<'dr, D: Driver<'dr>, const N: usize> ErrorMatrix<'dr, D, N> {
+impl<'dr, D: Driver<'dr>, const NUM_REVDOT_CLAIMS: usize> ErrorMatrix<'dr, D, NUM_REVDOT_CLAIMS> {
     /// Creates a new error matrix from the given elements.
-    pub fn new(elements: FixedVec<Element<'dr, D>, ErrorTermsLen<N>>) -> Self {
+    pub fn new(elements: FixedVec<Element<'dr, D>, ErrorTermsLen<NUM_REVDOT_CLAIMS>>) -> Self {
         Self { elements }
     }
 
