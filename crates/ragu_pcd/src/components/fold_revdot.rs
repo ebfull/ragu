@@ -1,110 +1,63 @@
-//! Routine for computing c, the revdot claim for the folded accumulator.
+//! Operations and utilities for reasoning about folded revdot claims.
 
-use ff::Field;
-use ragu_core::{
-    Result,
-    drivers::{Driver, DriverValue},
-    gadgets::{Gadget, GadgetKind, Kind},
-    routines::{Prediction, Routine},
-};
+use ragu_core::{Result, drivers::Driver};
 use ragu_primitives::{
     Element,
-    vec::{ConstLen, FixedVec},
+    vec::{ConstLen, FixedVec, Len},
 };
 
-use alloc::vec::Vec;
+/// Represents the number of "error" terms produced during a folding operation
+/// of many `revdot` claims.
+///
+/// Given $m$ claims being folded, the error terms are defined as the
+/// off-diagonal entries of an $m \times m$ matrix, which by definition has $m *
+/// (m - 1)$ terms.
+///
+/// See the book entry on [folding revdot
+/// claims](https://tachyon.z.cash/_ragu_INTERNAL_ONLY_H83J19XK1/design/structured.html#folding)
+/// for more information.
+pub struct ErrorTermsLen<const NUM_REVDOT_CLAIMS: usize>;
 
-use super::ErrorTermsLen;
-
-/// Off-diagonal error terms.
-#[derive(Gadget)]
-pub struct ErrorMatrix<'dr, D: Driver<'dr>, const NUM_REVDOT_CLAIMS: usize> {
-    #[ragu(gadget)]
-    elements: FixedVec<Element<'dr, D>, ErrorTermsLen<NUM_REVDOT_CLAIMS>>,
-}
-
-impl<'dr, D: Driver<'dr>, const NUM_REVDOT_CLAIMS: usize> ErrorMatrix<'dr, D, NUM_REVDOT_CLAIMS> {
-    /// Creates a new error matrix from the given elements.
-    pub fn new(elements: FixedVec<Element<'dr, D>, ErrorTermsLen<NUM_REVDOT_CLAIMS>>) -> Self {
-        Self { elements }
-    }
-
-    /// Consumes the matrix and returns the underlying elements.
-    pub fn into_inner(self) -> Vec<Element<'dr, D>> {
-        self.elements.into_inner()
+impl<const NUM_REVDOT_CLAIMS: usize> Len for ErrorTermsLen<NUM_REVDOT_CLAIMS> {
+    fn len() -> usize {
+        // NUM_REVDOT_CLAIMS * (NUM_REVDOT_CLAIMS - 1) =
+        NUM_REVDOT_CLAIMS * NUM_REVDOT_CLAIMS - NUM_REVDOT_CLAIMS
     }
 }
 
-/// Input gadget for the [`RevdotFolding`] routine.
-#[derive(Gadget)]
-pub struct RevdotFoldingInput<'dr, D: Driver<'dr>, const NUM_REVDOT_CLAIMS: usize> {
-    /// Folding challenge for rows.
-    #[ragu(gadget)]
-    pub mu: Element<'dr, D>,
-    /// Folding challenge for columns.
-    #[ragu(gadget)]
-    pub nu: Element<'dr, D>,
-    /// Off-diagonal error terms from folding.
-    #[ragu(gadget)]
-    pub error_matrix: ErrorMatrix<'dr, D, NUM_REVDOT_CLAIMS>,
-    /// Diagonal k(Y) polynomial evaluations.
-    #[ragu(gadget)]
-    pub ky_values: FixedVec<Element<'dr, D>, ConstLen<NUM_REVDOT_CLAIMS>>,
-}
+pub fn compute_c<'dr, D: Driver<'dr>, const NUM_REVDOT_CLAIMS: usize>(
+    dr: &mut D,
+    mu: &Element<'dr, D>,
+    nu: &Element<'dr, D>,
+    error_terms: &FixedVec<Element<'dr, D>, ErrorTermsLen<NUM_REVDOT_CLAIMS>>,
+    ky_values: &FixedVec<Element<'dr, D>, ConstLen<NUM_REVDOT_CLAIMS>>,
+) -> Result<Element<'dr, D>> {
+    let munu = mu.mul(dr, nu)?;
+    let mu_inv = mu.invert(dr)?;
 
-/// Routine for folding the revdot claims into a target value c.
-#[derive(Clone, Default)]
-pub struct RevdotFolding<const NUM_REVDOT_CLAIMS: usize>;
+    let mut error_terms = error_terms.iter();
+    let mut ky_values = ky_values.iter();
 
-impl<F: Field, const NUM_REVDOT_CLAIMS: usize> Routine<F> for RevdotFolding<NUM_REVDOT_CLAIMS> {
-    type Input = Kind![F; RevdotFoldingInput<'_, _, NUM_REVDOT_CLAIMS>];
-    type Output = Kind![F; Element<'_, _>];
-    type Aux<'dr> = ();
+    let mut result = Element::zero(dr);
+    let mut row_power = Element::one();
 
-    fn execute<'dr, D: Driver<'dr, F = F>>(
-        &self,
-        dr: &mut D,
-        input: <Self::Input as GadgetKind<F>>::Rebind<'dr, D>,
-        _: DriverValue<D, Self::Aux<'dr>>,
-    ) -> Result<<Self::Output as GadgetKind<F>>::Rebind<'dr, D>> {
-        let munu = input.mu.mul(dr, &input.nu)?;
-        let mu_inv = input.mu.invert(dr)?;
+    for i in 0..NUM_REVDOT_CLAIMS {
+        let mut col_power = row_power.clone();
+        for j in 0..NUM_REVDOT_CLAIMS {
+            let term = if i == j {
+                ky_values.next().expect("should exist")
+            } else {
+                error_terms.next().expect("should exist")
+            };
 
-        let mut error_terms = input.error_matrix.into_inner().into_iter();
-        let mut ky_values = input.ky_values.into_inner().into_iter();
-
-        let mut result = Element::zero(dr);
-        let mut row_power = Element::one();
-
-        for i in 0..NUM_REVDOT_CLAIMS {
-            let mut col_power = row_power.clone();
-            for j in 0..NUM_REVDOT_CLAIMS {
-                let term = if i == j {
-                    ky_values.next().expect("should exist")
-                } else {
-                    error_terms.next().expect("should exist")
-                };
-
-                let contribution = col_power.mul(dr, &term)?;
-                result = result.add(dr, &contribution);
-                col_power = col_power.mul(dr, &munu)?;
-            }
-            row_power = row_power.mul(dr, &mu_inv)?;
+            let contribution = col_power.mul(dr, term)?;
+            result = result.add(dr, &contribution);
+            col_power = col_power.mul(dr, &munu)?;
         }
-
-        Ok(result)
+        row_power = row_power.mul(dr, &mu_inv)?;
     }
 
-    fn predict<'dr, D: Driver<'dr, F = F>>(
-        &self,
-        _dr: &mut D,
-        _input: &<Self::Input as GadgetKind<F>>::Rebind<'dr, D>,
-    ) -> Result<
-        Prediction<<Self::Output as GadgetKind<F>>::Rebind<'dr, D>, DriverValue<D, Self::Aux<'dr>>>,
-    > {
-        // Prediction requires the same computation as execution. Return `Prediction::Unknown` to defer to execute().
-        Ok(Prediction::Unknown(D::just(|| ())))
-    }
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -143,32 +96,24 @@ mod tests {
         let expected_c = arithmetic::eval(a.iter(), mu_inv) * arithmetic::eval(b.iter(), mu * nu);
 
         // Run routine with Emulator.
-        let mut emulator = Emulator::execute();
+        let dr = &mut Emulator::execute();
 
-        let mu = Element::constant(&mut emulator, mu);
-        let nu = Element::constant(&mut emulator, nu);
+        let mu = Element::constant(dr, mu);
+        let nu = Element::constant(dr, nu);
 
-        let error_vec = error
+        let error_terms = error
             .iter()
-            .map(|&v| Element::constant(&mut emulator, v))
+            .map(|&v| Element::constant(dr, v))
             .collect_fixed()
             .unwrap();
-        let error_matrix = ErrorMatrix::new(error_vec);
 
         let ky_values = ky
             .iter()
-            .map(|&v| Element::constant(&mut emulator, v))
+            .map(|&v| Element::constant(dr, v))
             .collect_fixed()
             .unwrap();
 
-        let input = RevdotFoldingInput {
-            mu,
-            nu,
-            error_matrix,
-            ky_values,
-        };
-
-        let result = emulator.routine(RevdotFolding::<NUM_REVDOT_CLAIMS>, input)?;
+        let result = compute_c::<_, NUM_REVDOT_CLAIMS>(dr, &mu, &nu, &error_terms, &ky_values)?;
         let computed_c = result.value().take();
 
         assert_eq!(

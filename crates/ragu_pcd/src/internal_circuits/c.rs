@@ -9,7 +9,7 @@ use ragu_core::{
     maybe::Maybe,
 };
 use ragu_primitives::{
-    Element, GadgetExt, Sponge,
+    Element,
     vec::{CollectFixed, FixedVec, Len},
 };
 
@@ -19,23 +19,22 @@ use super::{
     stages::native::preamble,
     unified::{self, OutputBuilder},
 };
-use crate::components::{
-    ErrorTermsLen,
-    fold_revdot::{ErrorMatrix, RevdotFolding, RevdotFoldingInput},
-};
+use crate::components::fold_revdot::{self, ErrorTermsLen};
 
 pub const CIRCUIT_ID: usize = super::C_CIRCUIT_ID;
 pub const STAGED_ID: usize = super::C_STAGED_ID;
 
-pub struct Circuit<'a, C: Cycle, R, const NUM_REVDOT_CLAIMS: usize> {
-    circuit_poseidon: &'a C::CircuitPoseidon,
-    _marker: PhantomData<(C, R)>,
+pub struct Circuit<'params, C: Cycle, R, const NUM_REVDOT_CLAIMS: usize> {
+    params: &'params C,
+    _marker: PhantomData<R>,
 }
 
-impl<'a, C: Cycle, R: Rank, const NUM_REVDOT_CLAIMS: usize> Circuit<'a, C, R, NUM_REVDOT_CLAIMS> {
-    pub fn new(circuit_poseidon: &'a C::CircuitPoseidon) -> Staged<C::CircuitField, R, Self> {
+impl<'params, C: Cycle, R: Rank, const NUM_REVDOT_CLAIMS: usize>
+    Circuit<'params, C, R, NUM_REVDOT_CLAIMS>
+{
+    pub fn new(params: &'params C) -> Staged<C::CircuitField, R, Self> {
         Staged::new(Circuit {
-            circuit_poseidon,
+            params,
             _marker: PhantomData,
         })
     }
@@ -43,8 +42,6 @@ impl<'a, C: Cycle, R: Rank, const NUM_REVDOT_CLAIMS: usize> Circuit<'a, C, R, NU
 
 pub struct Witness<'a, C: Cycle, const NUM_REVDOT_CLAIMS: usize> {
     pub unified_instance: &'a unified::Instance<C>,
-    pub mu: C::CircuitField,
-    pub nu: C::CircuitField,
     pub error_terms: FixedVec<C::CircuitField, ErrorTermsLen<NUM_REVDOT_CLAIMS>>,
 }
 
@@ -88,11 +85,13 @@ impl<C: Cycle, R: Rank, const NUM_REVDOT_CLAIMS: usize> StagedCircuit<C::Circuit
             // Grab nested_preamble_commitment from the unified instance
             let nested_preamble_commitment = unified_output
                 .nested_preamble_commitment
-                .get(dr, unified_instance);
+                .get(dr, unified_instance)?;
 
-            let mut sponge = Sponge::new(dr, self.circuit_poseidon);
-            nested_preamble_commitment.write(dr, &mut sponge)?;
-            let w = sponge.squeeze(dr)?;
+            let w = crate::components::transcript::derive_w::<_, C>(
+                dr,
+                &nested_preamble_commitment,
+                self.params,
+            )?;
 
             // Use our local w value to impose upon the unified instance
             unified_output.w.set(w);
@@ -102,29 +101,27 @@ impl<C: Cycle, R: Rank, const NUM_REVDOT_CLAIMS: usize> StagedCircuit<C::Circuit
 
         // Compute c, the folded revdot product claim.
         {
-            // TODO: witnessing these values for now; derive them later
-            let mu = Element::alloc(dr, witness.view().map(|w| w.mu))?;
-            let nu = Element::alloc(dr, witness.view().map(|w| w.nu))?;
+            // Grab mu and nu from the unified instance
+            let mu = unified_output.mu.get(dr, unified_instance)?;
+            let nu = unified_output.nu.get(dr, unified_instance)?;
 
-            // Allocate error terms from witness as an error matrix.
-            let error_elements = (0..ErrorTermsLen::<NUM_REVDOT_CLAIMS>::len())
+            // Allocate error terms.
+            let error_terms = ErrorTermsLen::<NUM_REVDOT_CLAIMS>::range()
                 .map(|i| Element::alloc(dr, witness.view().map(|w| w.error_terms[i])))
                 .try_collect_fixed()?;
-            let error_matrix = ErrorMatrix::new(error_elements);
 
             // TODO: Use zeros for ky_values for now.
             let ky_values = (0..NUM_REVDOT_CLAIMS)
                 .map(|_| Element::zero(dr))
                 .collect_fixed()?;
 
-            let input = RevdotFoldingInput {
-                mu,
-                nu,
-                error_matrix,
-                ky_values,
-            };
-
-            let c = dr.routine(RevdotFolding::<NUM_REVDOT_CLAIMS>, input)?;
+            let c = fold_revdot::compute_c::<_, NUM_REVDOT_CLAIMS>(
+                dr,
+                &mu,
+                &nu,
+                &error_terms,
+                &ky_values,
+            )?;
             unified_output.c.set(c);
         }
 

@@ -5,24 +5,18 @@ use ragu_circuits::{
     polynomials::{Rank, structured},
     staging::StageExt,
 };
-use ragu_core::{
-    drivers::{Driver, emulator::Emulator},
-    maybe::{Always, Maybe, MaybeKind},
-};
+use ragu_core::{Result, drivers::emulator::Emulator, maybe::Maybe};
 use ragu_primitives::{
-    Element, GadgetExt, Point, Sponge,
+    Element,
     vec::{CollectFixed, Len},
 };
-use rand::rngs::OsRng;
+use rand::{Rng, rngs::OsRng};
 
 use alloc::{vec, vec::Vec};
 
 use crate::{
     Application,
-    components::{
-        ErrorTermsLen,
-        fold_revdot::{ErrorMatrix, RevdotFolding, RevdotFoldingInput},
-    },
+    components::fold_revdot::{self, ErrorTermsLen},
     header::Header,
     internal_circuits::{self, NUM_REVDOT_CLAIMS, dummy},
 };
@@ -59,6 +53,8 @@ pub(crate) struct InternalCircuits<C: Cycle, R: Rank> {
     pub(crate) w: C::CircuitField,
     pub(crate) c: C::CircuitField,
     pub(crate) c_rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) mu: C::CircuitField,
+    pub(crate) nu: C::CircuitField,
 }
 
 impl<C: Cycle, R: Rank> Clone for Proof<C, R> {
@@ -101,6 +97,8 @@ impl<C: Cycle, R: Rank> Clone for InternalCircuits<C, R> {
             w: self.w,
             c: self.c,
             c_rx: self.c_rx.clone(),
+            mu: self.mu,
+            nu: self.nu,
         }
     }
 }
@@ -136,96 +134,85 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     /// This may or may not be identical to any previously constructed (trivial)
     /// proof, and so is not guaranteed to be freshly randomized.
     pub fn trivial(&self) -> Proof<C, R> {
+        self.try_trivial(&mut OsRng)
+            .expect("trivial proof generation should not fail")
+    }
+
+    fn try_trivial<RNG: Rng>(&self, rng: &mut RNG) -> Result<Proof<C, R>> {
         use internal_circuits::stages;
 
         // Preamble rx polynomial
-        let native_preamble_rx =
-            stages::native::preamble::Stage::<C, R>::rx(()).expect("preamble rx should not fail");
-        let native_preamble_blind = C::CircuitField::ONE;
+        let native_preamble_rx = stages::native::preamble::Stage::<C, R>::rx(())?;
+        let native_preamble_blind = C::CircuitField::random(&mut *rng);
         let native_preamble_commitment =
             native_preamble_rx.commit(self.params.host_generators(), native_preamble_blind);
 
         // Nested preamble rx polynomial
         let nested_preamble_rx =
-            stages::nested::preamble::Stage::<C::HostCurve, R>::rx(native_preamble_commitment)
-                .expect("nested preamble rx should not fail");
-        let nested_preamble_blind = C::ScalarField::ONE;
+            stages::nested::preamble::Stage::<C::HostCurve, R>::rx(native_preamble_commitment)?;
+        let nested_preamble_blind = C::ScalarField::random(&mut *rng);
         let nested_preamble_commitment =
             nested_preamble_rx.commit(self.params.nested_generators(), nested_preamble_blind);
 
         // Compute w = H(nested_preamble_commitment)
-        let circuit_poseidon = self.params.circuit_poseidon();
-        let w: C::CircuitField =
-            Emulator::emulate_wireless(nested_preamble_commitment, |dr, comm| {
-                let point = Point::alloc(dr, comm)?;
-                let mut sponge = Sponge::new(dr, circuit_poseidon);
-                point.write(dr, &mut sponge)?;
-                Ok(*sponge.squeeze(dr)?.value().take())
-            })
-            .expect("w computation should not fail");
+        let w =
+            crate::components::transcript::emulate_w::<C>(nested_preamble_commitment, self.params)?;
 
         // Generate dummy values for mu, nu, and error_terms (for now – these will be derived challenges)
-        let mu = C::CircuitField::random(OsRng);
-        let nu = C::CircuitField::random(OsRng);
-        let mu_inv = mu.invert().unwrap();
-        let error_terms = (0..ErrorTermsLen::<NUM_REVDOT_CLAIMS>::len())
-            .map(|_| C::CircuitField::random(OsRng))
-            .collect_fixed()
-            .expect("error_terms collection should not fail");
+        let mu = C::CircuitField::random(&mut *rng);
+        let nu = C::CircuitField::random(&mut *rng);
+        let error_terms = ErrorTermsLen::<NUM_REVDOT_CLAIMS>::range()
+            .map(|_| C::CircuitField::random(&mut *rng))
+            .collect_fixed()?;
 
         // Compute c, the folded revdot product claim, by invoking the routine within a wireless emulator.
-        let c = Emulator::emulate_wireless((mu, nu, mu_inv, error_terms.clone()), |dr, _| {
-            let mu = Element::alloc(dr, Always::maybe_just(|| mu))?;
-            let nu = Element::alloc(dr, Always::maybe_just(|| nu))?;
+        let c = Emulator::emulate_wireless((mu, nu, &error_terms), |dr, witness| {
+            let (mu, nu, error_terms) = witness.cast();
 
-            let error_matrix = ErrorMatrix::new(
-                error_terms
-                    .iter()
-                    .map(|&et| Element::alloc(dr, Always::maybe_just(|| et)))
-                    .try_collect_fixed()?,
-            );
+            let mu = Element::alloc(dr, mu)?;
+            let nu = Element::alloc(dr, nu)?;
+
+            let error_terms = ErrorTermsLen::<NUM_REVDOT_CLAIMS>::range()
+                .map(|i| Element::alloc(dr, error_terms.view().map(|et| et[i])))
+                .try_collect_fixed()?;
 
             // TODO: Use zeros for ky_values for now.
             let ky_values = (0..NUM_REVDOT_CLAIMS)
                 .map(|_| Element::zero(dr))
                 .collect_fixed()?;
 
-            let input = RevdotFoldingInput {
-                mu,
-                nu,
-                error_matrix,
-                ky_values,
-            };
-            let c = dr.routine(RevdotFolding::<NUM_REVDOT_CLAIMS>, input)?;
-            Ok(*c.value().take())
-        })
-        .expect("c should not fail");
+            Ok(*fold_revdot::compute_c::<_, NUM_REVDOT_CLAIMS>(
+                dr,
+                &mu,
+                &nu,
+                &error_terms,
+                &ky_values,
+            )?
+            .value()
+            .take())
+        })?;
 
         // Create unified instance and compute c_rx
         let unified_instance = internal_circuits::unified::Instance {
             nested_preamble_commitment,
             w,
             c,
-        };
-        let internal_circuit_c =
-            internal_circuits::c::Circuit::<C, R, NUM_REVDOT_CLAIMS>::new(circuit_poseidon);
-        let internal_circuit_c_witness = internal_circuits::c::Witness {
-            unified_instance: &unified_instance,
             mu,
             nu,
+        };
+        let internal_circuit_c =
+            internal_circuits::c::Circuit::<C, R, NUM_REVDOT_CLAIMS>::new(self.params);
+        let internal_circuit_c_witness = internal_circuits::c::Witness {
+            unified_instance: &unified_instance,
             error_terms,
         };
-        let (c_rx, _) = internal_circuit_c
-            .rx::<R>(internal_circuit_c_witness, self.circuit_mesh.get_key())
-            .expect("c_rx computation should not fail");
+        let (c_rx, _) =
+            internal_circuit_c.rx::<R>(internal_circuit_c_witness, self.circuit_mesh.get_key())?;
 
         // Application rx polynomial
-        let application_rx = dummy::Circuit
-            .rx((), self.circuit_mesh.get_key())
-            .expect("should not fail")
-            .0;
+        let application_rx = dummy::Circuit.rx((), self.circuit_mesh.get_key())?.0;
 
-        Proof {
+        Ok(Proof {
             preamble: PreambleProof {
                 native_preamble_rx,
                 native_preamble_commitment,
@@ -234,13 +221,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 nested_preamble_commitment,
                 nested_preamble_blind,
             },
-            internal_circuits: InternalCircuits { w, c, c_rx },
+            internal_circuits: InternalCircuits { w, c, c_rx, mu, nu },
             application: ApplicationProof {
                 rx: application_rx,
                 circuit_id: internal_circuits::index(self.num_application_steps, dummy::CIRCUIT_ID),
                 left_header: vec![C::CircuitField::ZERO; HEADER_SIZE],
                 right_header: vec![C::CircuitField::ZERO; HEADER_SIZE],
             },
-        }
+        })
     }
 }

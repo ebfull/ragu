@@ -53,6 +53,11 @@ pub trait Len: Send + Sync + 'static {
     /// This must always return the same value for a given concrete
     /// implementation.
     fn len() -> usize;
+
+    /// Returns a range from `0` to [`Self::len()`].
+    fn range() -> core::ops::Range<usize> {
+        0..Self::len()
+    }
 }
 
 /// Represents a length determined at compile time.
@@ -175,6 +180,15 @@ impl<T, L: Len> Deref for FixedVec<T, L> {
 impl<T, L: Len> DerefMut for FixedVec<T, L> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.v[..]
+    }
+}
+
+impl<T, L: Len> IntoIterator for FixedVec<T, L> {
+    type Item = T;
+    type IntoIter = alloc::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.v.into_iter()
     }
 }
 

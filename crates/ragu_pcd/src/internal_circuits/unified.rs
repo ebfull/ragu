@@ -24,6 +24,10 @@ pub struct Output<'dr, D: Driver<'dr>, C: Cycle> {
     pub w: Element<'dr, D>,
     #[ragu(gadget)]
     pub c: Element<'dr, D>,
+    #[ragu(gadget)]
+    pub mu: Element<'dr, D>,
+    #[ragu(gadget)]
+    pub nu: Element<'dr, D>,
 
     /// This is used to ensure k(Y) has a zero coefficient for the linear term.
     #[ragu(gadget)]
@@ -34,17 +38,19 @@ pub struct Instance<C: Cycle> {
     pub nested_preamble_commitment: C::NestedCurve,
     pub w: C::CircuitField,
     pub c: C::CircuitField,
+    pub mu: C::CircuitField,
+    pub nu: C::CircuitField,
 }
 
 /// An entry in the shared public inputs for an internal circuit.
 pub struct Slot<'a, 'dr, D: Driver<'dr>, T, C: Cycle> {
     value: Option<T>,
-    alloc: fn(&mut D, &DriverValue<D, &'a Instance<C>>) -> T,
+    alloc: fn(&mut D, &DriverValue<D, &'a Instance<C>>) -> Result<T>,
     _marker: core::marker::PhantomData<&'dr ()>,
 }
 
 impl<'a, 'dr, D: Driver<'dr>, T: Clone, C: Cycle> Slot<'a, 'dr, D, T, C> {
-    pub(super) fn new(alloc: fn(&mut D, &DriverValue<D, &'a Instance<C>>) -> T) -> Self {
+    pub(super) fn new(alloc: fn(&mut D, &DriverValue<D, &'a Instance<C>>) -> Result<T>) -> Self {
         Slot {
             value: None,
             alloc,
@@ -52,11 +58,11 @@ impl<'a, 'dr, D: Driver<'dr>, T: Clone, C: Cycle> Slot<'a, 'dr, D, T, C> {
         }
     }
 
-    pub fn get(&mut self, dr: &mut D, instance: &DriverValue<D, &'a Instance<C>>) -> T {
+    pub fn get(&mut self, dr: &mut D, instance: &DriverValue<D, &'a Instance<C>>) -> Result<T> {
         assert!(self.value.is_none(), "Slot::get: slot already filled");
-        let value = (self.alloc)(dr, instance);
+        let value = (self.alloc)(dr, instance)?;
         self.value = Some(value.clone());
-        value
+        Ok(value)
     }
 
     pub fn set(&mut self, value: T) {
@@ -64,8 +70,10 @@ impl<'a, 'dr, D: Driver<'dr>, T: Clone, C: Cycle> Slot<'a, 'dr, D, T, C> {
         self.value = Some(value);
     }
 
-    fn unwrap(self, dr: &mut D, instance: &DriverValue<D, &'a Instance<C>>) -> T {
-        self.value.unwrap_or_else(|| (self.alloc)(dr, instance))
+    fn take(self, dr: &mut D, instance: &DriverValue<D, &'a Instance<C>>) -> Result<T> {
+        self.value
+            .map(Result::Ok)
+            .unwrap_or_else(|| (self.alloc)(dr, instance))
     }
 }
 
@@ -73,6 +81,8 @@ pub struct OutputBuilder<'a, 'dr, D: Driver<'dr>, C: Cycle> {
     pub nested_preamble_commitment: Slot<'a, 'dr, D, Point<'dr, D, C::NestedCurve>, C>,
     pub w: Slot<'a, 'dr, D, Element<'dr, D>, C>,
     pub c: Slot<'a, 'dr, D, Element<'dr, D>, C>,
+    pub mu: Slot<'a, 'dr, D, Element<'dr, D>, C>,
+    pub nu: Slot<'a, 'dr, D, Element<'dr, D>, C>,
 }
 
 impl<'a, 'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle> OutputBuilder<'a, 'dr, D, C> {
@@ -80,14 +90,14 @@ impl<'a, 'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle> OutputBuilder<'a, '
         macro_rules! point_slot {
             ($field:ident) => {
                 Slot::new(|dr, i: &DriverValue<D, &'a Instance<C>>| {
-                    Point::alloc(dr, i.view().map(|i| i.$field)).unwrap()
+                    Point::alloc(dr, i.view().map(|i| i.$field))
                 })
             };
         }
         macro_rules! element_slot {
             ($field:ident) => {
                 Slot::new(|dr, i: &DriverValue<D, &'a Instance<C>>| {
-                    Element::alloc(dr, i.view().map(|i| i.$field)).unwrap()
+                    Element::alloc(dr, i.view().map(|i| i.$field))
                 })
             };
         }
@@ -95,6 +105,8 @@ impl<'a, 'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle> OutputBuilder<'a, '
             nested_preamble_commitment: point_slot!(nested_preamble_commitment),
             w: element_slot!(w),
             c: element_slot!(c),
+            mu: element_slot!(mu),
+            nu: element_slot!(nu),
         }
     }
 
@@ -104,9 +116,11 @@ impl<'a, 'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle> OutputBuilder<'a, '
         instance: &DriverValue<D, &'a Instance<C>>,
     ) -> Result<Output<'dr, D, C>> {
         Ok(Output {
-            nested_preamble_commitment: self.nested_preamble_commitment.unwrap(dr, instance),
-            w: self.w.unwrap(dr, instance),
-            c: self.c.unwrap(dr, instance),
+            nested_preamble_commitment: self.nested_preamble_commitment.take(dr, instance)?,
+            w: self.w.take(dr, instance)?,
+            c: self.c.take(dr, instance)?,
+            mu: self.mu.take(dr, instance)?,
+            nu: self.nu.take(dr, instance)?,
             zero: Element::zero(dr),
         })
     }

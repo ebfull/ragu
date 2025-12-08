@@ -216,9 +216,8 @@ fn test_multipack_vector() -> Result<()> {
 
     let bits = vec![false, true, true, false, true]; // 0b10110 = 22
     Simulator::simulate(bits, |dr, bits| {
-        let mut bits = bits.map(|b| b.into_iter());
         let bits = (0..5)
-            .map(|_| Boolean::alloc(dr, bits.view_mut().map(|v| v.next().unwrap())))
+            .map(|i| Boolean::alloc(dr, bits.view().map(|b| b[i])))
             .collect::<Result<Vec<_>>>()?;
 
         let vals = multipack(dr, &bits)?;
