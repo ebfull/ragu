@@ -6,6 +6,6 @@
 
 > ⚠️ **Ragu is under heavy development and has not undergone auditing.** Do not use this software in production.
 
-This book contains documentation about [how to use Ragu](guide/index.md), [how it is developed](development/index.md) and details about how its underlying cryptographic protocol is [designed](design/index.md).
+This book contains documentation about [how to use Ragu](guide/getting_started.md), the [protocol specification](protocol/index.md), and [implementation details](implementation/arch.md).
 
 This book is developed within the Ragu repository itself. See [the source](https://github.com/tachyon-zcash/ragu/tree/main/book) for more information about how it is developed and published.

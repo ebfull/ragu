@@ -51,5 +51,4 @@ When writing gadgets with the `GadgetKind` trait, you'll work with `Maybe<T>` va
 - **Emulator** - Direct execution without constraints
 - **Simulator** - Full synthesis simulation with validation
 
-For implementation details, see [Driver Architecture](../implementation/drivers/architecture.md).
-  * [ ] 
+For implementation details, see [Driver Architecture](../implementation/drivers/index.md).

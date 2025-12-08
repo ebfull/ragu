@@ -57,7 +57,7 @@ $$
 \revdot{\v{r}}{\v{r} \circ{\v{z^{4n}}} + \v{t}} = 0
 $$
 
-holds for a random $z$, then $\textcolor{blue}{\v{a} \circ \v{b} = \v{c}}$ and ${\v{c} \circ \v{d} = \v{0^n}}$ each hold with high probability. (The latter claim is useless and redundant for our purposes, since $\v{d} = \v{0^n}$ for [witness vectors](witness.md) anyway.)
+holds for a random $z$, then $\textcolor{blue}{\v{a} \circ \v{b} = \v{c}}$ and ${\v{c} \circ \v{d} = \v{0^n}}$ each hold with high probability. (The latter claim is useless and redundant for our purposes, since $\v{d} = \v{0^n}$ for witness vectors anyway.)
 
 ## Linear Constraints
 

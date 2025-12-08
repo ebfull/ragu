@@ -38,7 +38,7 @@ $$
 \end{array}
 $$
 
-and so we can encode [multiplication constraints](circuits/constraints.md#multiplication-constraints)
+and so we can encode [multiplication constraints](../protocol/prelim/cs.md#multiplication-constraints)
 into claims about such vectors, using verifier challenges to keep the claims linearly independent.
 
 ### Folding

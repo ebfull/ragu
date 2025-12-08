@@ -18,4 +18,4 @@ The left-hand side of all linear constraints are linear combinations of elements
 
 ### `ONE`
 
-Circuits always have the specially-labeled `ONE` wire $\v{c}_0 = 1$. This is enforced with the [linear constraint](constraints.md#linear-constraints) $\v{c}_0 = \v{k}_0 = 1$.
+Circuits always have the specially-labeled `ONE` wire $\v{c}_0 = 1$. This is enforced with the [linear constraint](../protocol/prelim/cs.md#linear-constraints) $\v{c}_0 = \v{k}_0 = 1$.

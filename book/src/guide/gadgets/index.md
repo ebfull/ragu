@@ -2,7 +2,7 @@
 
 A **gadget** is the fundamental unit of all algorithms expressed as arithmetic circuits. It consists of a collection of _wires_, the _witness_ information required to reason about their possible assignments, and the _constraints_ that impose invariants over these assignments. Gadgets consolidate these components into an opaque type that guards how the underlying wires are manipulated and optimizes how their witness information is represented.
 
-As an example, one of the simplest gadgets is the [`Boolean`][boolean-gadget] gadget which internally represents a wire that is constrained to be $0$ or $1$ together with the witness information (a `bool`) that describes its assignment. Wires always take the form of an associated type `D::Wire` based on the [driver](drivers.md) `D`, and so the `Boolean` gadget could be represented by the Rust structure:
+As an example, one of the simplest gadgets is the [`Boolean`][boolean-gadget] gadget which internally represents a wire that is constrained to be $0$ or $1$ together with the witness information (a `bool`) that describes its assignment. Wires always take the form of an associated type `D::Wire` based on the [driver](../drivers.md) `D`, and so the `Boolean` gadget could be represented by the Rust structure:
 
 ```rust
 pub struct Boolean<'dr, D: Driver<'dr>> {
@@ -36,7 +36,7 @@ Gadgets usually can (and should) implement the [`Gadget`][gadget-trait] trait, w
 
 ### Transformations
 
-Due to the above guarantees, types that implement [`Gadget`][gadget-trait] can be transformed between drivers. This is very useful for implementations of drivers themselves, which may need to perform deep analysis of a gadget's constituent wires for various kinds of optimizations. The primary boundary where these optimizations are applied involves the inputs and outputs of [routines](routines.md).
+Due to the above guarantees, types that implement [`Gadget`][gadget-trait] can be transformed between drivers. This is very useful for implementations of drivers themselves, which may need to perform deep analysis of a gadget's constituent wires for various kinds of optimizations. The primary boundary where these optimizations are applied involves the inputs and outputs of [routines](../routines.md).
 
 In order to transform a gadget from one driver to another, gadgets provide a [`map_gadget`][map-gadget-method] method implementation which uses the [`FromDriver`][fromdriver-trait] to map a gadget's constituent wires and witness data to a new [`Driver`][driver-trait].
 
