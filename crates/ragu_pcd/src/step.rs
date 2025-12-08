@@ -1,6 +1,7 @@
 //! Merging operations defined for the proof-carrying data computational graph.
 
 use arithmetic::Cycle;
+use ragu_circuits::CircuitIndex;
 use ragu_core::{
     Result,
     drivers::{Driver, DriverValue},
@@ -54,9 +55,9 @@ impl Index {
     /// Pass the known number of application steps to validate and compute the
     /// final index of this step. Returns an error if an application step index
     /// exceeds the number of registered steps.
-    pub(crate) fn circuit_index(&self, num_application_steps: usize) -> Result<usize> {
+    pub(crate) fn circuit_index(&self, num_application_steps: usize) -> Result<CircuitIndex> {
         match self.index {
-            StepIndex::Internal(i) => Ok(num_application_steps + (i as usize)),
+            StepIndex::Internal(i) => Ok(CircuitIndex::new(num_application_steps + (i as usize))),
             StepIndex::Application(i) => {
                 if i >= num_application_steps {
                     return Err(ragu_core::Error::Initialization(
@@ -64,7 +65,7 @@ impl Index {
                         ));
                 }
 
-                Ok(i)
+                Ok(CircuitIndex::new(i))
             }
         }
     }
@@ -105,11 +106,16 @@ fn test_index_map() -> Result<()> {
 
     assert_eq!(
         Index::internal(InternalStepIndex::Rerandomize).circuit_index(num_application_steps)?,
-        10
+        CircuitIndex::new(10)
     );
-
-    assert_eq!(Index::new(0).circuit_index(num_application_steps)?, 0);
-    assert_eq!(Index::new(1).circuit_index(num_application_steps)?, 1);
+    assert_eq!(
+        Index::new(0).circuit_index(num_application_steps)?,
+        CircuitIndex::new(0)
+    );
+    assert_eq!(
+        Index::new(1).circuit_index(num_application_steps)?,
+        CircuitIndex::new(1)
+    );
     Index::new(999).assert_index(999)?;
     assert!(Index::new(10).circuit_index(num_application_steps).is_err());
 

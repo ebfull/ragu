@@ -12,7 +12,7 @@ use ragu_primitives::Element;
 use rand::thread_rng;
 
 use crate::{
-    Circuit, CircuitExt, CircuitObject,
+    Circuit, CircuitExt, CircuitIndex, CircuitObject,
     polynomials::{R, Rank},
 };
 
@@ -187,4 +187,54 @@ fn test_simple_circuit() {
     let b = b.unstructured();
 
     assert_eq!(expected, arithmetic::dot(a.iter(), b.iter().rev()),);
+}
+
+#[test]
+fn test_omega_j_multiplicative_order() {
+    /// Return the 2^k multiplicative order of f (assumes f is a 2^k root of unity).
+    fn order<F: Field>(mut f: F) -> usize {
+        let mut order = 0;
+        while f != F::ONE {
+            f = f.square();
+            order += 1;
+        }
+        1 << order
+    }
+    assert_eq!(CircuitIndex::new(0).into::<Fp>(), Fp::ONE);
+    assert_eq!(CircuitIndex::new(1).into::<Fp>(), -Fp::ONE);
+    assert_eq!(order(CircuitIndex::new(0).into::<Fp>()), 1);
+    assert_eq!(order(CircuitIndex::new(1).into::<Fp>()), 2);
+    assert_eq!(order(CircuitIndex::new(2).into::<Fp>()), 4);
+    assert_eq!(order(CircuitIndex::new(3).into::<Fp>()), 4);
+    assert_eq!(order(CircuitIndex::new(4).into::<Fp>()), 8);
+    assert_eq!(order(CircuitIndex::new(5).into::<Fp>()), 8);
+    assert_eq!(order(CircuitIndex::new(6).into::<Fp>()), 8);
+    assert_eq!(order(CircuitIndex::new(7).into::<Fp>()), 8);
+}
+
+#[test]
+fn test_omega_j_consistency() -> Result<()> {
+    use arithmetic::{Domain, bitreverse};
+    use ff::PrimeField;
+
+    for num_circuits in [2usize, 3, 7, 8, 15, 16, 32] {
+        let log2_circuits = num_circuits.next_power_of_two().trailing_zeros();
+        let domain = Domain::<Fp>::new(log2_circuits);
+
+        for id in 0..num_circuits {
+            let omega_from_function = CircuitIndex::new(id).into::<Fp>();
+
+            let bit_reversal_id = bitreverse(id as u32, Fp::S);
+            let position = ((bit_reversal_id as u64) >> (Fp::S - log2_circuits)) as usize;
+            let omega_from_finalization = domain.omega().pow([position as u64]);
+
+            assert_eq!(
+                omega_from_function, omega_from_finalization,
+                "Omega mismatch for circuit {} in mesh of size {}",
+                id, num_circuits
+            );
+        }
+    }
+
+    Ok(())
 }

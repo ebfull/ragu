@@ -1,7 +1,7 @@
 use arithmetic::Cycle;
 use ff::Field;
 use ragu_circuits::{
-    CircuitExt,
+    CircuitExt, CircuitIndex,
     polynomials::{Rank, structured},
     staging::StageExt,
 };
@@ -29,7 +29,7 @@ pub struct Proof<C: Cycle, R: Rank> {
 }
 
 pub(crate) struct ApplicationProof<C: Cycle, R: Rank> {
-    pub(crate) circuit_id: usize,
+    pub(crate) circuit_id: CircuitIndex,
     pub(crate) left_header: Vec<C::CircuitField>,
     pub(crate) right_header: Vec<C::CircuitField>,
     pub(crate) rx: structured::Polynomial<C::CircuitField, R>,

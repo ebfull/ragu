@@ -14,7 +14,7 @@
 
 extern crate alloc;
 
-use ff::Field;
+use ff::{Field, PrimeField};
 use ragu_core::{
     Error, Result,
     drivers::{Driver, DriverValue},
@@ -160,4 +160,38 @@ pub trait CircuitObject<F: Field, R: Rank>: Send + Sync {
 
     /// Computes the polynomial restriction $s(X, y)$ for some $y \in \mathbb{F}$.
     fn sy(&self, y: F, key: F) -> structured::Polynomial<F, R>;
+}
+
+/// Represents a simple numeric index of a circuit in the mesh.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug)]
+pub struct CircuitIndex(usize);
+
+impl PartialEq<CircuitIndex> for CircuitIndex {
+    fn eq(&self, other: &CircuitIndex) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl CircuitIndex {
+    /// Creates a new circuit index.
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    /// Returns $\omega^j$ field element that corresponds to this $i$th circuit index.
+    ///
+    /// The $i$th circuit added to any [`mesh::Mesh`] (for a given [`PrimeField`] `F`) is
+    /// assigned the domain element of smallest multiplicative order not yet
+    /// assigned to any circuit prior to $i$. This corresponds with $\Omega^{f(i)}$
+    /// where $f(i)$ is the [`S`](PrimeField::S)-bit reversal of `i` and $\Omega$ is
+    /// the primitive [root of unity](PrimeField::ROOT_OF_UNITY) of order $2^{S}$ in
+    /// `F`.
+    ///
+    /// Notably, the result of this function does not depend on the actual size of
+    /// the [`mesh::Mesh`]'s interpolation polynomial domain.
+    pub fn into<F: PrimeField>(self) -> F {
+        let bit_reversal_id = arithmetic::bitreverse(self.0.try_into().unwrap(), F::S);
+        F::ROOT_OF_UNITY.pow([bit_reversal_id as u64])
+    }
 }
