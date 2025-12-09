@@ -1,11 +1,10 @@
-use alloc::vec::Vec;
 use arithmetic::Cycle;
 use ff::Field;
-use ragu_circuits::{CircuitExt, mesh::omega_j, polynomials::Rank, staging::StageExt};
-use ragu_core::{Error, Result, drivers::emulator::Emulator, maybe::Maybe};
+use ragu_circuits::{CircuitExt, polynomials::Rank, staging::StageExt};
+use ragu_core::{Result, drivers::emulator::Emulator, maybe::Maybe};
 use ragu_primitives::{
     Element,
-    vec::{CollectFixed, FixedVec, Len},
+    vec::{CollectFixed, Len},
 };
 use rand::Rng;
 
@@ -15,7 +14,6 @@ use crate::{
     internal_circuits::{self, NUM_REVDOT_CLAIMS, stages::native::preamble},
     proof::{ApplicationProof, InternalCircuits, Pcd, PreambleProof, Proof},
     step::{Step, adapter::Adapter},
-    verify::stub_step::StubStep,
 };
 
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_SIZE> {
@@ -46,63 +44,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let host_generators = self.params.host_generators();
         let nested_generators = self.params.nested_generators();
 
-        // Reconstruct k(Y) public input polynomial for the left and right PCDs.
-        let left_ky_poly = {
-            let adapter = Adapter::<C, StubStep<S::Left>, R, HEADER_SIZE>::new(StubStep::new());
-            let left_header = FixedVec::try_from(left.proof.application.left_header)
-                .map_err(|_| Error::MalformedEncoding("left header size".into()))?;
-            let right_header = FixedVec::try_from(left.proof.application.right_header)
-                .map_err(|_| Error::MalformedEncoding("right header size".into()))?;
-            adapter.ky((left_header, right_header, left.data.clone()))?
-        };
-
-        let right_ky_poly = {
-            let adapter = Adapter::<C, StubStep<S::Right>, R, HEADER_SIZE>::new(StubStep::new());
-            let left_header = FixedVec::try_from(right.proof.application.left_header)
-                .map_err(|_| Error::MalformedEncoding("left header size".into()))?;
-            let right_header = FixedVec::try_from(right.proof.application.right_header)
-                .map_err(|_| Error::MalformedEncoding("right header size".into()))?;
-            adapter.ky((left_header, right_header, right.data.clone()))?
-        };
-
-        // Extract headers from k(Y) polynomials.
-        fn extract_headers<F: Copy, const HEADER_SIZE: usize>(
-            ky_poly: Vec<F>,
-        ) -> preamble::ProofHeaders<F, HEADER_SIZE> {
-            let mut right_header = [ky_poly[0]; HEADER_SIZE];
-            let mut left_header = [ky_poly[0]; HEADER_SIZE];
-            let mut output_header = [ky_poly[0]; HEADER_SIZE];
-
-            for i in 0..HEADER_SIZE {
-                right_header[i] = ky_poly[i];
-                left_header[i] = ky_poly[HEADER_SIZE + i];
-                output_header[i] = ky_poly[2 * HEADER_SIZE + i];
-            }
-
-            preamble::ProofHeaders {
-                right_header,
-                left_header,
-                output_header,
-            }
-        }
-
-        let preamble_witness = preamble::Witness {
-            left: extract_headers::<C::CircuitField, HEADER_SIZE>(left_ky_poly),
-            right: extract_headers::<C::CircuitField, HEADER_SIZE>(right_ky_poly),
-            // Circuit IDs from left / right proofs
-            left_circuit_id: omega_j(left.proof.application.circuit_id as u32),
-            right_circuit_id: omega_j(right.proof.application.circuit_id as u32),
-            // Unified instance data from left proof
-            left_w: left.proof.internal_circuits.w,
-            left_c: left.proof.internal_circuits.c,
-            left_mu: left.proof.internal_circuits.mu,
-            left_nu: left.proof.internal_circuits.nu,
-            // Unified instance data from right proof
-            right_w: right.proof.internal_circuits.w,
-            right_c: right.proof.internal_circuits.c,
-            right_mu: right.proof.internal_circuits.mu,
-            right_nu: right.proof.internal_circuits.nu,
-        };
+        // Create preamble witness from PCDs.
+        let preamble_witness = preamble::Witness::from_pcds(&left, &right)?;
 
         // Compute native preamble
         let native_preamble_rx = preamble::Stage::<C, R, HEADER_SIZE>::rx(&preamble_witness)?;
@@ -186,8 +129,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     },
                     self.circuit_mesh.get_key(),
                 )?;
-        let c_rx_blinding = C::CircuitField::random(&mut *rng);
-        let c_rx_commitment = c_rx.commit(host_generators, c_rx_blinding);
+        let c_rx_blind = C::CircuitField::random(&mut *rng);
+        let c_rx_commitment = c_rx.commit(host_generators, c_rx_blind);
 
         // Application
         let application_circuit_id = S::INDEX.circuit_index(self.num_application_steps)?;
@@ -195,9 +138,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             (left.data, right.data, witness),
             self.circuit_mesh.get_key(),
         )?;
-        let application_rx_blinding = C::CircuitField::random(&mut *rng);
+        let application_rx_blind = C::CircuitField::random(&mut *rng);
         let application_rx_commitment =
-            application_rx.commit(host_generators, application_rx_blinding);
+            application_rx.commit(host_generators, application_rx_blind);
 
         let ((left_header, right_header), aux) = aux;
 
@@ -215,7 +158,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     w,
                     c,
                     c_rx,
-                    c_rx_blinding,
+                    c_rx_blind,
                     c_rx_commitment,
                     mu,
                     nu,
@@ -225,7 +168,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     left_header: left_header.into_inner(),
                     right_header: right_header.into_inner(),
                     rx: application_rx,
-                    blind: application_rx_blinding,
+                    blind: application_rx_blind,
                     commitment: application_rx_commitment,
                 },
             },

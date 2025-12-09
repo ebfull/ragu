@@ -1,4 +1,4 @@
-use arithmetic::Cycle;
+use arithmetic::{Cycle, FixedGenerators};
 use ff::Field;
 use ragu_circuits::{
     CircuitExt,
@@ -56,7 +56,7 @@ pub(crate) struct InternalCircuits<C: Cycle, R: Rank> {
     pub(crate) w: C::CircuitField,
     pub(crate) c: C::CircuitField,
     pub(crate) c_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) c_rx_blinding: C::CircuitField,
+    pub(crate) c_rx_blind: C::CircuitField,
     pub(crate) c_rx_commitment: C::HostCurve,
     pub(crate) mu: C::CircuitField,
     pub(crate) nu: C::CircuitField,
@@ -104,7 +104,7 @@ impl<C: Cycle, R: Rank> Clone for InternalCircuits<C, R> {
             w: self.w,
             c: self.c,
             c_rx: self.c_rx.clone(),
-            c_rx_blinding: self.c_rx_blinding,
+            c_rx_blind: self.c_rx_blind,
             c_rx_commitment: self.c_rx_commitment,
             mu: self.mu,
             nu: self.nu,
@@ -159,37 +159,40 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let application_commitment =
             application_rx.commit(self.params.host_generators(), application_blind);
 
-        // Preamble rx polynomial with dummy headers and zero unified instance data
-        let preamble_witness: preamble::Witness<C::CircuitField, HEADER_SIZE> = preamble::Witness {
-            left: preamble::ProofHeaders {
-                output_header: [C::CircuitField::ZERO; HEADER_SIZE],
-                left_header: [C::CircuitField::ZERO; HEADER_SIZE],
-                right_header: [C::CircuitField::ZERO; HEADER_SIZE],
-            },
-            right: preamble::ProofHeaders {
-                output_header: [C::CircuitField::ZERO; HEADER_SIZE],
-                left_header: [C::CircuitField::ZERO; HEADER_SIZE],
-                right_header: [C::CircuitField::ZERO; HEADER_SIZE],
-            },
-            // Dummy circuit IDs (trivial proof uses dummy circuit)
-            left_circuit_id: omega_j(internal_circuits::index(
-                self.num_application_steps,
-                dummy::CIRCUIT_ID,
-            ) as u32),
-            right_circuit_id: omega_j(internal_circuits::index(
-                self.num_application_steps,
-                dummy::CIRCUIT_ID,
-            ) as u32),
-            // Zero unified instance data for trivial proofs
-            left_w: C::CircuitField::ZERO,
-            left_c: C::CircuitField::ZERO,
-            left_mu: C::CircuitField::ZERO,
-            left_nu: C::CircuitField::ZERO,
-            right_w: C::CircuitField::ZERO,
-            right_c: C::CircuitField::ZERO,
-            right_mu: C::CircuitField::ZERO,
-            right_nu: C::CircuitField::ZERO,
-        };
+        // Preamble rx polynomial with dummy headers and zero unified instance data.
+        let dummy_nested_commitment = self.params.nested_generators().g()[0];
+        let preamble_witness: preamble::Witness<C::CircuitField, C::NestedCurve, HEADER_SIZE> =
+            preamble::Witness {
+                left: preamble::ProofHeaders {
+                    output_header: [C::CircuitField::ZERO; HEADER_SIZE],
+                    left_header: [C::CircuitField::ZERO; HEADER_SIZE],
+                    right_header: [C::CircuitField::ZERO; HEADER_SIZE],
+                },
+                right: preamble::ProofHeaders {
+                    output_header: [C::CircuitField::ZERO; HEADER_SIZE],
+                    left_header: [C::CircuitField::ZERO; HEADER_SIZE],
+                    right_header: [C::CircuitField::ZERO; HEADER_SIZE],
+                },
+                // Dummy circuit IDs (trivial proof uses dummy circuit)
+                left_circuit_id: omega_j(internal_circuits::index(
+                    self.num_application_steps,
+                    dummy::CIRCUIT_ID,
+                ) as u32),
+                right_circuit_id: omega_j(internal_circuits::index(
+                    self.num_application_steps,
+                    dummy::CIRCUIT_ID,
+                ) as u32),
+                left_w: C::CircuitField::ZERO,
+                left_c: C::CircuitField::ZERO,
+                left_mu: C::CircuitField::ZERO,
+                left_nu: C::CircuitField::ZERO,
+                right_w: C::CircuitField::ZERO,
+                right_c: C::CircuitField::ZERO,
+                right_mu: C::CircuitField::ZERO,
+                right_nu: C::CircuitField::ZERO,
+                left_nested_preamble_commitment: dummy_nested_commitment,
+                right_nested_preamble_commitment: dummy_nested_commitment,
+            };
 
         let native_preamble_rx = preamble::Stage::<C, R, HEADER_SIZE>::rx(&preamble_witness)
             .expect("preamble rx should not fail");
@@ -251,7 +254,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             .take())
         })?;
 
-        // Create unified instance and compute c_rx
+        // Create the unified instance
         let unified_instance = internal_circuits::unified::Instance {
             nested_preamble_commitment,
             w,
@@ -259,6 +262,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             mu,
             nu,
         };
+
+        // C staged circuit
         let internal_circuit_c =
             internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NUM_REVDOT_CLAIMS>::new(self.params);
         let internal_circuit_c_witness = internal_circuits::c::Witness {
@@ -268,8 +273,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let (c_rx, _) = internal_circuit_c
             .rx::<R>(internal_circuit_c_witness, self.circuit_mesh.get_key())
             .expect("c_rx computation should not fail");
-        let c_rx_blinding = C::CircuitField::random(&mut *rng);
-        let c_rx_commitment = c_rx.commit(self.params.host_generators(), c_rx_blinding);
+        let c_rx_blind = C::CircuitField::random(&mut *rng);
+        let c_rx_commitment = c_rx.commit(self.params.host_generators(), c_rx_blind);
 
         Ok(Proof {
             preamble: PreambleProof {
@@ -284,7 +289,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 w,
                 c,
                 c_rx,
-                c_rx_blinding,
+                c_rx_blind,
                 c_rx_commitment,
                 mu,
                 nu,
