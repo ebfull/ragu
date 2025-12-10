@@ -176,8 +176,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> staging::Stage<C::CircuitField
     type OutputKind = Kind![C::CircuitField; Output<'_, _, C, HEADER_SIZE>];
 
     fn values() -> usize {
-        // 2 proofs * (3 headers * HEADER_SIZE + 1 circuit_id + 7 unified instance values)
-        2 * (3 * HEADER_SIZE + 1 + 7)
+        // 2 proofs * (3 headers * HEADER_SIZE + 1 circuit_id + unified instance wires)
+        2 * (3 * HEADER_SIZE + 1 + unified::NUM_WIRES)
     }
 
     fn witness<'dr, 'source: 'dr, D: Driver<'dr, F = C::CircuitField>>(

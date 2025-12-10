@@ -19,6 +19,9 @@ use crate::proof::Proof;
 #[allow(type_alias_bounds)]
 pub type OutputKind<C: Cycle> = Kind![C::CircuitField; Output<'_, _, C>];
 
+/// The number of wires in an `Output` gadget.
+pub const NUM_WIRES: usize = 7;
+
 #[derive(Gadget, Write)]
 pub struct Output<'dr, D: Driver<'dr>, C: Cycle> {
     #[ragu(gadget)]
@@ -156,5 +159,30 @@ impl<'a, 'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle> OutputBuilder<'a, '
             nu: self.nu.take(dr, instance)?,
             zero: Element::zero(dr),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ragu_circuits::polynomials::R;
+    use ragu_core::{
+        drivers::emulator::{Emulator, Wireless},
+        maybe::Empty,
+    };
+    use ragu_pasta::{Fp, Pasta};
+
+    #[test]
+    fn num_wires_constant_is_correct() {
+        // Use a wireless emulator with Empty witness - the emulator never reads witness values.
+        let mut emulator = Emulator::<Wireless<Empty, Fp>>::wireless();
+        let output = Output::<'_, _, Pasta>::alloc_from_proof::<R<16>>(&mut emulator, Empty)
+            .expect("allocation should succeed");
+
+        assert_eq!(
+            output.num_wires(),
+            NUM_WIRES,
+            "NUM_WIRES constant does not match actual wire count"
+        );
     }
 }
