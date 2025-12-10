@@ -11,7 +11,7 @@ use rand::Rng;
 use crate::{
     Application,
     components::fold_revdot::{self, ErrorTermsLen},
-    internal_circuits::{self, NUM_REVDOT_CLAIMS},
+    internal_circuits::{self, NUM_REVDOT_CLAIMS, stages, unified},
     proof::{ApplicationProof, InternalCircuits, Pcd, PreambleProof, Proof},
     step::{Step, adapter::Adapter},
 };
@@ -44,19 +44,28 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let host_generators = self.params.host_generators();
         let nested_generators = self.params.nested_generators();
 
-        // Compute the preamble (just a stub)
+        // Create preamble witness from PCDs.
+        let preamble_witness = stages::native::preamble::Witness::from_pcds(&left, &right)?;
+
+        // Compute native preamble
         let native_preamble_rx =
-            internal_circuits::stages::native::preamble::Stage::<C, R>::rx(())?;
+            stages::native::preamble::Stage::<C, R, HEADER_SIZE>::rx(&preamble_witness)?;
         let native_preamble_blind = C::CircuitField::random(&mut *rng);
         let native_preamble_commitment =
             native_preamble_rx.commit(host_generators, native_preamble_blind);
 
+        let nested_preamble_points: [C::HostCurve; 5] = [
+            native_preamble_commitment,
+            left.proof.application.commitment,
+            right.proof.application.commitment,
+            left.proof.internal_circuits.c_rx_commitment,
+            right.proof.internal_circuits.c_rx_commitment,
+        ];
+
         // Compute nested preamble
-        let nested_preamble_rx = internal_circuits::stages::nested::preamble::Stage::<
-            C::HostCurve,
-            R,
-        >::rx(native_preamble_commitment)?;
-        let nested_preamble_blind = C::ScalarField::random(&mut *rng);
+        let nested_preamble_rx =
+            stages::nested::preamble::Stage::<C::HostCurve, R, 5>::rx(&nested_preamble_points)?;
+        let nested_preamble_blind: <C as Cycle>::ScalarField = C::ScalarField::random(&mut *rng);
         let nested_preamble_commitment =
             nested_preamble_rx.commit(nested_generators, nested_preamble_blind);
 
@@ -101,7 +110,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             })?;
 
         // Create the unified instance.
-        let unified_instance = &internal_circuits::unified::Instance {
+        let unified_instance = &unified::Instance {
             nested_preamble_commitment,
             w,
             c,
@@ -110,14 +119,17 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         };
 
         // C staged circuit.
-        let (c_rx, _) = internal_circuits::c::Circuit::<C, R, NUM_REVDOT_CLAIMS>::new(self.params)
-            .rx::<R>(
-                internal_circuits::c::Witness {
-                    unified_instance,
-                    error_terms,
-                },
-                self.circuit_mesh.get_key(),
-            )?;
+        let (c_rx, _) =
+            internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NUM_REVDOT_CLAIMS>::new(self.params)
+                .rx::<R>(
+                    internal_circuits::c::Witness {
+                        unified_instance,
+                        error_terms,
+                    },
+                    self.circuit_mesh.get_key(),
+                )?;
+        let c_rx_blind = C::CircuitField::random(&mut *rng);
+        let c_rx_commitment = c_rx.commit(host_generators, c_rx_blind);
 
         // Application
         let application_circuit_id = S::INDEX.circuit_index(self.num_application_steps)?;
@@ -125,6 +137,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             (left.data, right.data, witness),
             self.circuit_mesh.get_key(),
         )?;
+        let application_rx_blind = C::CircuitField::random(&mut *rng);
+        let application_rx_commitment =
+            application_rx.commit(host_generators, application_rx_blind);
+
         let ((left_header, right_header), aux) = aux;
 
         Ok((
@@ -137,12 +153,22 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     nested_preamble_commitment,
                     nested_preamble_blind,
                 },
-                internal_circuits: InternalCircuits { w, c, c_rx, mu, nu },
+                internal_circuits: InternalCircuits {
+                    w,
+                    c,
+                    c_rx,
+                    c_rx_blind,
+                    c_rx_commitment,
+                    mu,
+                    nu,
+                },
                 application: ApplicationProof {
                     circuit_id: application_circuit_id,
                     left_header: left_header.into_inner(),
                     right_header: right_header.into_inner(),
                     rx: application_rx,
+                    blind: application_rx_blind,
+                    commitment: application_rx_commitment,
                 },
             },
             aux,

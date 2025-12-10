@@ -5,6 +5,7 @@
 //! to make it easier to reconfigure the roles of individual circuits later.
 
 use arithmetic::Cycle;
+use ragu_circuits::polynomials::Rank;
 use ragu_core::{
     Result,
     drivers::{Driver, DriverValue},
@@ -13,8 +14,13 @@ use ragu_core::{
 };
 use ragu_primitives::{Element, Point, io::Write};
 
+use crate::proof::Proof;
+
 #[allow(type_alias_bounds)]
 pub type OutputKind<C: Cycle> = Kind![C::CircuitField; Output<'_, _, C>];
+
+/// The number of wires in an `Output` gadget.
+pub const NUM_WIRES: usize = 7;
 
 #[derive(Gadget, Write)]
 pub struct Output<'dr, D: Driver<'dr>, C: Cycle> {
@@ -85,6 +91,36 @@ pub struct OutputBuilder<'a, 'dr, D: Driver<'dr>, C: Cycle> {
     pub nu: Slot<'a, 'dr, D, Element<'dr, D>, C>,
 }
 
+impl<'dr, D: Driver<'dr>, C: Cycle> Output<'dr, D, C> {
+    // TODO: Expose a gadget for the "trailing zero element" pattern to simplify values() counting.
+    /// Allocate an Output from a proof reference.
+    pub fn alloc_from_proof<R: Rank>(
+        dr: &mut D,
+        proof: DriverValue<D, &Proof<C, R>>,
+    ) -> Result<Self>
+    where
+        D: Driver<'dr, F = C::CircuitField>,
+    {
+        let nested_preamble_commitment = Point::alloc(
+            dr,
+            proof.view().map(|p| p.preamble.nested_preamble_commitment),
+        )?;
+        let w = Element::alloc(dr, proof.view().map(|p| p.internal_circuits.w))?;
+        let c = Element::alloc(dr, proof.view().map(|p| p.internal_circuits.c))?;
+        let mu = Element::alloc(dr, proof.view().map(|p| p.internal_circuits.mu))?;
+        let nu = Element::alloc(dr, proof.view().map(|p| p.internal_circuits.nu))?;
+
+        Ok(Output {
+            nested_preamble_commitment,
+            w,
+            c,
+            mu,
+            nu,
+            zero: Element::zero(dr),
+        })
+    }
+}
+
 impl<'a, 'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle> OutputBuilder<'a, 'dr, D, C> {
     pub fn new() -> Self {
         macro_rules! point_slot {
@@ -123,5 +159,30 @@ impl<'a, 'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle> OutputBuilder<'a, '
             nu: self.nu.take(dr, instance)?,
             zero: Element::zero(dr),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ragu_circuits::polynomials::R;
+    use ragu_core::{
+        drivers::emulator::{Emulator, Wireless},
+        maybe::Empty,
+    };
+    use ragu_pasta::{Fp, Pasta};
+
+    #[test]
+    fn num_wires_constant_is_correct() {
+        // Use a wireless emulator with Empty witness - the emulator never reads witness values.
+        let mut emulator = Emulator::<Wireless<Empty, Fp>>::wireless();
+        let output = Output::<'_, _, Pasta>::alloc_from_proof::<R<16>>(&mut emulator, Empty)
+            .expect("allocation should succeed");
+
+        assert_eq!(
+            output.num_wires(),
+            NUM_WIRES,
+            "NUM_WIRES constant does not match actual wire count"
+        );
     }
 }
