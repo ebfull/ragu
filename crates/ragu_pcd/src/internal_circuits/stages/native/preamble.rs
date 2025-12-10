@@ -132,6 +132,29 @@ impl<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize> Witness<'a, C, R, HEADER_S
         HL: Header<C::CircuitField>,
         HR: Header<C::CircuitField>,
     {
+        // TODO: Implement Buffer for arrays/slices to avoid Vec allocation here.
+        /// Encode header data into a fixed-size field element array.
+        fn encode_output_header<F: PrimeField, H: Header<F>, const HEADER_SIZE: usize>(
+            data: H::Data<'_>,
+        ) -> Result<[F; HEADER_SIZE]> {
+            fn vec_to_array<F: Copy, const N: usize>(v: &[F]) -> Result<[F; N]> {
+                v.try_into().map_err(|_| Error::VectorLengthMismatch {
+                    expected: N,
+                    actual: v.len(),
+                })
+            }
+
+            let mut emulator = Emulator::execute();
+            let gadget = H::encode(&mut emulator, Always::maybe_just(|| data))?;
+            let padded = padded::for_header::<H, HEADER_SIZE, _>(&mut emulator, gadget)?;
+
+            let mut elements = Vec::with_capacity(HEADER_SIZE);
+            padded.write(&mut emulator, &mut elements)?;
+
+            let values: Vec<F> = elements.into_iter().map(|e| *e.value().take()).collect();
+            vec_to_array(&values)
+        }
+
         Ok(Witness::new(
             &left.proof,
             &right.proof,
@@ -139,29 +162,6 @@ impl<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize> Witness<'a, C, R, HEADER_S
             encode_output_header::<C::CircuitField, HR, HEADER_SIZE>(right.data.clone())?,
         ))
     }
-}
-
-fn vec_to_array<F: Copy, const N: usize>(v: &[F]) -> Result<[F; N]> {
-    v.try_into().map_err(|_| Error::VectorLengthMismatch {
-        expected: N,
-        actual: v.len(),
-    })
-}
-
-// TODO: Implement Buffer for arrays/slices to avoid Vec allocation here.
-/// Encode header data into a fixed-size field element array.
-fn encode_output_header<F: PrimeField, H: Header<F>, const HEADER_SIZE: usize>(
-    data: H::Data<'_>,
-) -> Result<[F; HEADER_SIZE]> {
-    let mut emulator = Emulator::execute();
-    let gadget = H::encode(&mut emulator, Always::maybe_just(|| data))?;
-    let padded = padded::for_header::<H, HEADER_SIZE, _>(&mut emulator, gadget)?;
-
-    let mut elements = Vec::with_capacity(HEADER_SIZE);
-    padded.write(&mut emulator, &mut elements)?;
-
-    let values: Vec<F> = elements.into_iter().map(|e| *e.value().take()).collect();
-    vec_to_array(&values)
 }
 
 pub struct Stage<C: Cycle, R, const HEADER_SIZE: usize> {
