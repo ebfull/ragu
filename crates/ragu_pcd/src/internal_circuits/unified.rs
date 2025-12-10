@@ -5,6 +5,7 @@
 //! to make it easier to reconfigure the roles of individual circuits later.
 
 use arithmetic::Cycle;
+use ragu_circuits::polynomials::Rank;
 use ragu_core::{
     Result,
     drivers::{Driver, DriverValue},
@@ -12,6 +13,8 @@ use ragu_core::{
     maybe::Maybe,
 };
 use ragu_primitives::{Element, Point, io::Write};
+
+use crate::proof::Proof;
 
 #[allow(type_alias_bounds)]
 pub type OutputKind<C: Cycle> = Kind![C::CircuitField; Output<'_, _, C>];
@@ -86,23 +89,32 @@ pub struct OutputBuilder<'a, 'dr, D: Driver<'dr>, C: Cycle> {
 }
 
 impl<'dr, D: Driver<'dr>, C: Cycle> Output<'dr, D, C> {
-    /// Construct an Output from individual gadget parts.
-    pub fn from_parts(
+    // TODO: Expose a gadget for the "trailing zero element" pattern to simplify values() counting.
+    /// Allocate an Output from a proof reference.
+    pub fn alloc_from_proof<R: Rank>(
         dr: &mut D,
-        nested_preamble_commitment: Point<'dr, D, C::NestedCurve>,
-        w: Element<'dr, D>,
-        c: Element<'dr, D>,
-        mu: Element<'dr, D>,
-        nu: Element<'dr, D>,
-    ) -> Self {
-        Output {
+        proof: DriverValue<D, &Proof<C, R>>,
+    ) -> Result<Self>
+    where
+        D: Driver<'dr, F = C::CircuitField>,
+    {
+        let nested_preamble_commitment = Point::alloc(
+            dr,
+            proof.view().map(|p| p.preamble.nested_preamble_commitment),
+        )?;
+        let w = Element::alloc(dr, proof.view().map(|p| p.internal_circuits.w))?;
+        let c = Element::alloc(dr, proof.view().map(|p| p.internal_circuits.c))?;
+        let mu = Element::alloc(dr, proof.view().map(|p| p.internal_circuits.mu))?;
+        let nu = Element::alloc(dr, proof.view().map(|p| p.internal_circuits.nu))?;
+
+        Ok(Output {
             nested_preamble_commitment,
             w,
             c,
             mu,
             nu,
             zero: Element::zero(dr),
-        }
+        })
     }
 }
 

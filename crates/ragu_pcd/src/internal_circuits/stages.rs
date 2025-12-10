@@ -59,7 +59,6 @@ macro_rules! define_nested_multi_point_stage {
         parent = $parent:ty
     ) => {
         pub mod $mod_name {
-            use alloc::vec::Vec;
             use arithmetic::CurveAffine;
             use core::marker::PhantomData;
             use ragu_circuits::polynomials::Rank;
@@ -69,7 +68,7 @@ macro_rules! define_nested_multi_point_stage {
                 gadgets::{GadgetKind, Kind},
                 maybe::Maybe,
             };
-            use ragu_primitives::{Point, vec::{ConstLen, FixedVec}};
+            use ragu_primitives::{Point, vec::{CollectFixed, ConstLen, FixedVec}};
 
             $(#[$meta])*
             pub struct Stage<C: CurveAffine, R, const NUM: usize> {
@@ -94,11 +93,9 @@ macro_rules! define_nested_multi_point_stage {
                 where
                     Self: 'dr,
                 {
-                    let mut v = Vec::with_capacity(NUM);
-                    for i in 0..NUM {
-                        v.push(Point::alloc(dr, witness.view().map(|w| w[i]))?);
-                    }
-                    Ok(FixedVec::new(v).expect("length"))
+                    (0..NUM)
+                        .map(|i| Point::alloc(dr, witness.view().map(|w| w[i])))
+                        .try_collect_fixed()
                 }
             }
         }

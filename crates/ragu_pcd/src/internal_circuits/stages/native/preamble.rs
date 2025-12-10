@@ -9,8 +9,8 @@ use ragu_core::{
     maybe::{Always, Maybe, MaybeKind},
 };
 use ragu_primitives::{
-    Element, GadgetExt, Point,
-    vec::{ConstLen, FixedVec},
+    Element, GadgetExt,
+    vec::{CollectFixed, ConstLen, FixedVec},
 };
 
 use core::marker::PhantomData;
@@ -109,6 +109,7 @@ fn vec_to_array<F: Copy, const N: usize>(v: &[F]) -> Result<[F; N]> {
     })
 }
 
+// TODO: Implement Buffer for arrays/slices to avoid Vec allocation here.
 /// Encode header data into a fixed-size field element array.
 fn encode_output_header<F: PrimeField, H: HeaderTrait<F>, const HEADER_SIZE: usize>(
     data: H::Data<'_>,
@@ -152,24 +153,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> staging::Stage<C::CircuitField
             dr: &mut D,
             data: DriverValue<D, &[D::F]>,
         ) -> Result<FixedVec<Element<'dr, D>, ConstLen<HEADER_SIZE>>> {
-            let mut v = Vec::with_capacity(HEADER_SIZE);
-            for i in 0..HEADER_SIZE {
-                v.push(Element::alloc(dr, data.view().map(|d| d[i]))?);
-            }
-            Ok(FixedVec::new(v).expect("length"))
+            (0..HEADER_SIZE)
+                .map(|i| Element::alloc(dr, data.view().map(|d| d[i])))
+                .try_collect_fixed()
         }
-
-        // Allocate left unified instance components.
-        let left_nested = Point::alloc(
-            dr,
-            witness
-                .view()
-                .map(|w| w.left.preamble.nested_preamble_commitment),
-        )?;
-        let left_w = Element::alloc(dr, witness.view().map(|w| w.left.internal_circuits.w))?;
-        let left_c = Element::alloc(dr, witness.view().map(|w| w.left.internal_circuits.c))?;
-        let left_mu = Element::alloc(dr, witness.view().map(|w| w.left.internal_circuits.mu))?;
-        let left_nu = Element::alloc(dr, witness.view().map(|w| w.left.internal_circuits.nu))?;
 
         // Allocate left proof inputs.
         let left = ProofInputs {
@@ -195,20 +182,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> staging::Stage<C::CircuitField
                     .view()
                     .map(|w| omega_j(w.left.application.circuit_id as u32)),
             )?,
-            unified: unified::Output::from_parts(dr, left_nested, left_w, left_c, left_mu, left_nu),
+            unified: unified::Output::alloc_from_proof(dr, witness.view().map(|w| w.left))?,
         };
-
-        // Allocate right unified instance components.
-        let right_nested = Point::alloc(
-            dr,
-            witness
-                .view()
-                .map(|w| w.right.preamble.nested_preamble_commitment),
-        )?;
-        let right_w = Element::alloc(dr, witness.view().map(|w| w.right.internal_circuits.w))?;
-        let right_c = Element::alloc(dr, witness.view().map(|w| w.right.internal_circuits.c))?;
-        let right_mu = Element::alloc(dr, witness.view().map(|w| w.right.internal_circuits.mu))?;
-        let right_nu = Element::alloc(dr, witness.view().map(|w| w.right.internal_circuits.nu))?;
 
         // Allocate right proof inputs.
         let right = ProofInputs {
@@ -234,14 +209,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> staging::Stage<C::CircuitField
                     .view()
                     .map(|w| omega_j(w.right.application.circuit_id as u32)),
             )?,
-            unified: unified::Output::from_parts(
-                dr,
-                right_nested,
-                right_w,
-                right_c,
-                right_mu,
-                right_nu,
-            ),
+            unified: unified::Output::alloc_from_proof(dr, witness.view().map(|w| w.right))?,
         };
 
         Ok(Output { left, right })

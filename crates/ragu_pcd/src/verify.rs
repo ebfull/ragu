@@ -18,7 +18,7 @@ use crate::{
     step::adapter::Adapter,
 };
 
-pub(crate) mod stub_step;
+mod stub_step;
 use stub_step::StubStep;
 
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_SIZE> {
