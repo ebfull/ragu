@@ -7,7 +7,7 @@ WIP
 """
 license = "MIT OR Apache-2.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.90"
 
 readme = "README.md"
 repository = "https://github.com/tachyon-zcash/ragu"
