@@ -307,7 +307,7 @@ pub trait StageExt<F: Field, R: Rank>: Stage<F, R> {
     }
 
     /// Compute the (partial) witness polynomial $r(X)$ for this stage.
-    fn rx(witness: Self::Witness<'_>) -> Result<structured::Polynomial<F, R>> {
+    fn rx_configured(&self, witness: Self::Witness<'_>) -> Result<structured::Polynomial<F, R>> {
         let values = {
             let mut dr = Emulator::extractor();
             let out = Self::witness(&mut dr, Always::maybe_just(|| witness))?;
@@ -348,6 +348,15 @@ pub trait StageExt<F: Field, R: Rank>: Stage<F, R> {
         }
 
         Ok(rx)
+    }
+
+    /// Compute the (partial) witness polynomial $r(X)$ for this stage, using a
+    /// default implementation.
+    fn rx(witness: Self::Witness<'_>) -> Result<structured::Polynomial<F, R>>
+    where
+        Self: Default,
+    {
+        Self::default().rx_configured(witness)
     }
 
     /// Converts this stage into a circuit object that _only_ enforces
