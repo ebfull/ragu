@@ -1,4 +1,4 @@
-use arithmetic::{Cycle, FixedGenerators};
+use arithmetic::Cycle;
 use ff::Field;
 use ragu_circuits::{CircuitExt, polynomials::Rank, staging::StageExt};
 use ragu_core::{Result, drivers::emulator::Emulator, maybe::Maybe};
@@ -14,7 +14,7 @@ use crate::{
     internal_circuits::{self, NUM_NATIVE_REVDOT_CLAIMS, stages, unified},
     proof::{
         ABProof, ApplicationProof, ErrorProof, EvalProof, FProof, InternalCircuits, Pcd,
-        PreambleProof, Proof, QueryProof, SPrimeProof,
+        PreambleProof, Proof, QueryProof, SDoublePrimeProof, SPrimeProof,
     },
     step::{Step, adapter::Adapter},
 };
@@ -104,11 +104,23 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             self.params,
         )?;
 
+        // Given (w, y), we can compute m(w, X, y) and commit to it.
+        let mesh_wy = self.circuit_mesh.wy(w, y);
+        let mesh_wy_blind = C::CircuitField::random(&mut *rng);
+        let mesh_wy_commitment = mesh_wy.commit(host_generators, mesh_wy_blind);
+
+        // We compute a nested commitment to S'' = m(w, X, y).
+        let nested_s_doubleprime_rx =
+            stages::nested::s_doubleprime::Stage::<C::HostCurve, R>::rx(mesh_wy_commitment)?;
+        let nested_s_doubleprime_blind = C::ScalarField::random(&mut *rng);
+        let nested_s_doubleprime_commitment =
+            nested_s_doubleprime_rx.commit(nested_generators, nested_s_doubleprime_blind);
+
         // Compute error stage first so we can derive mu/nu from nested_error_commitment.
         // Create error witness with dummy z and error terms.
         let error_witness = stages::native::error::Witness::<C, NUM_NATIVE_REVDOT_CLAIMS> {
             z,
-            nested_s_doubleprime_commitment: nested_generators.g()[0],
+            nested_s_doubleprime_commitment,
             error_terms: ErrorTermsLen::<NUM_NATIVE_REVDOT_CLAIMS>::range()
                 .map(|_| C::CircuitField::ZERO)
                 .collect_fixed()?,
@@ -251,13 +263,14 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             crate::components::transcript::emulate_beta::<C>(nested_eval_commitment, self.params)?;
 
         // Create the unified instance.
-        // TODO: Missing fields: nested_s_doubleprime_commitment, nested_s_commitment
+        // TODO: Missing fields: nested_s_commitment
         let unified_instance = &unified::Instance {
             nested_preamble_commitment,
             w,
             nested_s_prime_commitment,
             y,
             z,
+            nested_s_doubleprime_commitment,
             nested_error_commitment,
             mu,
             nu,
@@ -337,6 +350,14 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     nested_s_prime_rx,
                     nested_s_prime_blind,
                     nested_s_prime_commitment,
+                },
+                s_doubleprime: SDoublePrimeProof {
+                    mesh_wy,
+                    mesh_wy_blind,
+                    mesh_wy_commitment,
+                    nested_s_doubleprime_rx,
+                    nested_s_doubleprime_blind,
+                    nested_s_doubleprime_commitment,
                 },
                 error: ErrorProof {
                     native_error_rx,
