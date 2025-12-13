@@ -43,7 +43,7 @@ pub fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
     params: &'params C,
     log2_circuits: u32,
 ) -> Result<MeshBuilder<'params, C::CircuitField, R>> {
-    let initial_count = mesh.circuit_count();
+    let initial_num_circuits = mesh.num_circuits();
 
     let mesh = mesh.register_circuit(dummy::Circuit)?;
     let mesh = {
@@ -70,8 +70,8 @@ pub fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
 
     // Verify we registered the expected number of circuits.
     assert_eq!(
-        mesh.circuit_count() - initial_count,
-        NUM_INTERNAL_CIRCUITS,
+        mesh.num_circuits(),
+        initial_num_circuits + NUM_INTERNAL_CIRCUITS,
         "internal circuit count mismatch"
     );
 

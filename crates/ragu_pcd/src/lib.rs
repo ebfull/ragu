@@ -123,10 +123,15 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         )?;
 
         // Verify circuit count matches expectation.
-        debug_assert_eq!(
+        assert_eq!(
             self.circuit_mesh.log2_circuits(),
             log2_circuits,
             "log2_circuits mismatch"
+        );
+        assert_eq!(
+            self.circuit_mesh.num_circuits(),
+            total_circuits,
+            "final circuit count mismatch"
         );
 
         Ok(Application {
