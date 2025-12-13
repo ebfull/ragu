@@ -28,6 +28,10 @@ pub enum InternalCircuitIndex {
     EvalStage = 7,
 }
 
+/// The number of internal circuits registered by [`register_all`],
+/// and the number of variants in [`InternalCircuitIndex`].
+pub const NUM_INTERNAL_CIRCUITS: usize = 8;
+
 impl InternalCircuitIndex {
     pub fn circuit_index(self, num_application_steps: usize) -> CircuitIndex {
         CircuitIndex::new(num_application_steps + super::step::NUM_INTERNAL_STEPS + self as usize)
@@ -37,10 +41,14 @@ impl InternalCircuitIndex {
 pub fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
     mesh: MeshBuilder<'params, C::CircuitField, R>,
     params: &'params C,
+    log2_circuits: u32,
 ) -> Result<MeshBuilder<'params, C::CircuitField, R>> {
+    let initial_num_circuits = mesh.num_circuits();
+
     let mesh = mesh.register_circuit(dummy::Circuit)?;
     let mesh = {
-        let c = c::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(params);
+        let c =
+            c::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(params, log2_circuits);
         mesh.register_circuit_object(c.final_into_object()?)?
             .register_circuit(c)?
     };
@@ -59,5 +67,13 @@ pub fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
     let mesh = mesh.register_circuit_object(
         stages::native::eval::Stage::<C, R, HEADER_SIZE>::into_object()?,
     )?;
+
+    // Verify we registered the expected number of circuits.
+    assert_eq!(
+        mesh.num_circuits(),
+        initial_num_circuits + NUM_INTERNAL_CIRCUITS,
+        "internal circuit count mismatch"
+    );
+
     Ok(mesh)
 }

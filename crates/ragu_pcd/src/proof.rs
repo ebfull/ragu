@@ -16,7 +16,7 @@ use rand::{Rng, rngs::OsRng};
 use alloc::{vec, vec::Vec};
 
 use crate::{
-    Application,
+    Application, circuit_counts,
     components::fold_revdot::{self, ErrorTermsLen},
     header::Header,
     internal_circuits::{self, NUM_NATIVE_REVDOT_CLAIMS, dummy, stages},
@@ -475,9 +475,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let internal_circuit_c =
             internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(
                 self.params,
+                circuit_counts(self.num_application_steps).1,
             );
         let internal_circuit_c_witness = internal_circuits::c::Witness {
             unified_instance: &unified_instance,
+            preamble_witness: &preamble_witness,
             error_terms,
         };
 

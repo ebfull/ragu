@@ -32,6 +32,15 @@ use header::Header;
 pub use proof::{Pcd, Proof};
 use step::{Step, adapter::Adapter};
 
+/// Compute the total circuit count and log2 domain size from the number of
+/// application-defined steps.
+pub(crate) fn circuit_counts(num_application_steps: usize) -> (usize, u32) {
+    let total_circuits =
+        num_application_steps + step::NUM_INTERNAL_STEPS + internal_circuits::NUM_INTERNAL_CIRCUITS;
+    let log2_circuits = total_circuits.next_power_of_two().trailing_zeros();
+    (total_circuits, log2_circuits)
+}
+
 /// Builder for an [`Application`] for proof-carrying data.
 pub struct ApplicationBuilder<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize> {
     circuit_mesh: MeshBuilder<'params, C::CircuitField, R>,
@@ -109,9 +118,27 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
                     step::rerandomize::Rerandomize::<()>::new(),
                 ))?;
 
+        // Compute circuit counts from known constants.
+        let (total_circuits, log2_circuits) = circuit_counts(self.num_application_steps);
+
         // Then, insert all of the internal circuits used for recursion plumbing.
-        self.circuit_mesh =
-            internal_circuits::register_all::<C, R, HEADER_SIZE>(self.circuit_mesh, params)?;
+        self.circuit_mesh = internal_circuits::register_all::<C, R, HEADER_SIZE>(
+            self.circuit_mesh,
+            params,
+            log2_circuits,
+        )?;
+
+        // Verify circuit count matches expectation.
+        assert_eq!(
+            self.circuit_mesh.log2_circuits(),
+            log2_circuits,
+            "log2_circuits mismatch"
+        );
+        assert_eq!(
+            self.circuit_mesh.num_circuits(),
+            total_circuits,
+            "final circuit count mismatch"
+        );
 
         Ok(Application {
             circuit_mesh: self.circuit_mesh.finalize(params.circuit_poseidon())?,

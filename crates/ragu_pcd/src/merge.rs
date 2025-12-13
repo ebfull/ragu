@@ -9,7 +9,7 @@ use ragu_primitives::{
 use rand::Rng;
 
 use crate::{
-    Application,
+    Application, circuit_counts,
     components::fold_revdot::{self, ErrorTermsLen},
     internal_circuits::{self, NUM_NATIVE_REVDOT_CLAIMS, stages, unified},
     proof::{
@@ -194,10 +194,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let (c_rx, _) =
             internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(
                 self.params,
+                circuit_counts(self.num_application_steps).1,
             )
             .rx::<R>(
                 internal_circuits::c::Witness {
                     unified_instance,
+                    preamble_witness: &preamble_witness,
                     error_terms,
                 },
                 self.circuit_mesh.get_key(),
