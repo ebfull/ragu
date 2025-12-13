@@ -27,17 +27,17 @@ pub struct Output<'dr, D: Driver<'dr>, C: Cycle> {
     #[ragu(gadget)]
     pub nested_preamble_commitment: Point<'dr, D, C::NestedCurve>,
     #[ragu(gadget)]
-    pub nested_error_commitment: Point<'dr, D, C::NestedCurve>,
-    #[ragu(gadget)]
-    pub nested_ab_commitment: Point<'dr, D, C::NestedCurve>,
-    #[ragu(gadget)]
     pub w: Element<'dr, D>,
     #[ragu(gadget)]
-    pub c: Element<'dr, D>,
+    pub nested_error_commitment: Point<'dr, D, C::NestedCurve>,
     #[ragu(gadget)]
     pub mu: Element<'dr, D>,
     #[ragu(gadget)]
     pub nu: Element<'dr, D>,
+    #[ragu(gadget)]
+    pub c: Element<'dr, D>,
+    #[ragu(gadget)]
+    pub nested_ab_commitment: Point<'dr, D, C::NestedCurve>,
     #[ragu(gadget)]
     pub nested_query_commitment: Point<'dr, D, C::NestedCurve>,
     #[ragu(gadget)]
@@ -109,12 +109,12 @@ impl<'a, 'dr, D: Driver<'dr>, T: Clone, C: Cycle> Slot<'a, 'dr, D, T, C> {
 
 pub struct OutputBuilder<'a, 'dr, D: Driver<'dr>, C: Cycle> {
     pub nested_preamble_commitment: Slot<'a, 'dr, D, Point<'dr, D, C::NestedCurve>, C>,
-    pub nested_error_commitment: Slot<'a, 'dr, D, Point<'dr, D, C::NestedCurve>, C>,
-    pub nested_ab_commitment: Slot<'a, 'dr, D, Point<'dr, D, C::NestedCurve>, C>,
     pub w: Slot<'a, 'dr, D, Element<'dr, D>, C>,
-    pub c: Slot<'a, 'dr, D, Element<'dr, D>, C>,
+    pub nested_error_commitment: Slot<'a, 'dr, D, Point<'dr, D, C::NestedCurve>, C>,
     pub mu: Slot<'a, 'dr, D, Element<'dr, D>, C>,
     pub nu: Slot<'a, 'dr, D, Element<'dr, D>, C>,
+    pub c: Slot<'a, 'dr, D, Element<'dr, D>, C>,
+    pub nested_ab_commitment: Slot<'a, 'dr, D, Point<'dr, D, C::NestedCurve>, C>,
     pub nested_query_commitment: Slot<'a, 'dr, D, Point<'dr, D, C::NestedCurve>, C>,
     pub alpha: Slot<'a, 'dr, D, Element<'dr, D>, C>,
     pub nested_f_commitment: Slot<'a, 'dr, D, Point<'dr, D, C::NestedCurve>, C>,
@@ -154,12 +154,12 @@ impl<'dr, D: Driver<'dr>, C: Cycle> Output<'dr, D, C> {
 
         Ok(Output {
             nested_preamble_commitment,
-            nested_error_commitment,
-            nested_ab_commitment,
             w,
-            c,
+            nested_error_commitment,
             mu,
             nu,
+            c,
+            nested_ab_commitment,
             nested_query_commitment,
             alpha,
             nested_f_commitment,
@@ -187,12 +187,12 @@ impl<'a, 'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle> OutputBuilder<'a, '
         }
         OutputBuilder {
             nested_preamble_commitment: point_slot!(nested_preamble_commitment),
-            nested_error_commitment: point_slot!(nested_error_commitment),
-            nested_ab_commitment: point_slot!(nested_ab_commitment),
             w: element_slot!(w),
-            c: element_slot!(c),
+            nested_error_commitment: point_slot!(nested_error_commitment),
             mu: element_slot!(mu),
             nu: element_slot!(nu),
+            c: element_slot!(c),
+            nested_ab_commitment: point_slot!(nested_ab_commitment),
             nested_query_commitment: point_slot!(nested_query_commitment),
             alpha: element_slot!(alpha),
             nested_f_commitment: point_slot!(nested_f_commitment),
@@ -210,12 +210,12 @@ impl<'a, 'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle> OutputBuilder<'a, '
         Ok(Suffix::new(
             Output {
                 nested_preamble_commitment: self.nested_preamble_commitment.take(dr, instance)?,
-                nested_error_commitment: self.nested_error_commitment.take(dr, instance)?,
-                nested_ab_commitment: self.nested_ab_commitment.take(dr, instance)?,
                 w: self.w.take(dr, instance)?,
-                c: self.c.take(dr, instance)?,
+                nested_error_commitment: self.nested_error_commitment.take(dr, instance)?,
                 mu: self.mu.take(dr, instance)?,
                 nu: self.nu.take(dr, instance)?,
+                c: self.c.take(dr, instance)?,
+                nested_ab_commitment: self.nested_ab_commitment.take(dr, instance)?,
                 nested_query_commitment: self.nested_query_commitment.take(dr, instance)?,
                 alpha: self.alpha.take(dr, instance)?,
                 nested_f_commitment: self.nested_f_commitment.take(dr, instance)?,
