@@ -98,17 +98,19 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
             transcript::derive_mu_nu::<_, C>(dr, &nested_error_commitment, self.params)?
         };
 
-        // Derive x = H(mu, nested_ab_commitment) and enforce query stage's x matches.
-        {
+        // Derive x = H(mu, nu, nested_ab_commitment) and enforce query stage's x matches.
+        let x = {
             let nested_ab_commitment = unified_output
                 .nested_ab_commitment
                 .get(dr, unified_instance)?;
-            let x = transcript::derive_x::<_, C>(dr, &mu, &nested_ab_commitment, self.params)?;
+            let x = transcript::derive_x::<_, C>(dr, &mu, &nu, &nested_ab_commitment, self.params)?;
             x.enforce_equal(dr, &query.x)?;
-        }
+            x
+        };
 
         unified_output.mu.set(mu);
         unified_output.nu.set(nu);
+        unified_output.x.set(x);
 
         // Derive alpha challenge.
         let alpha = {
@@ -129,7 +131,14 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
             unified_output.u.set(u);
         }
 
-        // TODO: Derive beta challenge.
+        // Derive beta = H(nested_eval_commitment).
+        {
+            let nested_eval_commitment = unified_output
+                .nested_eval_commitment
+                .get(dr, unified_instance)?;
+            let beta = transcript::derive_beta::<_, C>(dr, &nested_eval_commitment, self.params)?;
+            unified_output.beta.set(beta);
+        }
 
         Ok((unified_output.finish(dr, unified_instance)?, D::just(|| ())))
     }

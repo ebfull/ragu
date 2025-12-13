@@ -151,9 +151,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let nested_ab_blind = C::ScalarField::random(&mut *rng);
         let nested_ab_commitment = nested_ab_rx.commit(nested_generators, nested_ab_blind);
 
-        // Derive x = H(mu, nested_ab_commitment).
-        let x =
-            crate::components::transcript::emulate_x::<C>(mu, nested_ab_commitment, self.params)?;
+        // Derive x = H(mu, nu, nested_ab_commitment).
+        let x = crate::components::transcript::emulate_x::<C>(
+            mu,
+            nu,
+            nested_ab_commitment,
+            self.params,
+        )?;
 
         // Compute query witness (stubbed for now).
         let query_witness = internal_circuits::stages::native::query::Witness {
@@ -217,9 +221,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let nested_eval_blind = C::ScalarField::random(&mut *rng);
         let nested_eval_commitment = nested_eval_rx.commit(nested_generators, nested_eval_blind);
 
+        // Derive beta = H(nested_eval_commitment).
+        let beta =
+            crate::components::transcript::emulate_beta::<C>(nested_eval_commitment, self.params)?;
+
         // Create the unified instance.
         // TODO: Missing fields: nested_s_prime_commitment, y, z,
-        // nested_s_doubleprime_commitment, nested_s_commitment, beta
+        // nested_s_doubleprime_commitment, nested_s_commitment
         let unified_instance = &unified::Instance {
             nested_preamble_commitment,
             w,
@@ -228,11 +236,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             nu,
             c,
             nested_ab_commitment,
+            x,
             nested_query_commitment,
             alpha,
             nested_f_commitment,
             u,
             nested_eval_commitment,
+            beta,
         };
 
         // C staged circuit.
@@ -344,8 +354,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     v_rx_blind,
                     mu,
                     nu,
+                    x,
                     alpha,
                     u,
+                    beta,
                 },
                 application: ApplicationProof {
                     circuit_id: application_circuit_id,

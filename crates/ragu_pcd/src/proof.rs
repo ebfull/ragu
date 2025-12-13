@@ -34,6 +34,7 @@ pub struct Proof<C: Cycle, R: Rank> {
     pub(crate) application: ApplicationProof<C, R>,
 }
 
+/// Application-specific proof data including circuit ID, headers, and commitment.
 pub(crate) struct ApplicationProof<C: Cycle, R: Rank> {
     pub(crate) circuit_id: CircuitIndex,
     pub(crate) left_header: Vec<C::CircuitField>,
@@ -43,6 +44,7 @@ pub(crate) struct ApplicationProof<C: Cycle, R: Rank> {
     pub(crate) commitment: C::HostCurve,
 }
 
+/// Preamble stage proof with native and nested layer commitments.
 pub(crate) struct PreambleProof<C: Cycle, R: Rank> {
     pub(crate) native_preamble_rx: structured::Polynomial<C::CircuitField, R>,
     pub(crate) native_preamble_blind: C::CircuitField,
@@ -56,6 +58,7 @@ pub(crate) struct PreambleProof<C: Cycle, R: Rank> {
     pub(crate) nested_preamble_commitment: C::NestedCurve,
 }
 
+/// Fiat-Shamir challenges and C/V circuit polynomials.
 pub(crate) struct InternalCircuits<C: Cycle, R: Rank> {
     pub(crate) w: C::CircuitField,
     pub(crate) c: C::CircuitField,
@@ -67,10 +70,13 @@ pub(crate) struct InternalCircuits<C: Cycle, R: Rank> {
     pub(crate) v_rx_commitment: C::HostCurve,
     pub(crate) mu: C::CircuitField,
     pub(crate) nu: C::CircuitField,
+    pub(crate) x: C::CircuitField,
     pub(crate) alpha: C::CircuitField,
     pub(crate) u: C::CircuitField,
+    pub(crate) beta: C::CircuitField,
 }
 
+/// Query stage proof with native and nested layer commitments.
 pub(crate) struct QueryProof<C: Cycle, R: Rank> {
     pub(crate) native_query_rx: structured::Polynomial<C::CircuitField, R>,
     pub(crate) native_query_blind: C::CircuitField,
@@ -81,6 +87,7 @@ pub(crate) struct QueryProof<C: Cycle, R: Rank> {
     pub(crate) nested_query_commitment: C::NestedCurve,
 }
 
+/// F polynomial proof with native and nested layer commitments.
 pub(crate) struct FProof<C: Cycle, R: Rank> {
     pub(crate) native_f_rx: structured::Polynomial<C::CircuitField, R>,
     pub(crate) native_f_blind: C::CircuitField,
@@ -91,6 +98,7 @@ pub(crate) struct FProof<C: Cycle, R: Rank> {
     pub(crate) nested_f_commitment: C::NestedCurve,
 }
 
+/// Evaluation stage proof with native and nested layer commitments.
 pub(crate) struct EvalProof<C: Cycle, R: Rank> {
     pub(crate) native_eval_rx: structured::Polynomial<C::CircuitField, R>,
     pub(crate) native_eval_blind: C::CircuitField,
@@ -101,6 +109,7 @@ pub(crate) struct EvalProof<C: Cycle, R: Rank> {
     pub(crate) nested_eval_commitment: C::NestedCurve,
 }
 
+/// Error stage proof with native and nested layer commitments.
 pub(crate) struct ErrorProof<C: Cycle, R: Rank> {
     pub(crate) native_error_rx: structured::Polynomial<C::CircuitField, R>,
     pub(crate) native_error_blind: C::CircuitField,
@@ -111,6 +120,7 @@ pub(crate) struct ErrorProof<C: Cycle, R: Rank> {
     pub(crate) nested_error_commitment: C::NestedCurve,
 }
 
+/// A/B polynomial proof for folding. A and B depend on (mu, nu).
 pub(crate) struct ABProof<C: Cycle, R: Rank> {
     pub(crate) a: structured::Polynomial<C::CircuitField, R>,
     pub(crate) a_blind: C::CircuitField,
@@ -208,8 +218,10 @@ impl<C: Cycle, R: Rank> Clone for InternalCircuits<C, R> {
             v_rx_commitment: self.v_rx_commitment,
             mu: self.mu,
             nu: self.nu,
+            x: self.x,
             alpha: self.alpha,
             u: self.u,
+            beta: self.beta,
         }
     }
 }
@@ -360,8 +372,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 v_rx_commitment: v_rx_dummy_commitment,
                 mu: C::CircuitField::random(&mut *rng),
                 nu: C::CircuitField::random(&mut *rng),
+                x: C::CircuitField::random(&mut *rng),
                 alpha: C::CircuitField::random(&mut *rng),
                 u: C::CircuitField::random(&mut *rng),
+                beta: C::CircuitField::random(&mut *rng),
             },
             application: ApplicationProof {
                 circuit_id: dummy_circuit_id,
@@ -510,9 +524,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let nested_ab_commitment =
             nested_ab_rx.commit(self.params.nested_generators(), nested_ab_blind);
 
-        // Derive x = H(mu, nested_ab_commitment).
-        let x =
-            crate::components::transcript::emulate_x::<C>(mu, nested_ab_commitment, self.params)?;
+        // Derive x = H(mu, nu, nested_ab_commitment).
+        let x = crate::components::transcript::emulate_x::<C>(
+            mu,
+            nu,
+            nested_ab_commitment,
+            self.params,
+        )?;
 
         // Compute query witness (stubbed for now).
         let query_witness = internal_circuits::stages::native::query::Witness {
@@ -581,9 +599,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let nested_eval_commitment =
             nested_eval_rx.commit(self.params.nested_generators(), nested_eval_blind);
 
+        // Derive beta = H(nested_eval_commitment).
+        let beta =
+            crate::components::transcript::emulate_beta::<C>(nested_eval_commitment, self.params)?;
+
         // Create unified instance and compute c_rx
         // TODO: Missing fields: nested_s_prime_commitment, y, z,
-        // nested_s_doubleprime_commitment, nested_s_commitment, beta
+        // nested_s_doubleprime_commitment, nested_s_commitment
         let unified_instance = internal_circuits::unified::Instance {
             nested_preamble_commitment,
             w,
@@ -592,11 +614,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             nu,
             c,
             nested_ab_commitment,
+            x,
             nested_query_commitment,
             alpha,
             nested_f_commitment,
             u,
             nested_eval_commitment,
+            beta,
         };
         let internal_circuit_c =
             internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(
@@ -669,8 +693,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 v_rx_commitment,
                 mu,
                 nu,
+                x,
                 alpha,
                 u,
+                beta,
             },
             application: ApplicationProof {
                 rx: application_rx,
