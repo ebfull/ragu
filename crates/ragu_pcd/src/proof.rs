@@ -17,9 +17,9 @@ use alloc::{vec, vec::Vec};
 
 use crate::{
     Application, circuit_counts,
-    components::fold_revdot::{self, ErrorTermsLen},
+    components::fold_revdot::{self, ErrorTermsLen, NativeParameters, Parameters},
     header::Header,
-    internal_circuits::{self, NUM_NATIVE_REVDOT_CLAIMS, dummy, stages},
+    internal_circuits::{self, dummy, stages},
 };
 
 /// Represents a recursive proof for the correctness of some computation.
@@ -601,15 +601,15 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         // Compute error stage first so we can derive mu/nu from nested_error_commitment.
         // Create error witness with dummy z and error terms.
-        let error_witness = stages::native::error::Witness::<C, NUM_NATIVE_REVDOT_CLAIMS> {
+        let error_witness = stages::native::error::Witness::<C, NativeParameters> {
             z,
             nested_s_doubleprime_commitment,
-            error_terms: ErrorTermsLen::<NUM_NATIVE_REVDOT_CLAIMS>::range()
+            error_terms: ErrorTermsLen::<<NativeParameters as Parameters>::N>::range()
                 .map(|_| C::CircuitField::ZERO)
                 .collect_fixed()?,
         };
         let native_error_rx =
-            stages::native::error::Stage::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::rx(
+            stages::native::error::Stage::<C, R, HEADER_SIZE, NativeParameters>::rx(
                 &error_witness,
             )?;
         let native_error_blind = C::CircuitField::random(&mut *rng);
@@ -636,16 +636,16 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             let mu = Element::alloc(dr, mu)?;
             let nu = Element::alloc(dr, nu)?;
 
-            let error_terms = ErrorTermsLen::<NUM_NATIVE_REVDOT_CLAIMS>::range()
+            let error_terms = ErrorTermsLen::<<NativeParameters as Parameters>::N>::range()
                 .map(|i| Element::alloc(dr, error_terms.view().map(|et| et[i])))
                 .try_collect_fixed()?;
 
             // TODO: Use zeros for ky_values for now.
-            let ky_values = (0..NUM_NATIVE_REVDOT_CLAIMS)
+            let ky_values = <NativeParameters as Parameters>::N::range()
                 .map(|_| Element::zero(dr))
                 .collect_fixed()?;
 
-            Ok(*fold_revdot::compute_c::<_, NUM_NATIVE_REVDOT_CLAIMS>(
+            Ok(*fold_revdot::compute_c::<_, NativeParameters>(
                 dr,
                 &mu,
                 &nu,
@@ -782,7 +782,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             beta,
         };
         let internal_circuit_c =
-            internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(
+            internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(
                 self.params,
                 circuit_counts(self.num_application_steps).1,
             );
@@ -800,9 +800,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         // Compute v_rx using the V-staged circuit
         let internal_circuit_v =
-            internal_circuits::v::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(
-                self.params,
-            );
+            internal_circuits::v::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(self.params);
         let internal_circuit_v_witness = internal_circuits::v::Witness {
             unified_instance: &unified_instance,
             query_witness: &query_witness,

@@ -12,8 +12,7 @@ pub mod stages;
 pub mod unified;
 pub mod v;
 
-// TODO: Placeholder value for the number of revdot claims.
-pub const NUM_NATIVE_REVDOT_CLAIMS: usize = 3;
+pub use crate::components::fold_revdot::NativeParameters;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -48,13 +47,12 @@ pub fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
 
     let mesh = mesh.register_circuit(dummy::Circuit)?;
     let mesh = {
-        let c =
-            c::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(params, log2_circuits);
+        let c = c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params, log2_circuits);
         mesh.register_circuit_object(c.final_into_object()?)?
             .register_circuit(c)?
     };
     let mesh = {
-        let v = v::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(params);
+        let v = v::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params);
         mesh.register_circuit_object(v.final_into_object()?)?
             .register_circuit(v)?
     };
@@ -66,7 +64,7 @@ pub fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
         C,
         R,
         HEADER_SIZE,
-        NUM_NATIVE_REVDOT_CLAIMS,
+        NativeParameters,
     >::into_object()?)?;
     let mesh = mesh.register_circuit_object(
         stages::native::query::Stage::<C, R, HEADER_SIZE>::into_object()?,

@@ -9,7 +9,10 @@ use ragu_core::{
     gadgets::{Gadget, GadgetKind},
     maybe::Maybe,
 };
-use ragu_primitives::{Element, vec::CollectFixed};
+use ragu_primitives::{
+    Element,
+    vec::{CollectFixed, Len},
+};
 
 use core::marker::PhantomData;
 
@@ -17,19 +20,22 @@ use super::{
     stages::native::{error as native_error, preamble as native_preamble},
     unified::{self, OutputBuilder},
 };
-use crate::components::{fold_revdot, root_of_unity, transcript};
+use crate::components::{
+    fold_revdot::{self, Parameters},
+    root_of_unity, transcript,
+};
 
 pub use crate::internal_circuits::InternalCircuitIndex::ClaimCircuit as CIRCUIT_ID;
 pub use crate::internal_circuits::InternalCircuitIndex::ClaimStaged as STAGED_ID;
 
-pub struct Circuit<'params, C: Cycle, R, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize> {
+pub struct Circuit<'params, C: Cycle, R, const HEADER_SIZE: usize, P: Parameters> {
     params: &'params C,
     log2_circuits: u32,
-    _marker: PhantomData<R>,
+    _marker: PhantomData<(R, P)>,
 }
 
-impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize>
-    Circuit<'params, C, R, HEADER_SIZE, NUM_REVDOT_CLAIMS>
+impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, P: Parameters>
+    Circuit<'params, C, R, HEADER_SIZE, P>
 {
     pub fn new(params: &'params C, log2_circuits: u32) -> Staged<C::CircuitField, R, Self> {
         Staged::new(Circuit {
@@ -40,20 +46,19 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAI
     }
 }
 
-pub struct Witness<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize>
-{
+pub struct Witness<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize, P: Parameters> {
     pub unified_instance: &'a unified::Instance<C>,
     pub preamble_witness: &'a native_preamble::Witness<'a, C, R, HEADER_SIZE>,
-    pub error_witness: &'a native_error::Witness<C, NUM_REVDOT_CLAIMS>,
+    pub error_witness: &'a native_error::Witness<C, P>,
 }
 
-impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize>
-    StagedCircuit<C::CircuitField, R> for Circuit<'_, C, R, HEADER_SIZE, NUM_REVDOT_CLAIMS>
+impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, P: Parameters> StagedCircuit<C::CircuitField, R>
+    for Circuit<'_, C, R, HEADER_SIZE, P>
 {
-    type Final = native_error::Stage<C, R, HEADER_SIZE, NUM_REVDOT_CLAIMS>;
+    type Final = native_error::Stage<C, R, HEADER_SIZE, P>;
 
     type Instance<'source> = &'source unified::Instance<C>;
-    type Witness<'source> = Witness<'source, C, R, HEADER_SIZE, NUM_REVDOT_CLAIMS>;
+    type Witness<'source> = Witness<'source, C, R, HEADER_SIZE, P>;
     type Output = unified::InternalOutputKind<C>;
     type Aux<'source> = ();
 
@@ -81,8 +86,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
     {
         let (preamble, builder) =
             builder.add_stage::<native_preamble::Stage<C, R, HEADER_SIZE>>()?;
-        let (error, builder) =
-            builder.add_stage::<native_error::Stage<C, R, HEADER_SIZE, NUM_REVDOT_CLAIMS>>()?;
+        let (error, builder) = builder.add_stage::<native_error::Stage<C, R, HEADER_SIZE, P>>()?;
         let dr = builder.finish();
 
         let preamble = preamble.enforced(dr, witness.view().map(|w| w.preamble_witness))?;
@@ -132,17 +136,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
             let nu = unified_output.nu.get(dr, unified_instance)?;
 
             // TODO: Use zeros for ky_values for now.
-            let ky_values = (0..NUM_REVDOT_CLAIMS)
+            let ky_values = (0..P::N::len())
                 .map(|_| Element::zero(dr))
                 .collect_fixed()?;
 
-            let c = fold_revdot::compute_c::<_, NUM_REVDOT_CLAIMS>(
-                dr,
-                &mu,
-                &nu,
-                &error.error_terms,
-                &ky_values,
-            )?;
+            let c = fold_revdot::compute_c::<_, P>(dr, &mu, &nu, &error.error_terms, &ky_values)?;
             unified_output.c.set(c);
         }
 

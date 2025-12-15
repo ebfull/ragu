@@ -10,8 +10,8 @@ use rand::Rng;
 
 use crate::{
     Application, circuit_counts,
-    components::fold_revdot::{self, ErrorTermsLen},
-    internal_circuits::{self, NUM_NATIVE_REVDOT_CLAIMS, stages, unified},
+    components::fold_revdot::{self, ErrorTermsLen, NativeParameters, Parameters},
+    internal_circuits::{self, stages, unified},
     proof::{
         ABProof, ApplicationProof, ErrorProof, EvalProof, FProof, InternalCircuits, Pcd,
         PreambleProof, Proof, QueryProof, SDoublePrimeProof, SPrimeProof, SProof,
@@ -150,15 +150,15 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // Compute error stage first so we can derive mu/nu from
         // nested_error_commitment. Create error witness with z and error terms.
         // The inclusion of z binds the error stage to the earlier "transcript".
-        let error_witness = stages::native::error::Witness::<C, NUM_NATIVE_REVDOT_CLAIMS> {
+        let error_witness = stages::native::error::Witness::<C, NativeParameters> {
             z,
             nested_s_doubleprime_commitment,
-            error_terms: ErrorTermsLen::<NUM_NATIVE_REVDOT_CLAIMS>::range()
+            error_terms: ErrorTermsLen::<<NativeParameters as Parameters>::N>::range()
                 .map(|_| C::CircuitField::ZERO)
                 .collect_fixed()?,
         };
         let native_error_rx =
-            stages::native::error::Stage::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::rx(
+            stages::native::error::Stage::<C, R, HEADER_SIZE, NativeParameters>::rx(
                 &error_witness,
             )?;
         let native_error_blind = C::CircuitField::random(&mut *rng);
@@ -184,16 +184,16 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 let mu = Element::alloc(dr, mu)?;
                 let nu = Element::alloc(dr, nu)?;
 
-                let error_terms = ErrorTermsLen::<NUM_NATIVE_REVDOT_CLAIMS>::range()
+                let error_terms = ErrorTermsLen::<<NativeParameters as Parameters>::N>::range()
                     .map(|i| Element::alloc(dr, error_terms.view().map(|et| et[i])))
                     .try_collect_fixed()?;
 
                 // TODO: Use zeros for ky_values for now.
-                let ky_values = (0..NUM_NATIVE_REVDOT_CLAIMS)
+                let ky_values = (0..<NativeParameters as Parameters>::N::len())
                     .map(|_| Element::zero(dr))
                     .collect_fixed()?;
 
-                Ok(*fold_revdot::compute_c::<_, NUM_NATIVE_REVDOT_CLAIMS>(
+                Ok(*fold_revdot::compute_c::<_, NativeParameters>(
                     dr,
                     &mu,
                     &nu,
@@ -324,35 +324,32 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         };
 
         // C staged circuit.
-        let (c_rx, _) =
-            internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(
-                self.params,
-                circuit_counts(self.num_application_steps).1,
-            )
-            .rx::<R>(
-                internal_circuits::c::Witness {
-                    unified_instance,
-                    preamble_witness: &preamble_witness,
-                    error_witness: &error_witness,
-                },
-                self.circuit_mesh.get_key(),
-            )?;
+        let (c_rx, _) = internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(
+            self.params,
+            circuit_counts(self.num_application_steps).1,
+        )
+        .rx::<R>(
+            internal_circuits::c::Witness {
+                unified_instance,
+                preamble_witness: &preamble_witness,
+                error_witness: &error_witness,
+            },
+            self.circuit_mesh.get_key(),
+        )?;
         let c_rx_blind = C::CircuitField::random(&mut *rng);
         let c_rx_commitment = c_rx.commit(host_generators, c_rx_blind);
 
         // V staged circuit.
         let (v_rx, _) =
-            internal_circuits::v::Circuit::<C, R, HEADER_SIZE, NUM_NATIVE_REVDOT_CLAIMS>::new(
-                self.params,
-            )
-            .rx::<R>(
-                internal_circuits::v::Witness {
-                    unified_instance,
-                    query_witness: &query_witness,
-                    eval_witness: &eval_witness,
-                },
-                self.circuit_mesh.get_key(),
-            )?;
+            internal_circuits::v::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(self.params)
+                .rx::<R>(
+                    internal_circuits::v::Witness {
+                        unified_instance,
+                        query_witness: &query_witness,
+                        eval_witness: &eval_witness,
+                    },
+                    self.circuit_mesh.get_key(),
+                )?;
         let v_rx_blind = C::CircuitField::random(&mut *rng);
         let v_rx_commitment = v_rx.commit(host_generators, v_rx_blind);
 
