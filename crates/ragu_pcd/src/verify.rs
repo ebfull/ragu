@@ -78,10 +78,6 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             nested_s_prime_commitment: pcd.proof.s_prime.nested_s_prime_commitment,
             y: pcd.proof.internal_circuits.y,
             z: pcd.proof.internal_circuits.z,
-            nested_s_doubleprime_commitment: pcd
-                .proof
-                .s_doubleprime
-                .nested_s_doubleprime_commitment,
             nested_error_commitment: pcd.proof.error.nested_error_commitment,
             mu: pcd.proof.internal_circuits.mu,
             nu: pcd.proof.internal_circuits.nu,

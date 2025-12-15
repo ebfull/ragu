@@ -109,18 +109,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let mesh_wy_blind = C::CircuitField::random(&mut *rng);
         let mesh_wy_commitment = mesh_wy.commit(host_generators, mesh_wy_blind);
 
-        // We compute a nested commitment to S'' = m(w, X, y).
-        let nested_s_doubleprime_rx =
-            stages::nested::s_doubleprime::Stage::<C::HostCurve, R>::rx(mesh_wy_commitment)?;
-        let nested_s_doubleprime_blind = C::ScalarField::random(&mut *rng);
-        let nested_s_doubleprime_commitment =
-            nested_s_doubleprime_rx.commit(nested_generators, nested_s_doubleprime_blind);
-
         // Compute error stage first so we can derive mu/nu from nested_error_commitment.
         // Create error witness with dummy z and error terms.
         let error_witness = stages::native::error::Witness::<C, NUM_NATIVE_REVDOT_CLAIMS> {
             z,
-            nested_s_doubleprime_commitment,
             error_terms: ErrorTermsLen::<NUM_NATIVE_REVDOT_CLAIMS>::range()
                 .map(|_| C::CircuitField::ZERO)
                 .collect_fixed()?,
@@ -132,9 +124,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let native_error_blind = C::CircuitField::random(&mut *rng);
         let native_error_commitment = native_error_rx.commit(host_generators, native_error_blind);
 
-        // Stubbed nested error rx polynomial
-        let nested_error_rx =
-            stages::nested::error::Stage::<C::HostCurve, R>::rx(native_error_commitment)?;
+        // Nested error rx polynomial (native_error_commitment + mesh_wy_commitment)
+        let nested_error_rx = stages::nested::error::Stage::<C::HostCurve, R, 2>::rx(&[
+            native_error_commitment,
+            mesh_wy_commitment,
+        ])?;
         let nested_error_blind = C::ScalarField::random(&mut *rng);
         let nested_error_commitment = nested_error_rx.commit(nested_generators, nested_error_blind);
 
@@ -275,7 +269,6 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             nested_s_prime_commitment,
             y,
             z,
-            nested_s_doubleprime_commitment,
             nested_error_commitment,
             mu,
             nu,
@@ -361,9 +354,6 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     mesh_wy,
                     mesh_wy_blind,
                     mesh_wy_commitment,
-                    nested_s_doubleprime_rx,
-                    nested_s_doubleprime_blind,
-                    nested_s_doubleprime_commitment,
                 },
                 error: ErrorProof {
                     native_error_rx,
