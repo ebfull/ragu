@@ -17,7 +17,7 @@ use super::{
     stages::native::{error as native_error, preamble as native_preamble},
     unified::{self, OutputBuilder},
 };
-use crate::components::{fold_revdot, root_of_unity};
+use crate::components::{fold_revdot, root_of_unity, transcript};
 
 pub use crate::internal_circuits::InternalCircuitIndex::ClaimCircuit as CIRCUIT_ID;
 pub use crate::internal_circuits::InternalCircuitIndex::ClaimStaged as STAGED_ID;
@@ -61,7 +61,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
         &self,
         dr: &mut D,
         instance: DriverValue<D, Self::Instance<'source>>,
-    ) -> Result<<Self::Output as GadgetKind<C::CircuitField>>::Rebind<'dr, D>> {
+    ) -> Result<<Self::Output as GadgetKind<C::CircuitField>>::Rebind<'dr, D>>
+    where
+        Self: 'dr,
+    {
         OutputBuilder::new().finish(dr, &instance)
     }
 
@@ -99,11 +102,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
                 .nested_preamble_commitment
                 .get(dr, unified_instance)?;
 
-            let w = crate::components::transcript::derive_w::<_, C>(
-                dr,
-                &nested_preamble_commitment,
-                self.params,
-            )?;
+            let w = transcript::derive_w::<_, C>(dr, &nested_preamble_commitment, self.params)?;
 
             // Use our local w value to impose upon the unified instance
             unified_output.w.set(w);

@@ -1,4 +1,3 @@
-use crate::components::transcript;
 use arithmetic::Cycle;
 use ragu_circuits::{
     polynomials::{Rank, txz::Evaluate},
@@ -13,10 +12,11 @@ use ragu_core::{
 
 use core::marker::PhantomData;
 
-use super::stages::native::{
-    eval as native_eval, preamble as native_preamble, query as native_query,
+use super::{
+    stages::native::{eval as native_eval, preamble as native_preamble, query as native_query},
+    unified::{self, OutputBuilder},
 };
-use super::unified::{self, OutputBuilder};
+use crate::components::transcript;
 
 pub use crate::internal_circuits::InternalCircuitIndex::VCircuit as CIRCUIT_ID;
 pub use crate::internal_circuits::InternalCircuitIndex::VStaged as STAGED_ID;
