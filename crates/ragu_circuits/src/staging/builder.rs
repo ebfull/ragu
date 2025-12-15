@@ -16,6 +16,7 @@ use super::{Stage, StageExt};
 use crate::polynomials::Rank;
 
 /// Builder object for synthesizing a staged circuit witness.
+#[must_use = "StageBuilder must be consumed via `add_stage`, `configure_stage`, or `finish`"]
 pub struct StageBuilder<
     'a,
     'dr,
@@ -84,11 +85,12 @@ impl<'dr, D: Driver<'dr>> FromDriver<'_, 'dr, Emulator<Wireless<D::MaybeKind, D:
 /// Guard type returned by `add_stage` that holds pre-allocated stage wires.
 ///
 /// The stage wires are allocated at the correct positions, but the actual
-/// witness computation is deferred until either [`unenforced`](Self::unenforced)
-/// or [`enforced`](Self::enforced) is called.
+/// witness computation is deferred until one of the consuming methods is called:
 ///
-/// Implicitly, dropping this guard without calling either method effectively "skips"
-/// the stage, where the wire positions are reserved but no gadget is returned.
+/// - [`enforced`](Self::enforced) - run witness and enforce constraints
+/// - [`unenforced`](Self::unenforced) - run witness without constraints
+/// - [`skip`](Self::skip) - skip the stage without producing a gadget
+#[must_use = "StageGuard must be consumed via `enforced`, `unenforced`, or `skip`"]
 pub struct StageGuard<'dr, D: Driver<'dr>, R: Rank, S: Stage<D::F, R>> {
     stage: S,
     stage_wires: Vec<D::Wire>,
@@ -96,6 +98,21 @@ pub struct StageGuard<'dr, D: Driver<'dr>, R: Rank, S: Stage<D::F, R>> {
 }
 
 impl<'dr, D: Driver<'dr>, R: Rank, S: Stage<D::F, R> + 'dr> StageGuard<'dr, D, R, S> {
+    /// Explicitly skip this stage without producing a gadget.
+    ///
+    /// The stage wires have already been allocated at the correct positions,
+    /// but no witness computation or constraint enforcement is performed.
+    /// Use this method to make the skip behavior explicit rather than relying
+    /// on implicit drop.
+    ///
+    /// The `_dr` parameter is unused but required for API consistency with
+    /// [`enforced`](Self::enforced) and [`unenforced`](Self::unenforced),
+    /// ensuring `skip` is called after [`StageBuilder::finish`].
+    pub fn skip(self, _dr: &mut D) {
+        // Consumes self, dropping the pre-allocated stage wires.
+        // The wire positions remain reserved in the circuit layout.
+    }
+
     /// Enforce constraints and inject stage wires.
     ///
     /// Runs the stage's witness method on the real driver (enforcing all

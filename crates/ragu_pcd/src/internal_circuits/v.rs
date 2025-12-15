@@ -75,11 +75,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
     where
         Self: 'dr,
     {
-        let (_, builder) = builder.add_stage::<native_preamble::Stage<C, R, HEADER_SIZE>>()?;
+        let (preamble_guard, builder) =
+            builder.add_stage::<native_preamble::Stage<C, R, HEADER_SIZE>>()?;
         let (query, builder) = builder.add_stage::<native_query::Stage<C, R, HEADER_SIZE>>()?;
         let (eval, builder) = builder.add_stage::<native_eval::Stage<C, R, HEADER_SIZE>>()?;
         let dr = builder.finish();
 
+        preamble_guard.skip(dr);
         let query = query.enforced(dr, witness.view().map(|w| w.query_witness))?;
         let eval = eval.enforced(dr, witness.view().map(|w| w.eval_witness))?;
 

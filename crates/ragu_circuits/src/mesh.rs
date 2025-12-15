@@ -56,6 +56,7 @@ impl CircuitIndex {
 }
 
 /// Builder for constructing a new [`Mesh`].
+#[must_use = "MeshBuilder must be consumed via `register_circuit` or `finalize`"]
 pub struct MeshBuilder<'params, F: PrimeField, R: Rank> {
     circuits: Vec<Box<dyn CircuitObject<F, R> + 'params>>,
 }
