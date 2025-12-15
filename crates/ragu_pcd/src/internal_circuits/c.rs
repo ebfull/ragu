@@ -6,7 +6,7 @@ use ragu_circuits::{
 use ragu_core::{
     Result,
     drivers::{Driver, DriverValue},
-    gadgets::GadgetKind,
+    gadgets::{Gadget, GadgetKind},
     maybe::Maybe,
 };
 use ragu_primitives::{Element, vec::CollectFixed};
@@ -96,19 +96,34 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
         let mut unified_output = OutputBuilder::new();
 
         // Computation of w
-        {
+        let w = {
             // Grab nested_preamble_commitment from the unified instance
             let nested_preamble_commitment = unified_output
                 .nested_preamble_commitment
                 .get(dr, unified_instance)?;
 
-            let w = transcript::derive_w::<_, C>(dr, &nested_preamble_commitment, self.params)?;
+            transcript::derive_w::<_, C>(dr, &nested_preamble_commitment, self.params)?
+        };
 
-            // Use our local w value to impose upon the unified instance
-            unified_output.w.set(w);
-        }
+        // Derive (y, z) = H(w, nested_s_prime_commitment).
+        let (y, z) = {
+            let nested_s_prime_commitment = unified_output
+                .nested_s_prime_commitment
+                .get(dr, unified_instance)?;
+            transcript::derive_y_z::<_, C>(dr, &w, &nested_s_prime_commitment, self.params)?
+        };
 
-        // TODO: Call Horner's method routine to evaluate k(Y) polynomials at y.
+        // Enforce derived z matches error stage's z.
+        z.enforce_equal(dr, &error.z)?;
+
+        unified_output.w.set(w);
+        unified_output.y.set(y);
+        unified_output.z.set(z);
+
+        // Error stage's nested_s_doubleprime_commitment must equal the one in unified output
+        unified_output
+            .nested_s_doubleprime_commitment
+            .set(error.nested_s_doubleprime_commitment);
 
         // Compute c, the folded revdot product claim.
         {
@@ -130,11 +145,6 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
             )?;
             unified_output.c.set(c);
         }
-
-        // Error stage's nested_s_doubleprime_commitment must equal the one in unified output
-        unified_output
-            .nested_s_doubleprime_commitment
-            .set(error.nested_s_doubleprime_commitment);
 
         Ok((unified_output.finish(dr, unified_instance)?, D::just(|| ())))
     }

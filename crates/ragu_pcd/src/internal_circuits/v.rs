@@ -90,17 +90,6 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
             .nested_f_commitment
             .get(dr, unified_instance)?;
 
-        // Derive (y, z) = H(w, nested_s_prime_commitment).
-        let (y, z) = {
-            let w = unified_output.w.get(dr, unified_instance)?;
-            let nested_s_prime_commitment = unified_output
-                .nested_s_prime_commitment
-                .get(dr, unified_instance)?;
-            transcript::derive_y_z::<_, C>(dr, &w, &nested_s_prime_commitment, self.params)?
-        };
-        unified_output.y.set(y);
-        unified_output.z.set(z.clone());
-
         // Derive (mu, nu) = H(nested_error_commitment).
         let (mu, nu) = {
             let nested_error_commitment = unified_output
@@ -157,6 +146,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, const NUM_REVDOT_CLAIMS: usize
         }
 
         // TODO: what to do with txz? launder out as aux data?
+        let z = unified_output.z.get(dr, unified_instance)?;
         let evaluate_txz = Evaluate::new(R::RANK);
         let _txz = dr.routine(evaluate_txz, (x, z))?;
 
