@@ -82,9 +82,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, P: Parameters> staging::Stage<
                         .map(|j| Element::alloc(dr, witness.view().map(|w| w.error_terms[i][j])))
                         .try_collect_fixed()
                 })
-                .collect::<Result<alloc::vec::Vec<_>>>()?
-                .into_iter()
-                .collect_fixed()?;
+                .try_collect_fixed()?;
 
         Ok(Output { z, error_terms })
     }
