@@ -16,3 +16,4 @@
 \com:\mathsf{Commit}
 \acc:\mathsf{acc}
 \pf:\mathsf{pf}
+\aux:\mathsf{aux}

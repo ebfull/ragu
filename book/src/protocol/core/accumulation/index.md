@@ -158,3 +158,54 @@ chain from the _verifier's perspective_ and omits auxiliary advice and witness
 parts of the NARK instance and accumulator managed by the prover.
 
 ## 2-arity PCD
+
+IVC proves linear chains of computation. But what if your computation is a tree?
+Consider a distributed system where multiple branches of computation merge—each
+node needs to verify that both its children's states are valid before producing
+its own output.
+
+This is where proof-carrying data (PCD) generalizes IVC. Instead of a single
+parent, each step takes inputs from two branches: data and proofs from both left
+and right. The step function merges them: $F_i(z_{i,L}, z_{i,R}) = z_{i+1}$,
+and the accumulation verifiers fold both parent accumulators $\set{\acc_{i,L},
+\acc_{i,R}}$ into a single $\acc_{i+1}$. This natural extension gives us
+**2-arity PCD**, supporting trees of computational traces:
+
+<p align="center">
+  <img src="../../../assets/pcd_syntax.svg" alt="pcd_syntax" />
+</p>
+
+Two implementation details carry over from IVC on cycles:
+
+1. **Cycling curves**: Each side's data and accumulator contains a pair—one per
+   field—due to the ping-pong pattern [explained earlier](#ivc-on-a-cycle-of-curves).
+
+2. **Init state tracking**: Unlike IVC's single $z_0$, PCD must track all
+   initial states from the tree's leaves. We maintain a Merkle root of init
+   states $z_0^{(1)} \in \F_p$ (and similarly $z_0^{(2)} \in \F_q$), updated
+   efficiently in-circuit when branches merge. This ensures the final proof
+   attests to a valid tree rooted at a specific set of initial states.
+
+Zooming into the first half of a PCD step (the second half mirrors this
+symmetrically):
+
+<p align="center">
+  <img src="../../../assets/pcd_details.svg" alt="pcd_details" />
+</p>
+
+The primary circuit now:
+- Runs the binary step function: $F_i(z_{i,L}^{(1)}, z_{i,R}^{(1)}) = z_{i+1}^{(1)}$
+- Folds both parent accumulators: $\acc_{i,L}^{(2)}, \acc_{i,R}^{(2)} \to \acc_{i+1}^{(2)}$
+- Updates the init state root with left and right roots
+- Produces instance $\inst_{i+1}^{(1)}$ for the secondary circuit
+
+The secondary circuit performs the symmetric operations for the $(2)$ components.
+
+This establishes the general syntax for all split-accumulation schemes in Ragu:
+
+- **Accumulation Prover**:
+  $\mathsf{Acc.P}(\pi_i, \set{\acc_i}, \aux_i) \to (\acc_{i+1}, \pf_{i+1})$
+- **Accumulation Verifier**:
+  $\mathsf{Acc.V}(\pi_i.\inst, \set{\acc_i.\inst}, \acc_{i+1}.\inst, \pf_{i+1}) \to \{0,1\}$
+
+where $\set{\acc_i}$ denotes the set of parent accumulators being folded.
