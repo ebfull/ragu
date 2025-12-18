@@ -105,6 +105,8 @@ pub mod nested {
         native_preamble: C,
         left_application: C,
         right_application: C,
+        left_ky: C,
+        right_ky: C,
         left_c: C,
         right_c: C,
         left_v: C,

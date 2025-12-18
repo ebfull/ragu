@@ -10,6 +10,7 @@ pub mod c;
 pub mod dummy;
 pub mod hashes_1;
 pub mod hashes_2;
+pub mod ky;
 pub mod stages;
 pub mod unified;
 pub mod v;
@@ -22,20 +23,22 @@ pub enum InternalCircuitIndex {
     DummyCircuit = 0,
     Hashes1Circuit = 1,
     Hashes2Circuit = 2,
-    ClaimStaged = 3,
-    ClaimCircuit = 4,
-    VStaged = 5,
-    VCircuit = 6,
-    PreambleStage = 7,
-    ErrorMStage = 8,
-    ErrorNStage = 9,
-    QueryStage = 10,
-    EvalStage = 11,
+    KyStaged = 3,
+    KyCircuit = 4,
+    ClaimStaged = 5,
+    ClaimCircuit = 6,
+    VStaged = 7,
+    VCircuit = 8,
+    PreambleStage = 9,
+    ErrorMStage = 10,
+    ErrorNStage = 11,
+    QueryStage = 12,
+    EvalStage = 13,
 }
 
 /// The number of internal circuits registered by [`register_all`],
 /// and the number of variants in [`InternalCircuitIndex`].
-pub const NUM_INTERNAL_CIRCUITS: usize = 12;
+pub const NUM_INTERNAL_CIRCUITS: usize = 14;
 
 impl InternalCircuitIndex {
     pub fn circuit_index(self, num_application_steps: usize) -> CircuitIndex {
@@ -53,6 +56,11 @@ pub fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
     let mesh = mesh.register_circuit(dummy::Circuit)?;
     let mesh = mesh.register_circuit(hashes_1::Circuit::<C>::new(params))?;
     let mesh = mesh.register_circuit(hashes_2::Circuit::<C>::new(params))?;
+    let mesh = {
+        let ky = ky::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params, log2_circuits);
+        mesh.register_circuit_object(ky.final_into_object()?)?
+            .register_circuit(ky)?
+    };
     let mesh = {
         let c = c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params, log2_circuits);
         mesh.register_circuit_object(c.final_into_object()?)?

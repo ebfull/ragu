@@ -77,6 +77,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             internal_circuits::v::STAGED_ID,
         );
 
+        // Internal circuit ky stage verification
+        let ky_stage_valid = verifier.check_stage(
+            &pcd.proof.internal_circuits.ky_rx,
+            internal_circuits::ky::STAGED_ID,
+        );
+
         let unified_instance = internal_circuits::unified::Instance {
             nested_preamble_commitment: pcd.proof.preamble.nested_preamble_commitment,
             w: pcd.proof.internal_circuits.w,
@@ -152,6 +158,21 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             unified_ky,
         );
 
+        // Ky circuit verification with ky.
+        // Ky's final stage is error_n, so combine preamble_rx + error_m_rx + error_n_rx with ky_rx.
+        let ky_circuit_valid = {
+            let mut ky_combined_rx = pcd.proof.preamble.native_preamble_rx.clone();
+            ky_combined_rx.add_assign(&pcd.proof.error.native_error_m_rx);
+            ky_combined_rx.add_assign(&pcd.proof.error.native_error_n_rx);
+            ky_combined_rx.add_assign(&pcd.proof.internal_circuits.ky_rx);
+
+            verifier.check_internal_circuit(
+                &ky_combined_rx,
+                internal_circuits::ky::CIRCUIT_ID,
+                unified_ky,
+            )
+        };
+
         // Application verification
         let left_header = FixedVec::<_, ConstLen<HEADER_SIZE>>::try_from(
             pcd.proof.application.left_header.clone(),
@@ -181,10 +202,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             && eval_valid
             && c_stage_valid
             && v_stage_valid
+            && ky_stage_valid
             && c_circuit_valid
             && v_circuit_valid
             && hashes_1_valid
             && hashes_2_valid
+            && ky_circuit_valid
             && application_valid)
     }
 }

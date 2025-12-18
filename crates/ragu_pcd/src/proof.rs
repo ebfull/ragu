@@ -61,7 +61,7 @@ pub(crate) struct PreambleProof<C: Cycle, R: Rank> {
     pub(crate) nested_preamble_commitment: C::NestedCurve,
 }
 
-/// Fiat-Shamir challenges and C/V/hash circuit polynomials.
+/// Fiat-Shamir challenges and C/V/hash/ky circuit polynomials.
 pub(crate) struct InternalCircuits<C: Cycle, R: Rank> {
     pub(crate) w: C::CircuitField,
     pub(crate) y: C::CircuitField,
@@ -79,6 +79,9 @@ pub(crate) struct InternalCircuits<C: Cycle, R: Rank> {
     pub(crate) hashes_2_rx: structured::Polynomial<C::CircuitField, R>,
     pub(crate) hashes_2_rx_blind: C::CircuitField,
     pub(crate) hashes_2_rx_commitment: C::HostCurve,
+    pub(crate) ky_rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) ky_rx_blind: C::CircuitField,
+    pub(crate) ky_rx_commitment: C::HostCurve,
     pub(crate) mu: C::CircuitField,
     pub(crate) nu: C::CircuitField,
     pub(crate) mu_prime: C::CircuitField,
@@ -321,6 +324,9 @@ impl<C: Cycle, R: Rank> Clone for InternalCircuits<C, R> {
             hashes_2_rx: self.hashes_2_rx.clone(),
             hashes_2_rx_blind: self.hashes_2_rx_blind,
             hashes_2_rx_commitment: self.hashes_2_rx_commitment,
+            ky_rx: self.ky_rx.clone(),
+            ky_rx_blind: self.ky_rx_blind,
+            ky_rx_commitment: self.ky_rx_commitment,
             mu: self.mu,
             nu: self.nu,
             mu_prime: self.mu_prime,
@@ -453,6 +459,15 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let hashes_2_rx_dummy_commitment =
             hashes_2_rx_dummy_rx.commit(self.params.host_generators(), hashes_2_rx_dummy_blind);
 
+        // Dummy ky_rx commitment
+        let ky_rx_dummy_rx = dummy::Circuit
+            .rx((), self.circuit_mesh.get_key())
+            .expect("should not fail")
+            .0;
+        let ky_rx_dummy_blind = C::CircuitField::random(&mut *rng);
+        let ky_rx_dummy_commitment =
+            ky_rx_dummy_rx.commit(self.params.host_generators(), ky_rx_dummy_blind);
+
         // Create a dummy proof to use for preamble witness.
         // The preamble witness needs proof references, but we're creating a trivial proof
         // from scratch, so we construct a dummy with placeholder values.
@@ -530,6 +545,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 hashes_2_rx: hashes_2_rx_dummy_rx.clone(),
                 hashes_2_rx_blind: hashes_2_rx_dummy_blind,
                 hashes_2_rx_commitment: hashes_2_rx_dummy_commitment,
+                ky_rx: ky_rx_dummy_rx.clone(),
+                ky_rx_blind: ky_rx_dummy_blind,
+                ky_rx_commitment: ky_rx_dummy_commitment,
                 mu: C::CircuitField::random(&mut *rng),
                 nu: C::CircuitField::random(&mut *rng),
                 mu_prime: C::CircuitField::random(&mut *rng),
@@ -592,6 +610,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             native_preamble: native_preamble_commitment,
             left_application: application_commitment,
             right_application: application_commitment,
+            // placeholder for ky circuit commitments
+            left_ky: ky_rx_dummy_commitment,
+            right_ky: ky_rx_dummy_commitment,
             // placeholder for left.c_rx_commitment and right.c_rx_commitment
             left_c: c_rx_dummy_commitment,
             right_c: c_rx_dummy_commitment,
@@ -683,10 +704,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         )?;
 
         // Compute error_n stage (Layer 2: Single N-sized reduction)
-        // error_n includes nu as a binding challenge
+        // error_n includes nu as a binding challenge and collapsed values from layer 1
         let error_n_witness = stages::native::error_n::Witness::<C, NativeParameters> {
             nu,
             error_terms: ErrorTermsLen::<<NativeParameters as Parameters>::N>::range()
+                .map(|_| C::CircuitField::ZERO)
+                .collect_fixed()?,
+            collapsed: <<NativeParameters as Parameters>::N>::range()
                 .map(|_| C::CircuitField::ZERO)
                 .collect_fixed()?,
         };
@@ -975,6 +999,23 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let hashes_2_rx_commitment =
             hashes_2_rx.commit(self.params.host_generators(), hashes_2_rx_blind);
 
+        // Compute ky_rx using the ky circuit
+        let internal_circuit_ky =
+            internal_circuits::ky::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(
+                self.params,
+                circuit_counts(self.num_application_steps).1,
+            );
+        let internal_circuit_ky_witness = internal_circuits::ky::Witness {
+            unified_instance: &unified_instance,
+            preamble_witness: &preamble_witness,
+            error_m_witness: &error_m_witness,
+            error_n_witness: &error_n_witness,
+        };
+        let (ky_rx, _) = internal_circuit_ky
+            .rx::<R>(internal_circuit_ky_witness, self.circuit_mesh.get_key())?;
+        let ky_rx_blind = C::CircuitField::random(&mut *rng);
+        let ky_rx_commitment = ky_rx.commit(self.params.host_generators(), ky_rx_blind);
+
         Ok(Proof {
             preamble: PreambleProof {
                 native_preamble_rx,
@@ -1047,6 +1088,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 hashes_2_rx,
                 hashes_2_rx_blind,
                 hashes_2_rx_commitment,
+                ky_rx,
+                ky_rx_blind,
+                ky_rx_commitment,
                 mu,
                 nu,
                 mu_prime,

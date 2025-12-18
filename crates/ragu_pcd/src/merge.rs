@@ -8,8 +8,6 @@ use ragu_primitives::{
 };
 use rand::Rng;
 
-use alloc::vec;
-
 use crate::{
     Application, circuit_counts,
     components::fold_revdot::{self, ErrorTermsLen, NativeParameters, Parameters},
@@ -78,6 +76,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             native_preamble: native_preamble_commitment,
             left_application: left.proof.application.commitment,
             right_application: right.proof.application.commitment,
+            left_ky: left.proof.internal_circuits.ky_rx_commitment,
+            right_ky: right.proof.internal_circuits.ky_rx_commitment,
             left_c: left.proof.internal_circuits.c_rx_commitment,
             right_c: right.proof.internal_circuits.c_rx_commitment,
             left_v: left.proof.internal_circuits.v_rx_commitment,
@@ -182,13 +182,36 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             self.params,
         )?;
 
+        // Compute collapsed values (layer 1 folding) now that mu, nu are known.
+        let collapsed =
+            Emulator::emulate_wireless((mu, nu, &error_m_witness.error_terms), |dr, witness| {
+                let (mu, nu, error_terms_m) = witness.cast();
+                let mu = Element::alloc(dr, mu)?;
+                let nu = Element::alloc(dr, nu)?;
+                let ky_values = FixedVec::from_fn(|_| {
+                    // TODO
+                    Element::zero(dr)
+                });
+
+                FixedVec::try_from_fn(|i| {
+                    let errors = FixedVec::try_from_fn(|j| {
+                        Element::alloc(dr, error_terms_m.view().map(|et| et[i][j]))
+                    })?;
+                    let v = fold_revdot::compute_c_m::<_, NativeParameters>(
+                        dr, &mu, &nu, &errors, &ky_values,
+                    )?;
+                    Ok(*v.value().take())
+                })
+            })?;
+
         // Compute error_n stage (Layer 2: Single N-sized reduction).
-        // error_n includes nu as a binding challenge.
+        // error_n includes nu as a binding challenge and the collapsed values from layer 1.
         let error_n_witness = stages::native::error_n::Witness::<C, NativeParameters> {
             nu,
             error_terms: ErrorTermsLen::<<NativeParameters as Parameters>::N>::range()
                 .map(|_| C::CircuitField::ZERO)
                 .collect_fixed()?,
+            collapsed,
         };
         let native_error_n_rx =
             stages::native::error_n::Stage::<C, R, HEADER_SIZE, NativeParameters>::rx(
@@ -214,64 +237,27 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             self.params,
         )?;
 
-        // Compute c, the folded revdot product claim using two-layer reduction.
+        // Compute c, the folded revdot product claim (layer 2 only).
+        // Layer 1 was already computed above to produce the collapsed values.
         let c: C::CircuitField = Emulator::emulate_wireless(
             (
-                mu,
-                nu,
                 mu_prime,
                 nu_prime,
-                &error_m_witness.error_terms,
                 &error_n_witness.error_terms,
+                &error_n_witness.collapsed,
             ),
             |dr, witness| {
-                let (mu, nu, mu_prime, nu_prime, error_terms_m, error_terms_n) = witness.cast();
+                let (mu_prime, nu_prime, error_terms_n, collapsed) = witness.cast();
 
-                let mu = Element::alloc(dr, mu)?;
-                let nu = Element::alloc(dr, nu)?;
                 let mu_prime = Element::alloc(dr, mu_prime)?;
                 let nu_prime = Element::alloc(dr, nu_prime)?;
 
-                // Allocate error_m error terms (nested structure)
-                let error_terms_m: FixedVec<
-                    FixedVec<Element<'_, _>, ErrorTermsLen<<NativeParameters as Parameters>::M>>,
-                    <NativeParameters as Parameters>::N,
-                > = <<NativeParameters as Parameters>::N>::range()
-                    .map(|i| {
-                        ErrorTermsLen::<<NativeParameters as Parameters>::M>::range()
-                            .map(|j| Element::alloc(dr, error_terms_m.view().map(|et| et[i][j])))
-                            .try_collect_fixed()
-                    })
-                    .try_collect_fixed()?;
+                let error_terms_n = FixedVec::try_from_fn(|i| {
+                    Element::alloc(dr, error_terms_n.view().map(|et| et[i]))
+                })?;
 
-                // Allocate error_n error terms
-                let error_terms_n: FixedVec<
-                    Element<'_, _>,
-                    ErrorTermsLen<<NativeParameters as Parameters>::N>,
-                > = ErrorTermsLen::<<NativeParameters as Parameters>::N>::range()
-                    .map(|i| Element::alloc(dr, error_terms_n.view().map(|et| et[i])))
-                    .try_collect_fixed()?;
-
-                // Layer 1: N instances of M-sized reductions
-                // ky_values stay as zeros for now
-                let ky_values_m: FixedVec<_, <NativeParameters as Parameters>::M> =
-                    <<NativeParameters as Parameters>::M>::range()
-                        .map(|_| Element::zero(dr))
-                        .collect_fixed()?;
-
-                let mut collapsed = vec![];
-                for error_terms_i in error_terms_m.iter() {
-                    let v = fold_revdot::compute_c_m::<_, NativeParameters>(
-                        dr,
-                        &mu,
-                        &nu,
-                        error_terms_i,
-                        &ky_values_m,
-                    )?;
-                    collapsed.push(v);
-                }
-                let collapsed: FixedVec<_, <NativeParameters as Parameters>::N> =
-                    FixedVec::new(collapsed)?;
+                let collapsed =
+                    FixedVec::try_from_fn(|i| Element::alloc(dr, collapsed.view().map(|c| c[i])))?;
 
                 // Layer 2: Single N-sized reduction using collapsed as ky_values
                 let c = fold_revdot::compute_c_n::<_, NativeParameters>(
@@ -464,6 +450,24 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let hashes_2_rx_blind = C::CircuitField::random(&mut *rng);
         let hashes_2_rx_commitment = hashes_2_rx.commit(host_generators, hashes_2_rx_blind);
 
+        // Ky staged circuit (layer 1 folding verification).
+        let (ky_rx, _) =
+            internal_circuits::ky::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(
+                self.params,
+                circuit_counts(self.num_application_steps).1,
+            )
+            .rx::<R>(
+                internal_circuits::ky::Witness {
+                    unified_instance,
+                    preamble_witness: &preamble_witness,
+                    error_m_witness: &error_m_witness,
+                    error_n_witness: &error_n_witness,
+                },
+                self.circuit_mesh.get_key(),
+            )?;
+        let ky_rx_blind = C::CircuitField::random(&mut *rng);
+        let ky_rx_commitment = ky_rx.commit(host_generators, ky_rx_blind);
+
         // Application
         let application_circuit_id = S::INDEX.circuit_index(self.num_application_steps)?;
         let (application_rx, aux) = Adapter::<C, S, R, HEADER_SIZE>::new(step).rx::<R>(
@@ -573,6 +577,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     hashes_2_rx,
                     hashes_2_rx_blind,
                     hashes_2_rx_commitment,
+                    ky_rx,
+                    ky_rx_blind,
+                    ky_rx_commitment,
                     mu,
                     nu,
                     mu_prime,
