@@ -1,4 +1,4 @@
-use arithmetic::{Cycle, FixedGenerators};
+use arithmetic::{Cycle, FieldExt, FixedGenerators};
 use ff::Field;
 use ragu_circuits::{
     CircuitExt,
@@ -8,7 +8,7 @@ use ragu_circuits::{
 };
 use ragu_core::{Result, drivers::emulator::Emulator, maybe::Maybe};
 use ragu_primitives::{
-    Element, FieldExt, GadgetExt, Point,
+    Element, GadgetExt, Point,
     poseidon::Sponge,
     vec::{CollectFixed, FixedVec},
 };

@@ -1,9 +1,9 @@
-use arithmetic::Cycle;
+use arithmetic::{Cycle, FieldExt};
 use ff::Field;
 use ragu_circuits::{CircuitExt, polynomials::Rank, staging::StageExt};
 use ragu_core::{Result, drivers::emulator::Emulator, maybe::Maybe};
 use ragu_primitives::{
-    Element, FieldExt, GadgetExt, Point,
+    Element, GadgetExt, Point,
     poseidon::Sponge,
     vec::{CollectFixed, FixedVec},
 };

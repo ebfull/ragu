@@ -1,4 +1,5 @@
 use arithmetic::Coeff;
+use arithmetic::FieldExt;
 use ff::{Field, PrimeField};
 use ragu_core::{
     Error, Result,
@@ -10,21 +11,6 @@ use ragu_core::{
 use alloc::vec::Vec;
 
 use crate::io::{Buffer, Write};
-
-/// Stub for development that isn't algebraically special.
-const TODO_VALUE: u64 = 0x5E8B_1D3A;
-
-/// This extension trait provides [`FieldExt::todo`] which returns an arbitrary
-/// non-trivial constant that won't accidentally mask such bugs.
-pub trait FieldExt: PrimeField {
-    /// Returns a non-trivial constant for use as a stub during development.
-    #[inline]
-    fn todo() -> Self {
-        Self::from_u128(TODO_VALUE as u128)
-    }
-}
-
-impl<F: PrimeField> FieldExt for F {}
 
 /// Represents a wire and its corresponding field element value, but generally
 /// does not guarantee any particular constraint has been imposed on the wire.
@@ -128,7 +114,7 @@ impl<'dr, D: Driver<'dr>> Element<'dr, D> {
     where
         D::F: PrimeField,
     {
-        Self::constant(dr, D::F::from_u128(TODO_VALUE as u128))
+        Self::constant(dr, D::F::todo())
     }
 
     /// Creates an element for the provided constant value.
