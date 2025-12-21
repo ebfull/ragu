@@ -91,13 +91,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
         // Layer 1 folding is verified by circuit_ky; we use error_n.collapsed directly.
         {
             // Layer 2: Single N-sized reduction using collapsed from error_n as ky_values
-            let c = fold_revdot::compute_c_n::<_, FP>(
-                dr,
-                &mu_prime,
-                &nu_prime,
-                &error_n.error_terms,
-                &error_n.collapsed,
-            )?;
+            let fold_c = fold_revdot::FoldC::new(dr, &mu_prime, &nu_prime)?;
+            let c = fold_c.compute_n::<FP>(dr, &error_n.error_terms, &error_n.collapsed)?;
             unified_output.c.set(c);
         }
 

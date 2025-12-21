@@ -764,6 +764,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 ]
                 .into_iter();
 
+                let fold_c = fold_revdot::FoldC::new(dr, &mu, &nu)?;
+
                 FixedVec::try_from_fn(|i| {
                     let errors = FixedVec::try_from_fn(|j| {
                         Element::alloc(dr, error_terms_m.view().map(|et| et[i][j]))
@@ -771,9 +773,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     let ky_values = FixedVec::from_fn(|_| {
                         ky_values.next().unwrap_or_else(|| Element::zero(dr))
                     });
-                    let v = fold_revdot::compute_c_m::<_, NativeParameters>(
-                        dr, &mu, &nu, &errors, &ky_values,
-                    )?;
+
+                    let v = fold_c.compute_m::<NativeParameters>(dr, &errors, &ky_values)?;
                     Ok(*v.value().take())
                 })
             },
@@ -835,13 +836,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     FixedVec::try_from_fn(|i| Element::alloc(dr, collapsed.view().map(|c| c[i])))?;
 
                 // Layer 2: Single N-sized reduction using collapsed as ky_values
-                let c = fold_revdot::compute_c_n::<_, NativeParameters>(
-                    dr,
-                    &mu_prime,
-                    &nu_prime,
-                    &error_terms_n,
-                    &collapsed,
-                )?;
+                let fold_c = fold_revdot::FoldC::new(dr, &mu_prime, &nu_prime)?;
+                let c = fold_c.compute_n::<NativeParameters>(dr, &error_terms_n, &collapsed)?;
 
                 Ok(*c.value().take())
             },

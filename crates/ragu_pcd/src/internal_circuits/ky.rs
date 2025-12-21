@@ -107,6 +107,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
         // Get mu, nu from unified instance
         let mu = unified_output.mu.get(dr, unified_instance)?;
         let nu = unified_output.nu.get(dr, unified_instance)?;
+        let fold_c = fold_revdot::FoldC::new(dr, &mu, &nu)?;
 
         // Read k(y) values from error_n stage (computed and verified in hashes_1).
         let mut ky_values = [
@@ -121,7 +122,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
             let ky_values =
                 FixedVec::from_fn(|_| ky_values.next().unwrap_or_else(|| Element::zero(dr)));
 
-            fold_revdot::compute_c_m::<_, FP>(dr, &mu, &nu, error_terms, &ky_values)?
+            fold_c
+                .compute_m::<FP>(dr, error_terms, &ky_values)?
                 .enforce_equal(dr, &error_n.collapsed[i])?;
         }
 
