@@ -64,31 +64,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // constructed during the merge step.
         //
         // This block will return the enclosed left/right `Proof` structures.
-        let (left, right, application_proof, application_aux) = {
-            let circuit_id = S::INDEX.circuit_index(self.num_application_steps)?;
-            let (rx, aux) = Adapter::<C, S, R, HEADER_SIZE>::new(step).rx::<R>(
-                (left.data, right.data, witness),
-                self.circuit_mesh.get_key(),
-            )?;
-            let blind = C::CircuitField::random(&mut *rng);
-            let commitment = rx.commit(host_generators, blind);
-
-            let ((left_header, right_header), aux) = aux;
-
-            (
-                left.proof,
-                right.proof,
-                ApplicationProof {
-                    circuit_id,
-                    left_header: left_header.into_inner(),
-                    right_header: right_header.into_inner(),
-                    rx,
-                    blind,
-                    commitment,
-                },
-                aux,
-            )
-        };
+        let (left, right, application_proof, application_aux) =
+            self.compute_application_proof(rng, step, witness, left, right)?;
 
         // The preamble stage commits to all of the C::CircuitField elements
         // used as public inputs to the circuits being merged together. This
@@ -710,6 +687,47 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             // We return the application auxillary data for potential use by the
             // caller.
             application_aux,
+        ))
+    }
+
+    /// Compute the application circuit proof.
+    fn compute_application_proof<'source, RNG: Rng, S: Step<C>>(
+        &self,
+        rng: &mut RNG,
+        step: S,
+        witness: S::Witness<'source>,
+        left: Pcd<'source, C, R, S::Left>,
+        right: Pcd<'source, C, R, S::Right>,
+    ) -> Result<(
+        Proof<C, R>,
+        Proof<C, R>,
+        ApplicationProof<C, R>,
+        S::Aux<'source>,
+    )> {
+        let host_generators = self.params.host_generators();
+
+        let circuit_id = S::INDEX.circuit_index(self.num_application_steps)?;
+        let (rx, aux) = Adapter::<C, S, R, HEADER_SIZE>::new(step).rx::<R>(
+            (left.data, right.data, witness),
+            self.circuit_mesh.get_key(),
+        )?;
+        let blind = C::CircuitField::random(&mut *rng);
+        let commitment = rx.commit(host_generators, blind);
+
+        let ((left_header, right_header), aux) = aux;
+
+        Ok((
+            left.proof,
+            right.proof,
+            ApplicationProof {
+                circuit_id,
+                left_header: left_header.into_inner(),
+                right_header: right_header.into_inner(),
+                rx,
+                blind,
+                commitment,
+            },
+            aux,
         ))
     }
 }
