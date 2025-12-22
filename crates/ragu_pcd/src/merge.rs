@@ -74,57 +74,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // the mesh domain that corresponds to the Step circuit being checked).
         //
         // Let's assemble the witness needed to generate the preamble stage.
-        let preamble_witness = stages::native::preamble::Witness::new(
+        let (preamble, preamble_witness) = self.compute_preamble(
+            rng,
             &left,
             &right,
             &application_proof.left_header,
             &application_proof.right_header,
         )?;
-
-        // Now, compute the partial witness polynomial (stage polynomial) for
-        // the preamble.
-        let native_preamble_rx =
-            stages::native::preamble::Stage::<C, R, HEADER_SIZE>::rx(&preamble_witness)?;
-        // ... and commit to it, with a random blinding factor.
-        let native_preamble_blind = C::CircuitField::random(&mut *rng);
-        let native_preamble_commitment =
-            native_preamble_rx.commit(host_generators, native_preamble_blind);
-
-        // In order to circle back to C::CircuitField, because our
-        // `native_preamble_commitment` has base points in C::ScalarField, we
-        // need to commit to a stage polynomial over the C::NestedCurve that
-        // contains all of the `C::HostCurve` points. This includes the
-        // native_preamble_commitment we just computed, but also contains
-        // commitments to circuit and stage polynomials that were created in the
-        // merge operations that produced each of the two input proofs.
-        let nested_preamble_witness = stages::nested::preamble::Witness {
-            native_preamble: native_preamble_commitment,
-            left_application: left.application.commitment,
-            right_application: right.application.commitment,
-            left_ky: left.internal_circuits.ky_rx_commitment,
-            right_ky: right.internal_circuits.ky_rx_commitment,
-            left_c: left.internal_circuits.c_rx_commitment,
-            right_c: right.internal_circuits.c_rx_commitment,
-            left_v: left.internal_circuits.v_rx_commitment,
-            right_v: right.internal_circuits.v_rx_commitment,
-            left_hashes_1: left.internal_circuits.hashes_1_rx_commitment,
-            right_hashes_1: right.internal_circuits.hashes_1_rx_commitment,
-            left_hashes_2: left.internal_circuits.hashes_2_rx_commitment,
-            right_hashes_2: right.internal_circuits.hashes_2_rx_commitment,
-            left_bridge: left.internal_circuits.bridge_rx_commitment,
-            right_bridge: right.internal_circuits.bridge_rx_commitment,
-        };
-
-        // Compute the stage polynomial that commits to the `C::HostCurve`
-        // points.
-        let nested_preamble_rx =
-            stages::nested::preamble::Stage::<C::HostCurve, R>::rx(&nested_preamble_witness)?;
-        // ... and again commit to it, this time producing a point that is
-        // represented using base field elements in `C::CircuitField` that we
-        // can manipulate as the "native" field.
-        let nested_preamble_blind = C::ScalarField::random(&mut *rng);
-        let nested_preamble_commitment =
-            nested_preamble_rx.commit(nested_generators, nested_preamble_blind);
 
         // We now simulate the computation of `w`, the first challenge of the
         // protocol. The challenges we compute in this manner are produced so as
@@ -135,7 +91,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let mut sponge = Sponge::new(&mut dr, self.params.circuit_poseidon());
 
         // Derive w = H(nested_preamble_commitment)
-        Point::constant(&mut dr, nested_preamble_commitment)?.write(&mut dr, &mut sponge)?;
+        Point::constant(&mut dr, preamble.nested_preamble_commitment)?
+            .write(&mut dr, &mut sponge)?;
         let w = *sponge.squeeze(&mut dr)?.value().take();
 
         // In order to check that the two proofs' commitments to s (the mesh polynomial
@@ -468,7 +425,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         // Create the unified instance.
         let unified_instance = &unified::Instance {
-            nested_preamble_commitment,
+            nested_preamble_commitment: preamble.nested_preamble_commitment,
             w,
             nested_s_prime_commitment,
             y,
@@ -572,14 +529,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         Ok((
             Proof {
-                preamble: PreambleProof {
-                    native_preamble_rx,
-                    native_preamble_commitment,
-                    native_preamble_blind,
-                    nested_preamble_rx,
-                    nested_preamble_commitment,
-                    nested_preamble_blind,
-                },
+                preamble,
                 s_prime: SPrimeProof {
                     mesh_wx0,
                     mesh_wx0_blind,
@@ -728,6 +678,87 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 commitment,
             },
             aux,
+        ))
+    }
+
+    /// Compute the preamble proof.
+    ///
+    /// The preamble commits to all the C::CircuitField elements used as public
+    /// inputs to the circuits being merged, including unified instance values
+    /// and circuit IDs.
+    fn compute_preamble<'a, RNG: Rng>(
+        &self,
+        rng: &mut RNG,
+        left: &'a Proof<C, R>,
+        right: &'a Proof<C, R>,
+        left_header: &'a [C::CircuitField],
+        right_header: &'a [C::CircuitField],
+    ) -> Result<(
+        PreambleProof<C, R>,
+        stages::native::preamble::Witness<'a, C, R, HEADER_SIZE>,
+    )> {
+        let host_generators = self.params.host_generators();
+        let nested_generators = self.params.nested_generators();
+
+        // Let's assemble the witness needed to generate the preamble stage.
+        let preamble_witness =
+            stages::native::preamble::Witness::new(left, right, left_header, right_header)?;
+
+        // Now, compute the partial witness polynomial (stage polynomial) for
+        // the preamble.
+        let native_preamble_rx =
+            stages::native::preamble::Stage::<C, R, HEADER_SIZE>::rx(&preamble_witness)?;
+        // ... and commit to it, with a random blinding factor.
+        let native_preamble_blind = C::CircuitField::random(&mut *rng);
+        let native_preamble_commitment =
+            native_preamble_rx.commit(host_generators, native_preamble_blind);
+
+        // In order to circle back to C::CircuitField, because our
+        // `native_preamble_commitment` has base points in C::ScalarField, we
+        // need to commit to a stage polynomial over the C::NestedCurve that
+        // contains all of the `C::HostCurve` points. This includes the
+        // native_preamble_commitment we just computed, but also contains
+        // commitments to circuit and stage polynomials that were created in the
+        // merge operations that produced each of the two input proofs.
+        let nested_preamble_witness = stages::nested::preamble::Witness {
+            native_preamble: native_preamble_commitment,
+            left_application: left.application.commitment,
+            right_application: right.application.commitment,
+            left_ky: left.internal_circuits.ky_rx_commitment,
+            right_ky: right.internal_circuits.ky_rx_commitment,
+            left_c: left.internal_circuits.c_rx_commitment,
+            right_c: right.internal_circuits.c_rx_commitment,
+            left_v: left.internal_circuits.v_rx_commitment,
+            right_v: right.internal_circuits.v_rx_commitment,
+            left_hashes_1: left.internal_circuits.hashes_1_rx_commitment,
+            right_hashes_1: right.internal_circuits.hashes_1_rx_commitment,
+            left_hashes_2: left.internal_circuits.hashes_2_rx_commitment,
+            right_hashes_2: right.internal_circuits.hashes_2_rx_commitment,
+            left_bridge: left.internal_circuits.bridge_rx_commitment,
+            right_bridge: right.internal_circuits.bridge_rx_commitment,
+        };
+
+        // Compute the stage polynomial that commits to the `C::HostCurve`
+        // points.
+        let nested_preamble_rx =
+            stages::nested::preamble::Stage::<C::HostCurve, R>::rx(&nested_preamble_witness)?;
+        // ... and again commit to it, this time producing a point that is
+        // represented using base field elements in `C::CircuitField` that we
+        // can manipulate as the "native" field.
+        let nested_preamble_blind = C::ScalarField::random(&mut *rng);
+        let nested_preamble_commitment =
+            nested_preamble_rx.commit(nested_generators, nested_preamble_blind);
+
+        Ok((
+            PreambleProof {
+                native_preamble_rx,
+                native_preamble_commitment,
+                native_preamble_blind,
+                nested_preamble_rx,
+                nested_preamble_commitment,
+                nested_preamble_blind,
+            },
+            preamble_witness,
         ))
     }
 }
