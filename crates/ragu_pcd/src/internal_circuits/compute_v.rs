@@ -16,8 +16,8 @@ use super::{
     stages::native::{eval as native_eval, preamble as native_preamble, query as native_query},
     unified::{self, OutputBuilder},
 };
-pub use crate::internal_circuits::InternalCircuitIndex::VCircuit as CIRCUIT_ID;
-pub use crate::internal_circuits::InternalCircuitIndex::VStaged as STAGED_ID;
+pub use crate::internal_circuits::InternalCircuitIndex::ComputeVCircuit as CIRCUIT_ID;
+pub use crate::internal_circuits::InternalCircuitIndex::ComputeVStaged as STAGED_ID;
 
 pub struct Circuit<C: Cycle, R, const HEADER_SIZE: usize> {
     _marker: PhantomData<(C, R)>,
@@ -47,13 +47,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> StagedCircuit<C::CircuitField,
 
     fn instance<'dr, 'source: 'dr, D: Driver<'dr, F = C::CircuitField>>(
         &self,
-        dr: &mut D,
-        instance: DriverValue<D, Self::Instance<'source>>,
+        _: &mut D,
+        _: DriverValue<D, Self::Instance<'source>>,
     ) -> Result<<Self::Output as GadgetKind<C::CircuitField>>::Rebind<'dr, D>>
     where
         Self: 'dr,
     {
-        OutputBuilder::new().finish(dr, &instance)
+        unreachable!("instance for internal circuits is not invoked")
     }
 
     fn witness<'a, 'dr, 'source: 'dr, D: Driver<'dr, F = C::CircuitField>>(

@@ -18,8 +18,8 @@ use super::{
 };
 use crate::components::fold_revdot;
 
-pub use crate::internal_circuits::InternalCircuitIndex::ClaimCircuit as CIRCUIT_ID;
-pub use crate::internal_circuits::InternalCircuitIndex::ClaimStaged as STAGED_ID;
+pub use crate::internal_circuits::InternalCircuitIndex::ComputeCCircuit as CIRCUIT_ID;
+pub use crate::internal_circuits::InternalCircuitIndex::ComputeCStaged as STAGED_ID;
 
 pub struct Circuit<C: Cycle, R, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {
     _marker: PhantomData<(C, R, FP)>,
@@ -52,13 +52,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
 
     fn instance<'dr, 'source: 'dr, D: Driver<'dr, F = C::CircuitField>>(
         &self,
-        dr: &mut D,
-        instance: DriverValue<D, Self::Instance<'source>>,
+        _: &mut D,
+        _: DriverValue<D, Self::Instance<'source>>,
     ) -> Result<<Self::Output as GadgetKind<C::CircuitField>>::Rebind<'dr, D>>
     where
         Self: 'dr,
     {
-        OutputBuilder::new().finish(dr, &instance)
+        unreachable!("instance for internal circuits is not invoked")
     }
 
     fn witness<'a, 'dr, 'source: 'dr, D: Driver<'dr, F = C::CircuitField>>(

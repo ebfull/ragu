@@ -89,34 +89,6 @@ pub struct Instance<C: Cycle> {
     pub beta: C::CircuitField,
 }
 
-impl<C: Cycle> Instance<C> {
-    /// Construct a unified instance from a proof.
-    pub fn from_proof<R: Rank>(proof: &Proof<C, R>) -> Self {
-        Instance {
-            nested_preamble_commitment: proof.preamble.nested_preamble_commitment,
-            w: proof.internal_circuits.w,
-            nested_s_prime_commitment: proof.s_prime.nested_s_prime_commitment,
-            y: proof.internal_circuits.y,
-            z: proof.internal_circuits.z,
-            nested_error_m_commitment: proof.error.nested_error_m_commitment,
-            mu: proof.internal_circuits.mu,
-            nu: proof.internal_circuits.nu,
-            nested_error_n_commitment: proof.error.nested_error_n_commitment,
-            mu_prime: proof.internal_circuits.mu_prime,
-            nu_prime: proof.internal_circuits.nu_prime,
-            c: proof.internal_circuits.c,
-            nested_ab_commitment: proof.ab.nested_ab_commitment,
-            x: proof.internal_circuits.x,
-            nested_query_commitment: proof.query.nested_query_commitment,
-            alpha: proof.internal_circuits.alpha,
-            nested_f_commitment: proof.f.nested_f_commitment,
-            u: proof.internal_circuits.u,
-            nested_eval_commitment: proof.eval.nested_eval_commitment,
-            beta: proof.internal_circuits.beta,
-        }
-    }
-}
-
 /// An entry in the shared public inputs for an internal circuit.
 pub struct Slot<'a, 'dr, D: Driver<'dr>, T, C: Cycle> {
     value: Option<T>,

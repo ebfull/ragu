@@ -1,11 +1,10 @@
 use arithmetic::Cycle;
-use ff::PrimeField;
 use ragu_circuits::{polynomials::Rank, staging};
 use ragu_core::{
     Error, Result,
-    drivers::{Driver, DriverValue, emulator::Emulator},
+    drivers::{Driver, DriverValue},
     gadgets::{Gadget, GadgetKind, Kind},
-    maybe::{Always, Maybe, MaybeKind},
+    maybe::Maybe,
 };
 use ragu_primitives::{
     Element, GadgetExt,
@@ -16,10 +15,7 @@ use alloc::vec::Vec;
 use core::marker::PhantomData;
 
 use crate::{
-    header::Header,
-    internal_circuits::unified,
-    proof::{Pcd, Proof},
-    step::padded,
+    components::ky::Ky, header::Header, internal_circuits::unified, proof::Proof, step::padded,
 };
 
 pub use crate::internal_circuits::InternalCircuitIndex::PreambleStage as STAGING_ID;
@@ -32,27 +28,83 @@ type HeaderVec<'dr, D, const HEADER_SIZE: usize> = FixedVec<Element<'dr, D>, Con
 /// computed outside the circuit.
 pub struct Witness<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize> {
     /// Output header for left proof.
-    pub left_output_header: [C::CircuitField; HEADER_SIZE],
+    pub left_output_header: FixedVec<C::CircuitField, ConstLen<HEADER_SIZE>>,
     /// Output header for right proof.
-    pub right_output_header: [C::CircuitField; HEADER_SIZE],
+    pub right_output_header: FixedVec<C::CircuitField, ConstLen<HEADER_SIZE>>,
     /// Left proof.
     pub left: &'a Proof<C, R>,
     /// Right proof.
     pub right: &'a Proof<C, R>,
 }
 
+impl<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize> Witness<'a, C, R, HEADER_SIZE> {
+    /// Create a witness from proof references and pre-computed output headers.
+    pub fn new(
+        left: &'a Proof<C, R>,
+        right: &'a Proof<C, R>,
+        left_output_header: &[C::CircuitField],
+        right_output_header: &[C::CircuitField],
+    ) -> Result<Self> {
+        Ok(Witness {
+            left_output_header: FixedVec::try_from(left_output_header.to_vec())?,
+            right_output_header: FixedVec::try_from(right_output_header.to_vec())?,
+            left,
+            right,
+        })
+    }
+}
+
 #[derive(Gadget)]
 pub struct ProofInputs<'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize> {
     #[ragu(gadget)]
-    pub right_header: HeaderVec<'dr, D, HEADER_SIZE>,
-    #[ragu(gadget)]
     pub left_header: HeaderVec<'dr, D, HEADER_SIZE>,
+    #[ragu(gadget)]
+    pub right_header: HeaderVec<'dr, D, HEADER_SIZE>,
     #[ragu(gadget)]
     pub output_header: HeaderVec<'dr, D, HEADER_SIZE>,
     #[ragu(gadget)]
     pub circuit_id: Element<'dr, D>,
     #[ragu(gadget)]
     pub unified: unified::Output<'dr, D, C>,
+}
+
+impl<'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize> ProofInputs<'dr, D, C, HEADER_SIZE> {
+    /// Compute k(y) for unified circuit instance.
+    pub fn unified_ky(&self, dr: &mut D, y: &Element<'dr, D>) -> Result<Element<'dr, D>> {
+        let mut ky = Ky::new(dr, y);
+        self.unified.write(dr, &mut ky)?;
+        Element::zero(dr).write(dr, &mut ky)?;
+        ky.finish(dr)
+    }
+
+    /// Compute k(y) for both application and bridge circuit instances.
+    ///
+    /// Returns `(application_ky, bridge_ky)` where:
+    /// - `application_ky` = k(y) for `(left_header, right_header, output_header)`
+    /// - `bridge_ky` = k(y) for `(left_header, right_header, 0)`
+    pub fn application_and_bridge_ky(
+        &self,
+        dr: &mut D,
+        y: &Element<'dr, D>,
+    ) -> Result<(Element<'dr, D>, Element<'dr, D>)> {
+        // Shared prefix
+        let mut ky = Ky::new(dr, y);
+        self.left_header.write(dr, &mut ky)?;
+        self.right_header.write(dr, &mut ky)?;
+
+        // Clone and fork
+        let mut ky_bridge = ky.clone();
+
+        // Application: write output_header
+        self.output_header.write(dr, &mut ky)?;
+        let application_ky = ky.finish(dr)?;
+
+        // Bridge: write zero discriminant
+        Element::zero(dr).write(dr, &mut ky_bridge)?;
+        let bridge_ky = ky_bridge.finish(dr)?;
+
+        Ok((application_ky, bridge_ky))
+    }
 }
 
 impl<'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle, const HEADER_SIZE: usize>
@@ -62,12 +114,22 @@ impl<'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle, const HEADER_SIZE: usiz
     pub fn alloc<R: Rank>(
         dr: &mut D,
         proof: DriverValue<D, &Proof<C, R>>,
-        output_header: DriverValue<D, &[D::F; HEADER_SIZE]>,
+        output_header: DriverValue<D, &FixedVec<D::F, ConstLen<HEADER_SIZE>>>,
     ) -> Result<Self> {
         fn alloc_header<'dr, D: Driver<'dr>, const N: usize>(
             dr: &mut D,
             data: DriverValue<D, &[D::F]>,
         ) -> Result<FixedVec<Element<'dr, D>, ConstLen<N>>> {
+            D::with(|| {
+                if data.view().take().len() != N {
+                    return Err(Error::MalformedEncoding(
+                        "Header data length does not match HEADER_SIZE".into(),
+                    ));
+                }
+
+                Ok(())
+            })?;
+
             (0..N)
                 .map(|i| Element::alloc(dr, data.view().map(|d| d[i])))
                 .try_collect_fixed()
@@ -82,13 +144,42 @@ impl<'dr, D: Driver<'dr, F = C::CircuitField>, C: Cycle, const HEADER_SIZE: usiz
                 dr,
                 proof.view().map(|p| p.application.left_header.as_slice()),
             )?,
-            output_header: alloc_header(dr, output_header.view().map(|h| h.as_slice()))?,
+            output_header: alloc_header(dr, output_header.view().map(|h| &h[..]))?,
             circuit_id: Element::alloc(
                 dr,
                 proof.view().map(|p| p.application.circuit_id.omega_j()),
             )?,
             unified: unified::Output::alloc_from_proof(dr, proof)?,
         })
+    }
+
+    /// Allocate ProofInputs from a proof reference and some unprocessed header
+    /// data.
+    pub fn alloc_for_verify<'source, R: Rank, H: Header<C::CircuitField>>(
+        dr: &mut D,
+        proof: DriverValue<D, &Proof<C, R>>,
+        header_data: DriverValue<D, H::Data<'source>>,
+    ) -> Result<Self>
+    where
+        'source: 'dr,
+    {
+        let header_data = D::with(|| {
+            use ragu_core::drivers::emulator::{Emulator, Wireless};
+            let emulator = &mut Emulator::<Wireless<D::MaybeKind, D::F>>::wireless();
+
+            let output = H::encode(emulator, header_data)?;
+            let output = padded::for_header::<H, HEADER_SIZE, _>(emulator, output)?;
+
+            let mut header_data = Vec::with_capacity(HEADER_SIZE);
+            output.write(emulator, &mut header_data)?;
+
+            header_data
+                .into_iter()
+                .map(|e| *e.value().take())
+                .collect_fixed()
+        })?;
+
+        Self::alloc(dr, proof, header_data.view())
     }
 }
 
@@ -99,67 +190,6 @@ pub struct Output<'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize> {
     pub left: ProofInputs<'dr, D, C, HEADER_SIZE>,
     #[ragu(gadget)]
     pub right: ProofInputs<'dr, D, C, HEADER_SIZE>,
-}
-
-impl<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize> Witness<'a, C, R, HEADER_SIZE> {
-    /// Create a witness from proof references and pre-computed output headers.
-    pub fn new(
-        left: &'a Proof<C, R>,
-        right: &'a Proof<C, R>,
-        left_output_header: [C::CircuitField; HEADER_SIZE],
-        right_output_header: [C::CircuitField; HEADER_SIZE],
-    ) -> Self {
-        Witness {
-            left_output_header,
-            right_output_header,
-            left,
-            right,
-        }
-    }
-
-    /// Create a witness from two PCDs.
-    ///
-    /// Output headers are computed outside the circuit using the encoder pattern.
-    /// Other data (input headers, circuit IDs, unified instance) is accessed
-    /// directly from the proof references during circuit synthesis.
-    pub fn from_pcds<HL, HR>(
-        left: &'a Pcd<'_, C, R, HL>,
-        right: &'a Pcd<'_, C, R, HR>,
-    ) -> Result<Self>
-    where
-        HL: Header<C::CircuitField>,
-        HR: Header<C::CircuitField>,
-    {
-        // TODO: Implement Buffer for arrays/slices to avoid Vec allocation here.
-        /// Encode header data into a fixed-size field element array.
-        fn encode_output_header<F: PrimeField, H: Header<F>, const HEADER_SIZE: usize>(
-            data: H::Data<'_>,
-        ) -> Result<[F; HEADER_SIZE]> {
-            fn vec_to_array<F: Copy, const N: usize>(v: &[F]) -> Result<[F; N]> {
-                v.try_into().map_err(|_| Error::VectorLengthMismatch {
-                    expected: N,
-                    actual: v.len(),
-                })
-            }
-
-            let mut emulator = Emulator::execute();
-            let gadget = H::encode(&mut emulator, Always::maybe_just(|| data))?;
-            let padded = padded::for_header::<H, HEADER_SIZE, _>(&mut emulator, gadget)?;
-
-            let mut elements = Vec::with_capacity(HEADER_SIZE);
-            padded.write(&mut emulator, &mut elements)?;
-
-            let values: Vec<_> = elements.into_iter().map(|e| *e.value().take()).collect();
-            vec_to_array(&values)
-        }
-
-        Ok(Witness::new(
-            &left.proof,
-            &right.proof,
-            encode_output_header::<C::CircuitField, HL, HEADER_SIZE>(left.data.clone())?,
-            encode_output_header::<C::CircuitField, HR, HEADER_SIZE>(right.data.clone())?,
-        ))
-    }
 }
 
 #[derive(Default)]

@@ -115,6 +115,8 @@ pub mod nested {
         right_hashes_1: C,
         left_hashes_2: C,
         right_hashes_2: C,
+        left_bridge: C,
+        right_bridge: C,
     });
 
     define_nested_stage!(s_prime, parent = (), fields = {

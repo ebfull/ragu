@@ -6,14 +6,15 @@ use ragu_circuits::{
 };
 use ragu_core::Result;
 
-pub mod c;
+pub mod bridge;
+pub mod compute_c;
+pub mod compute_v;
 pub mod dummy;
+pub mod fold;
 pub mod hashes_1;
 pub mod hashes_2;
-pub mod ky;
 pub mod stages;
 pub mod unified;
-pub mod v;
 
 pub use crate::components::fold_revdot::NativeParameters;
 
@@ -25,22 +26,24 @@ pub enum InternalCircuitIndex {
     Hashes1Circuit = 2,
     Hashes2Staged = 3,
     Hashes2Circuit = 4,
-    KyStaged = 5,
-    KyCircuit = 6,
-    ClaimStaged = 7,
-    ClaimCircuit = 8,
-    VStaged = 9,
-    VCircuit = 10,
-    PreambleStage = 11,
-    ErrorMStage = 12,
-    ErrorNStage = 13,
-    QueryStage = 14,
-    EvalStage = 15,
+    FoldStaged = 5,
+    FoldCircuit = 6,
+    ComputeCStaged = 7,
+    ComputeCCircuit = 8,
+    ComputeVStaged = 9,
+    ComputeVCircuit = 10,
+    BridgeStaged = 11,
+    BridgeCircuit = 12,
+    PreambleStage = 13,
+    ErrorMStage = 14,
+    ErrorNStage = 15,
+    QueryStage = 16,
+    EvalStage = 17,
 }
 
 /// The number of internal circuits registered by [`register_all`],
 /// and the number of variants in [`InternalCircuitIndex`].
-pub const NUM_INTERNAL_CIRCUITS: usize = 16;
+pub const NUM_INTERNAL_CIRCUITS: usize = 18;
 
 impl InternalCircuitIndex {
     pub fn circuit_index(self, num_application_steps: usize) -> CircuitIndex {
@@ -68,19 +71,24 @@ pub fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
             .register_circuit(hashes_2)?
     };
     let mesh = {
-        let ky = ky::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
-        mesh.register_circuit_object(ky.final_into_object()?)?
-            .register_circuit(ky)?
+        let fold = fold::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
+        mesh.register_circuit_object(fold.final_into_object()?)?
+            .register_circuit(fold)?
     };
     let mesh = {
-        let c = c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
-        mesh.register_circuit_object(c.final_into_object()?)?
-            .register_circuit(c)?
+        let compute_c = compute_c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
+        mesh.register_circuit_object(compute_c.final_into_object()?)?
+            .register_circuit(compute_c)?
     };
     let mesh = {
-        let v = v::Circuit::<C, R, HEADER_SIZE>::new();
-        mesh.register_circuit_object(v.final_into_object()?)?
-            .register_circuit(v)?
+        let compute_v = compute_v::Circuit::<C, R, HEADER_SIZE>::new();
+        mesh.register_circuit_object(compute_v.final_into_object()?)?
+            .register_circuit(compute_v)?
+    };
+    let mesh = {
+        let bridge = bridge::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
+        mesh.register_circuit_object(bridge.final_into_object()?)?
+            .register_circuit(bridge)?
     };
 
     let mesh = mesh.register_circuit_object(

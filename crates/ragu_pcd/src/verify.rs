@@ -1,29 +1,20 @@
 //! This module provides the [`Application::verify`] method implementation.
 
-// TODO: these should be made private, since if the trivial proof API is
-// improved these will only be used by the verifier.
-pub(crate) mod stub_step;
-pub(crate) mod stub_unified;
-
 use arithmetic::Cycle;
 use ff::PrimeField;
 use ragu_circuits::{
     mesh::{CircuitIndex, Mesh},
     polynomials::{Rank, structured},
 };
-use ragu_core::{Error, Result};
-use ragu_primitives::vec::{ConstLen, FixedVec};
+use ragu_core::{Result, drivers::emulator::Emulator, maybe::Maybe};
+use ragu_primitives::Element;
 use rand::Rng;
 
 use crate::{
     Application, Pcd,
     header::Header,
-    internal_circuits::{self, InternalCircuitIndex},
-    step::adapter::Adapter,
+    internal_circuits::{self, InternalCircuitIndex, stages::native::preamble::ProofInputs},
 };
-
-use stub_step::StubStep;
-use stub_unified::StubUnified;
 
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_SIZE> {
     /// Verifies some [`Pcd`] for the provided [`Header`].
@@ -67,22 +58,22 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             internal_circuits::stages::native::eval::STAGING_ID,
         );
 
-        // Internal circuit c verification
+        // Internal circuit compute_c verification
         let c_stage_valid = verifier.check_stage(
             &pcd.proof.internal_circuits.c_rx,
-            internal_circuits::c::STAGED_ID,
+            internal_circuits::compute_c::STAGED_ID,
         );
 
-        // Internal circuit v verification
+        // Internal circuit compute_v verification
         let v_stage_valid = verifier.check_stage(
             &pcd.proof.internal_circuits.v_rx,
-            internal_circuits::v::STAGED_ID,
+            internal_circuits::compute_v::STAGED_ID,
         );
 
-        // Internal circuit ky stage verification
-        let ky_stage_valid = verifier.check_stage(
+        // Internal circuit fold stage verification
+        let fold_stage_valid = verifier.check_stage(
             &pcd.proof.internal_circuits.ky_rx,
-            internal_circuits::ky::STAGED_ID,
+            internal_circuits::fold::STAGED_ID,
         );
 
         // Internal circuit hashes_1 stage verification
@@ -97,32 +88,48 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             internal_circuits::hashes_2::STAGED_ID,
         );
 
-        let unified_instance = internal_circuits::unified::Instance::from_proof(&pcd.proof);
+        // Internal circuit bridge stage verification
+        let bridge_stage_valid = verifier.check_stage(
+            &pcd.proof.internal_circuits.bridge_rx,
+            internal_circuits::bridge::STAGED_ID,
+        );
 
-        // Compute unified k(Y) once for both C and V circuits.
-        let unified_ky = {
-            let stub = StubUnified::<C>::new();
-            crate::components::ky::emulate(&stub, &unified_instance, verifier.y)?
-        };
+        // Compute unified k(Y), application k(Y), and bridge k(Y).
+        let (unified_ky, application_ky, bridge_ky) = Emulator::emulate_wireless(
+            (&pcd.proof, pcd.data.clone(), verifier.y),
+            |dr, witness| {
+                let (proof, data, y) = witness.cast();
+                let y = Element::alloc(dr, y)?;
+                let proof_inputs =
+                    ProofInputs::<_, C, HEADER_SIZE>::alloc_for_verify::<R, H>(dr, proof, data)?;
 
-        // C circuit verification with ky.
-        // C skips preamble and error_m, so only combine error_n_rx with c_rx.
+                let unified_ky = *proof_inputs.unified_ky(dr, &y)?.value().take();
+                let (application_ky, bridge_ky) = proof_inputs.application_and_bridge_ky(dr, &y)?;
+                let application_ky = *application_ky.value().take();
+                let bridge_ky = *bridge_ky.value().take();
+
+                Ok((unified_ky, application_ky, bridge_ky))
+            },
+        )?;
+
+        // compute_c circuit verification with ky.
+        // compute_c skips preamble and error_m, so only combine error_n_rx with c_rx.
         let c_circuit_valid = {
             let mut c_combined_rx = pcd.proof.error.native_error_n_rx.clone();
             c_combined_rx.add_assign(&pcd.proof.internal_circuits.c_rx);
 
             verifier.check_internal_circuit(
                 &c_combined_rx,
-                internal_circuits::c::CIRCUIT_ID,
+                internal_circuits::compute_c::CIRCUIT_ID,
                 unified_ky,
             )
         };
 
-        // V circuit verification with ky.
-        // V skips all stages (preamble, query, eval), so only check v_rx.
+        // compute_v circuit verification with ky.
+        // compute_v skips all stages (preamble, query, eval), so only check v_rx.
         let v_circuit_valid = verifier.check_internal_circuit(
             &pcd.proof.internal_circuits.v_rx,
-            internal_circuits::v::CIRCUIT_ID,
+            internal_circuits::compute_v::CIRCUIT_ID,
             unified_ky,
         );
 
@@ -154,36 +161,33 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             )
         };
 
-        // Ky circuit verification with ky.
-        // Ky skips preamble, so only combine error_m_rx + error_n_rx with ky_rx.
-        let ky_circuit_valid = {
-            let mut ky_combined_rx = pcd.proof.error.native_error_m_rx.clone();
-            ky_combined_rx.add_assign(&pcd.proof.error.native_error_n_rx);
-            ky_combined_rx.add_assign(&pcd.proof.internal_circuits.ky_rx);
+        // fold circuit verification with ky.
+        // fold skips preamble, so only combine error_m_rx + error_n_rx with ky_rx.
+        let fold_circuit_valid = {
+            let mut fold_combined_rx = pcd.proof.error.native_error_m_rx.clone();
+            fold_combined_rx.add_assign(&pcd.proof.error.native_error_n_rx);
+            fold_combined_rx.add_assign(&pcd.proof.internal_circuits.ky_rx);
 
             verifier.check_internal_circuit(
-                &ky_combined_rx,
-                internal_circuits::ky::CIRCUIT_ID,
+                &fold_combined_rx,
+                internal_circuits::fold::CIRCUIT_ID,
                 unified_ky,
             )
         };
 
-        // Application verification
-        let left_header = FixedVec::<_, ConstLen<HEADER_SIZE>>::try_from(
-            pcd.proof.application.left_header.clone(),
-        )
-        .map_err(|_| Error::MalformedEncoding("left_header has incorrect size".into()))?;
-        let right_header = FixedVec::<_, ConstLen<HEADER_SIZE>>::try_from(
-            pcd.proof.application.right_header.clone(),
-        )
-        .map_err(|_| Error::MalformedEncoding("right_header has incorrect size".into()))?;
+        // Bridge circuit verification with bridge_ky.
+        let bridge_circuit_valid = {
+            let mut bridge_combined_rx = pcd.proof.preamble.native_preamble_rx.clone();
+            bridge_combined_rx.add_assign(&pcd.proof.internal_circuits.bridge_rx);
 
-        let application_ky = {
-            let adapter = Adapter::<C, StubStep<H>, R, HEADER_SIZE>::new(StubStep::new());
-            let instance = (left_header, right_header, pcd.data.clone());
-            crate::components::ky::emulate(&adapter, instance, verifier.y)?
+            verifier.check_internal_circuit(
+                &bridge_combined_rx,
+                internal_circuits::bridge::CIRCUIT_ID,
+                bridge_ky,
+            )
         };
 
+        // Application verification (application_ky was computed earlier with unified_ky)
         let application_valid = verifier.check_circuit(
             &pcd.proof.application.rx,
             pcd.proof.application.circuit_id,
@@ -197,14 +201,16 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             && eval_valid
             && c_stage_valid
             && v_stage_valid
-            && ky_stage_valid
+            && fold_stage_valid
             && hashes_1_stage_valid
             && hashes_2_stage_valid
+            && bridge_stage_valid
             && c_circuit_valid
             && v_circuit_valid
             && hashes_1_valid
             && hashes_2_valid
-            && ky_circuit_valid
+            && fold_circuit_valid
+            && bridge_circuit_valid
             && application_valid)
     }
 }

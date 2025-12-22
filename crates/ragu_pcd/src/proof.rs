@@ -18,13 +18,9 @@ use alloc::{vec, vec::Vec};
 
 use crate::{
     Application, circuit_counts,
-    components::{
-        fold_revdot::{self, NativeParameters},
-        ky,
-    },
+    components::fold_revdot::{self, NativeParameters},
     header::Header,
-    internal_circuits::{self, dummy, stages, unified},
-    verify::stub_unified::StubUnified,
+    internal_circuits::{self, dummy, stages, stages::native::preamble::ProofInputs},
 };
 
 /// Represents a recursive proof for the correctness of some computation.
@@ -87,6 +83,9 @@ pub(crate) struct InternalCircuits<C: Cycle, R: Rank> {
     pub(crate) ky_rx: structured::Polynomial<C::CircuitField, R>,
     pub(crate) ky_rx_blind: C::CircuitField,
     pub(crate) ky_rx_commitment: C::HostCurve,
+    pub(crate) bridge_rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) bridge_rx_blind: C::CircuitField,
+    pub(crate) bridge_rx_commitment: C::HostCurve,
     pub(crate) mu: C::CircuitField,
     pub(crate) nu: C::CircuitField,
     pub(crate) mu_prime: C::CircuitField,
@@ -332,6 +331,9 @@ impl<C: Cycle, R: Rank> Clone for InternalCircuits<C, R> {
             ky_rx: self.ky_rx.clone(),
             ky_rx_blind: self.ky_rx_blind,
             ky_rx_commitment: self.ky_rx_commitment,
+            bridge_rx: self.bridge_rx.clone(),
+            bridge_rx_blind: self.bridge_rx_blind,
+            bridge_rx_commitment: self.bridge_rx_commitment,
             mu: self.mu,
             nu: self.nu,
             mu_prime: self.mu_prime,
@@ -473,6 +475,15 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let ky_rx_dummy_commitment =
             ky_rx_dummy_rx.commit(self.params.host_generators(), ky_rx_dummy_blind);
 
+        // Dummy bridge_rx commitment
+        let bridge_rx_dummy_rx = dummy::Circuit
+            .rx((), self.circuit_mesh.get_key())
+            .expect("should not fail")
+            .0;
+        let bridge_rx_dummy_blind = C::CircuitField::random(&mut *rng);
+        let bridge_rx_dummy_commitment =
+            bridge_rx_dummy_rx.commit(self.params.host_generators(), bridge_rx_dummy_blind);
+
         // Create a dummy proof to use for preamble witness.
         // The preamble witness needs proof references, but we're creating a trivial proof
         // from scratch, so we construct a dummy with placeholder values.
@@ -553,6 +564,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 ky_rx: ky_rx_dummy_rx.clone(),
                 ky_rx_blind: ky_rx_dummy_blind,
                 ky_rx_commitment: ky_rx_dummy_commitment,
+                bridge_rx: bridge_rx_dummy_rx.clone(),
+                bridge_rx_blind: bridge_rx_dummy_blind,
+                bridge_rx_commitment: bridge_rx_dummy_commitment,
                 mu: C::CircuitField::random(&mut *rng),
                 nu: C::CircuitField::random(&mut *rng),
                 mu_prime: C::CircuitField::random(&mut *rng),
@@ -600,9 +614,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let preamble_witness = stages::native::preamble::Witness::new(
             &dummy_proof,
             &dummy_proof,
-            [C::CircuitField::ZERO; HEADER_SIZE],
-            [C::CircuitField::ZERO; HEADER_SIZE],
-        );
+            &[C::CircuitField::ZERO; HEADER_SIZE],
+            &[C::CircuitField::ZERO; HEADER_SIZE],
+        )?;
 
         let native_preamble_rx =
             stages::native::preamble::Stage::<C, R, HEADER_SIZE>::rx(&preamble_witness)
@@ -629,6 +643,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             right_hashes_1: hashes_1_rx_dummy_commitment,
             left_hashes_2: hashes_2_rx_dummy_commitment,
             right_hashes_2: hashes_2_rx_dummy_commitment,
+            // placeholder for bridge circuit commitments
+            left_bridge: bridge_rx_dummy_commitment,
+            right_bridge: bridge_rx_dummy_commitment,
         };
 
         // Nested preamble rx polynomial
@@ -668,17 +685,24 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let y = *sponge.squeeze(&mut dr)?.value().take();
         let z = *sponge.squeeze(&mut dr)?.value().take();
 
-        // Compute k(y) values for the trivial proof.
-        // The ky circuit computes k(y) from the preamble headers (left_header,
-        // right_header, output_header). For a trivial proof, all headers are zeros,
-        // so k(y) = 1 (just the constant term from Horner's method finish).
-        let app_ky = C::CircuitField::ONE;
-
         // For the unified circuit, k(y) encodes the dummy_proof's commitments and challenges.
-        let unified_ky = {
-            let stub = StubUnified::<C>::new();
-            let unified_instance = unified::Instance::from_proof(&dummy_proof);
-            ky::emulate(&stub, &unified_instance, y)?
+        // Use ProofInputs::alloc with zero output header (trivial proof has all-zero headers).
+        // TODO: this is garbage, let's fix this properly later
+        let (unified_ky, app_ky, bridge_ky) = {
+            let zero_header = FixedVec::from_fn(|_| C::CircuitField::ZERO);
+            Emulator::emulate_wireless((&dummy_proof, &zero_header, y), |dr, witness| {
+                let (proof, header, y) = witness.cast();
+                let y = Element::alloc(dr, y)?;
+                let proof_inputs = ProofInputs::<_, C, HEADER_SIZE>::alloc(dr, proof, header)?;
+
+                let (app_ky, bridge_ky) = proof_inputs.application_and_bridge_ky(dr, &y)?;
+
+                Ok((
+                    *proof_inputs.unified_ky(dr, &y)?.value().take(),
+                    *app_ky.value().take(),
+                    *bridge_ky.value().take(),
+                ))
+            })?
         };
 
         // We compute a nested commitment to S'' = m(w, X, y).
@@ -743,24 +767,30 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 app_ky,
                 unified_ky,
                 unified_ky,
+                bridge_ky,
+                bridge_ky,
             ),
             |dr, witness| {
                 let (
                     mu,
                     nu,
                     error_terms_m,
-                    left_app_ky,
-                    right_app_ky,
+                    left_application_ky,
+                    right_application_ky,
                     left_unified_ky,
                     right_unified_ky,
+                    left_bridge_ky,
+                    right_bridge_ky,
                 ) = witness.cast();
                 let mu = Element::alloc(dr, mu)?;
                 let nu = Element::alloc(dr, nu)?;
                 let mut ky_values = vec![
-                    Element::alloc(dr, left_app_ky)?,
-                    Element::alloc(dr, right_app_ky)?,
+                    Element::alloc(dr, left_application_ky)?,
+                    Element::alloc(dr, right_application_ky)?,
                     Element::alloc(dr, left_unified_ky)?,
                     Element::alloc(dr, right_unified_ky)?,
+                    Element::alloc(dr, left_bridge_ky)?,
+                    Element::alloc(dr, right_bridge_ky)?,
                 ]
                 .into_iter();
 
@@ -784,10 +814,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let error_n_witness = stages::native::error_n::Witness::<C, NativeParameters> {
             error_terms: FixedVec::from_fn(|_| C::CircuitField::todo()),
             collapsed,
-            left_app_ky: app_ky,
-            right_app_ky: app_ky,
+            left_application_ky: app_ky,
+            right_application_ky: app_ky,
             left_unified_ky: unified_ky,
             right_unified_ky: unified_ky,
+            // Bridge k(y) for zero headers evaluates to ONE
+            left_bridge_ky: C::CircuitField::ONE,
+            right_bridge_ky: C::CircuitField::ONE,
             sponge_state_elements,
         };
         let native_error_n_rx =
@@ -968,21 +1001,21 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             beta,
         };
         let internal_circuit_c =
-            internal_circuits::c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
-        let internal_circuit_c_witness = internal_circuits::c::Witness {
+            internal_circuits::compute_c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
+        let internal_circuit_c_witness = internal_circuits::compute_c::Witness {
             unified_instance: &unified_instance,
             error_n_witness: &error_n_witness,
         };
 
-        // Compute c_rx using the C-staged circuit
+        // Compute c_rx using the compute_c staged circuit
         let (c_rx, _) =
             internal_circuit_c.rx::<R>(internal_circuit_c_witness, self.circuit_mesh.get_key())?;
         let c_rx_blind = C::CircuitField::random(&mut *rng);
         let c_rx_commitment = c_rx.commit(self.params.host_generators(), c_rx_blind);
 
-        // Compute v_rx using the V-staged circuit
-        let internal_circuit_v = internal_circuits::v::Circuit::<C, R, HEADER_SIZE>::new();
-        let internal_circuit_v_witness = internal_circuits::v::Witness {
+        // Compute v_rx using the compute_v staged circuit
+        let internal_circuit_v = internal_circuits::compute_v::Circuit::<C, R, HEADER_SIZE>::new();
+        let internal_circuit_v_witness = internal_circuits::compute_v::Witness {
             unified_instance: &unified_instance,
         };
         let (v_rx, _) =
@@ -1025,18 +1058,29 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let hashes_2_rx_commitment =
             hashes_2_rx.commit(self.params.host_generators(), hashes_2_rx_blind);
 
-        // Compute ky_rx using the ky circuit
-        let internal_circuit_ky =
-            internal_circuits::ky::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
-        let internal_circuit_ky_witness = internal_circuits::ky::Witness {
+        // Compute ky_rx using the fold circuit
+        let internal_circuit_fold =
+            internal_circuits::fold::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
+        let internal_circuit_fold_witness = internal_circuits::fold::Witness {
             unified_instance: &unified_instance,
             error_m_witness: &error_m_witness,
             error_n_witness: &error_n_witness,
         };
-        let (ky_rx, _) = internal_circuit_ky
-            .rx::<R>(internal_circuit_ky_witness, self.circuit_mesh.get_key())?;
+        let (ky_rx, _) = internal_circuit_fold
+            .rx::<R>(internal_circuit_fold_witness, self.circuit_mesh.get_key())?;
         let ky_rx_blind = C::CircuitField::random(&mut *rng);
         let ky_rx_commitment = ky_rx.commit(self.params.host_generators(), ky_rx_blind);
+
+        // Compute bridge_rx using the bridge circuit
+        let internal_circuit_bridge =
+            internal_circuits::bridge::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
+        let internal_circuit_bridge_witness = internal_circuits::bridge::Witness {
+            preamble_witness: &preamble_witness,
+        };
+        let (bridge_rx, _) = internal_circuit_bridge
+            .rx::<R>(internal_circuit_bridge_witness, self.circuit_mesh.get_key())?;
+        let bridge_rx_blind = C::CircuitField::random(&mut *rng);
+        let bridge_rx_commitment = bridge_rx.commit(self.params.host_generators(), bridge_rx_blind);
 
         Ok(Proof {
             preamble: PreambleProof {
@@ -1113,6 +1157,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 ky_rx,
                 ky_rx_blind,
                 ky_rx_commitment,
+                bridge_rx,
+                bridge_rx_blind,
+                bridge_rx_commitment,
                 mu,
                 nu,
                 mu_prime,

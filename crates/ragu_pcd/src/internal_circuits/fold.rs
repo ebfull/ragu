@@ -31,8 +31,8 @@ use super::{
 };
 use crate::components::fold_revdot;
 
-pub use crate::internal_circuits::InternalCircuitIndex::KyCircuit as CIRCUIT_ID;
-pub use crate::internal_circuits::InternalCircuitIndex::KyStaged as STAGED_ID;
+pub use crate::internal_circuits::InternalCircuitIndex::FoldCircuit as CIRCUIT_ID;
+pub use crate::internal_circuits::InternalCircuitIndex::FoldStaged as STAGED_ID;
 
 /// Circuit that verifies layer 1 revdot folding.
 pub struct Circuit<C: Cycle, R, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {
@@ -72,13 +72,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
 
     fn instance<'dr, 'source: 'dr, D: Driver<'dr, F = C::CircuitField>>(
         &self,
-        dr: &mut D,
-        instance: DriverValue<D, Self::Instance<'source>>,
+        _: &mut D,
+        _: DriverValue<D, Self::Instance<'source>>,
     ) -> Result<<Self::Output as GadgetKind<C::CircuitField>>::Rebind<'dr, D>>
     where
         Self: 'dr,
     {
-        OutputBuilder::new().finish(dr, &instance)
+        unreachable!("instance for internal circuits is not invoked")
     }
 
     fn witness<'a, 'dr, 'source: 'dr, D: Driver<'dr, F = C::CircuitField>>(
@@ -111,10 +111,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
 
         // Read k(y) values from error_n stage (computed and verified in hashes_1).
         let mut ky_values = [
-            error_n.left_app_ky,
-            error_n.right_app_ky,
+            error_n.left_application_ky,
+            error_n.right_application_ky,
             error_n.left_unified_ky,
             error_n.right_unified_ky,
+            error_n.left_bridge_ky,
+            error_n.right_bridge_ky,
         ]
         .into_iter();
 

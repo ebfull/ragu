@@ -7,14 +7,14 @@ use ragu_core::{
     maybe::Maybe,
 };
 use ragu_primitives::{
-    Element, GadgetExt,
+    Element,
     vec::{CollectFixed, ConstLen, FixedVec, Len},
 };
 
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-use super::{Encoder, Header, Step, padded};
+use super::{Encoder, Header, Step};
 
 /// Represents triple a length determined at compile time.
 pub struct TripleConstLen<const N: usize>;
@@ -63,26 +63,10 @@ impl<C: Cycle, S: Step<C>, R: Rank, const HEADER_SIZE: usize> Circuit<C::Circuit
 
     fn instance<'dr, 'source: 'dr, D: Driver<'dr, F = C::CircuitField>>(
         &self,
-        dr: &mut D,
-        instance: DriverValue<D, Self::Instance<'source>>,
+        _: &mut D,
+        _: DriverValue<D, Self::Instance<'source>>,
     ) -> Result<<Self::Output as GadgetKind<C::CircuitField>>::Rebind<'dr, D>> {
-        let (left_header, right_header, output) = instance.cast();
-
-        let output_gadget = S::Output::encode(dr, output)?;
-        let output_gadget = padded::for_header::<S::Output, HEADER_SIZE, _>(dr, output_gadget)?;
-
-        let mut elements = Vec::with_capacity(HEADER_SIZE * 3);
-        for i in 0..HEADER_SIZE {
-            elements.push(Element::alloc(dr, D::just(|| left_header.snag()[i]))?);
-        }
-
-        for i in 0..HEADER_SIZE {
-            elements.push(Element::alloc(dr, D::just(|| right_header.snag()[i]))?);
-        }
-
-        output_gadget.write(dr, &mut elements)?;
-
-        FixedVec::try_from(elements)
+        unreachable!("k(Y) is computed manually for ragu_pcd circuit implementations")
     }
 
     fn witness<'dr, 'source: 'dr, D: Driver<'dr, F = C::CircuitField>>(
