@@ -191,27 +191,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let c = self.compute_c(mu_prime, nu_prime, &error_n_witness)?;
 
         // Compute the A/B polynomials (depend on mu, nu).
-        // TODO: For now, stub out fake A and B polynomials.
-        let a = ragu_circuits::polynomials::structured::Polynomial::<C::CircuitField, R>::new();
-        let b = ragu_circuits::polynomials::structured::Polynomial::<C::CircuitField, R>::new();
-
-        // Commit to A and B, then create the nested commitment.
-        let a_blind = C::CircuitField::random(&mut *rng);
-        let a_commitment = a.commit(host_generators, a_blind);
-        let b_blind = C::CircuitField::random(&mut *rng);
-        let b_commitment = b.commit(host_generators, b_blind);
-
-        let nested_ab_witness = stages::nested::ab::Witness {
-            a: a_commitment,
-            b: b_commitment,
-        };
-        let nested_ab_rx = stages::nested::ab::Stage::<C::HostCurve, R>::rx(&nested_ab_witness)?;
-        let nested_ab_blind = C::ScalarField::random(&mut *rng);
-        let nested_ab_commitment = nested_ab_rx.commit(nested_generators, nested_ab_blind);
+        let ab = self.compute_ab(rng)?;
 
         // Continue using the same sponge transcript (bridged from hashes_1)
         // Derive x = H(nested_ab_commitment).
-        Point::constant(&mut dr, nested_ab_commitment)?.write(&mut dr, &mut sponge)?;
+        Point::constant(&mut dr, ab.nested_ab_commitment)?.write(&mut dr, &mut sponge)?;
         let x = *sponge.squeeze(&mut dr)?.value().take();
 
         // Compute commitment to mesh polynomial at (x, y).
@@ -299,7 +283,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             mu_prime,
             nu_prime,
             c,
-            nested_ab_commitment,
+            nested_ab_commitment: ab.nested_ab_commitment,
             x,
             nested_query_commitment,
             alpha,
@@ -408,17 +392,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     nested_error_n_blind,
                     nested_error_n_commitment,
                 },
-                ab: ABProof {
-                    a,
-                    a_blind,
-                    a_commitment,
-                    b,
-                    b_blind,
-                    b_commitment,
-                    nested_ab_rx,
-                    nested_ab_blind,
-                    nested_ab_commitment,
-                },
+                ab,
                 mesh_xy: MeshXyProof {
                     mesh_xy,
                     mesh_xy_blind,
@@ -943,5 +917,41 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 Ok(*c.value().take())
             },
         )
+    }
+
+    /// Compute the A/B polynomials proof.
+    fn compute_ab<RNG: Rng>(&self, rng: &mut RNG) -> Result<ABProof<C, R>> {
+        let host_generators = self.params.host_generators();
+        let nested_generators = self.params.nested_generators();
+
+        // TODO: For now, stub out fake A and B polynomials.
+        let a = ragu_circuits::polynomials::structured::Polynomial::<C::CircuitField, R>::new();
+        let b = ragu_circuits::polynomials::structured::Polynomial::<C::CircuitField, R>::new();
+
+        // Commit to A and B, then create the nested commitment.
+        let a_blind = C::CircuitField::random(&mut *rng);
+        let a_commitment = a.commit(host_generators, a_blind);
+        let b_blind = C::CircuitField::random(&mut *rng);
+        let b_commitment = b.commit(host_generators, b_blind);
+
+        let nested_ab_witness = stages::nested::ab::Witness {
+            a: a_commitment,
+            b: b_commitment,
+        };
+        let nested_ab_rx = stages::nested::ab::Stage::<C::HostCurve, R>::rx(&nested_ab_witness)?;
+        let nested_ab_blind = C::ScalarField::random(&mut *rng);
+        let nested_ab_commitment = nested_ab_rx.commit(nested_generators, nested_ab_blind);
+
+        Ok(ABProof {
+            a,
+            a_blind,
+            a_commitment,
+            b,
+            b_blind,
+            b_commitment,
+            nested_ab_rx,
+            nested_ab_blind,
+            nested_ab_commitment,
+        })
     }
 }
