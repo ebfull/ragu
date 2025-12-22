@@ -188,33 +188,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         // Compute c, the folded revdot product claim (layer 2 only).
         // Layer 1 was already computed above to produce the collapsed values.
-        let c: C::CircuitField = Emulator::emulate_wireless(
-            (
-                mu_prime,
-                nu_prime,
-                &error_n_witness.error_terms,
-                &error_n_witness.collapsed,
-            ),
-            |dr, witness| {
-                let (mu_prime, nu_prime, error_terms_n, collapsed) = witness.cast();
-
-                let mu_prime = Element::alloc(dr, mu_prime)?;
-                let nu_prime = Element::alloc(dr, nu_prime)?;
-
-                let error_terms_n = FixedVec::try_from_fn(|i| {
-                    Element::alloc(dr, error_terms_n.view().map(|et| et[i]))
-                })?;
-
-                let collapsed =
-                    FixedVec::try_from_fn(|i| Element::alloc(dr, collapsed.view().map(|c| c[i])))?;
-
-                // Layer 2: Single N-sized reduction using collapsed as ky_values
-                let fold_c = fold_revdot::FoldC::new(dr, &mu_prime, &nu_prime)?;
-                let c = fold_c.compute_n::<NativeParameters>(dr, &error_terms_n, &collapsed)?;
-
-                Ok(*c.value().take())
-            },
-        )?;
+        let c = self.compute_c(mu_prime, nu_prime, &error_n_witness)?;
 
         // Compute the A/B polynomials (depend on mu, nu).
         // TODO: For now, stub out fake A and B polynomials.
@@ -933,5 +907,41 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             ),
             error_n_witness,
         ))
+    }
+
+    /// Compute c, the folded revdot product claim (layer 2 only).
+    fn compute_c(
+        &self,
+        mu_prime: C::CircuitField,
+        nu_prime: C::CircuitField,
+        error_n_witness: &stages::native::error_n::Witness<C, NativeParameters>,
+    ) -> Result<C::CircuitField> {
+        Emulator::emulate_wireless(
+            (
+                mu_prime,
+                nu_prime,
+                &error_n_witness.error_terms,
+                &error_n_witness.collapsed,
+            ),
+            |dr, witness| {
+                let (mu_prime, nu_prime, error_terms_n, collapsed) = witness.cast();
+
+                let mu_prime = Element::alloc(dr, mu_prime)?;
+                let nu_prime = Element::alloc(dr, nu_prime)?;
+
+                let error_terms_n = FixedVec::try_from_fn(|i| {
+                    Element::alloc(dr, error_terms_n.view().map(|et| et[i]))
+                })?;
+
+                let collapsed =
+                    FixedVec::try_from_fn(|i| Element::alloc(dr, collapsed.view().map(|c| c[i])))?;
+
+                // Layer 2: Single N-sized reduction using collapsed as ky_values
+                let fold_c = fold_revdot::FoldC::new(dr, &mu_prime, &nu_prime)?;
+                let c = fold_c.compute_n::<NativeParameters>(dr, &error_terms_n, &collapsed)?;
+
+                Ok(*c.value().take())
+            },
+        )
     }
 }
