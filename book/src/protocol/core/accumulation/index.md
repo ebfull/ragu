@@ -130,7 +130,6 @@ Each future IVC step now consists of two halves working in tandem:
   producing new NARK public instance $\inst_{app,i+1}^{(1)}$
 - **Merge Circuit**: Folds (relevant part of) the previous step's instance into
   the accumulator
-  - commits (but not folds) new application step instances $\inst_{app,i+1}^{(1)}$
   - **base case**: if $i=0$, set $\acc'_{i+1}=\acc_0=\acc_\bot$ and skip the rest
   - folds scalars in the last step instances $\inst_{app,i}^{(1)}$ and
     $\inst_{merge,i}^{(1)}$ into accumulator $\acc_i^{(1)}$ 
@@ -146,7 +145,6 @@ Each future IVC step now consists of two halves working in tandem:
   producing new NARK public instance $\inst_{app,i+1}^{(2)}$
 - **Merge Circuit**: Folds (relevant part of) the current step's instance into
   the accumulator
-  - commits (but not folds) new application step instances $\inst_{app,i+1}^{(2)}$
   - **base case**: if $i=0$, set $\acc_{i+1}=\acc'_{i+1}$ without any folding
     and skip the rest
   - folds scalars in the last step instances $\inst_{app,i}^{(2)}$
@@ -174,8 +172,8 @@ parts of the NARK instance and accumulator managed by the prover.
 - NARK instances for both the application circuit and merge circuits in step $i$
   is **only folded in the step $i+1$**.
 - The NARK instance for the application circuit is first committed via
-  [nested commitment](../../prelim/nested_commitment.md) in the primary merge
-  ciruict of _the same step_ before being accumulated in the next.
+  [nested commitment](../../prelim/nested_commitment.md) outside the circuit
+  before being accumulated inside the merge circuit in the next recursion step.
 - The accumulator for one curve contains both group and field elements. E.g.,
   $\acc^{(1)}=(S,\bar{A},\bar{B},c,\bar{P},u,v)$ where
   $S,\bar{A},\bar{B},P\in\G^{(1)}$ and $c,u,v\in\F^{(1)}\equiv\F_p$.
