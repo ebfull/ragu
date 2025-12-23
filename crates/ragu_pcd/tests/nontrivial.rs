@@ -137,6 +137,34 @@ impl<C: Cycle> Step<C> for WitnessLeaf<'_, C> {
 }
 
 #[test]
+fn seed_creates_valid_proof() -> Result<()> {
+    let pasta = Pasta::baked();
+    let app = ApplicationBuilder::<Pasta, R<13>, 4>::new()
+        .register(WitnessLeaf {
+            poseidon_params: pasta.circuit_poseidon(),
+        })?
+        .register(Hash2 {
+            poseidon_params: pasta.circuit_poseidon(),
+        })?
+        .finalize(pasta)?;
+
+    let mut rng = StdRng::seed_from_u64(1234);
+
+    let (proof, aux) = app.seed(
+        &mut rng,
+        WitnessLeaf {
+            poseidon_params: pasta.circuit_poseidon(),
+        },
+        Fp::from(1234u64),
+    )?;
+    let pcd = proof.carry::<LeafNode>(aux);
+
+    assert!(app.verify(&pcd, &mut rng)?);
+
+    Ok(())
+}
+
+#[test]
 fn various_merging_operations() -> Result<()> {
     let pasta = Pasta::baked();
     let app = ApplicationBuilder::<Pasta, R<13>, 4>::new()
@@ -150,34 +178,27 @@ fn various_merging_operations() -> Result<()> {
 
     let mut rng = StdRng::seed_from_u64(1234);
 
-    let trivial = app.trivial().carry::<()>(());
-    assert!(app.verify(&trivial, &mut rng)?);
-
-    let leaf1 = app.merge(
+    let leaf1 = app.seed(
         &mut rng,
         WitnessLeaf {
             poseidon_params: pasta.circuit_poseidon(),
         },
         Fp::from(42u64),
-        trivial.clone(),
-        trivial.clone(),
     )?;
     let leaf1 = leaf1.0.carry(leaf1.1);
     assert!(app.verify(&leaf1, &mut rng)?);
 
-    let leaf2 = app.merge(
+    let leaf2 = app.seed(
         &mut rng,
         WitnessLeaf {
             poseidon_params: pasta.circuit_poseidon(),
         },
         Fp::from(42u64),
-        trivial.clone(),
-        trivial.clone(),
     )?;
     let leaf2 = leaf2.0.carry(leaf2.1);
     assert!(app.verify(&leaf2, &mut rng)?);
 
-    let node1 = app.merge(
+    let node1 = app.fuse(
         &mut rng,
         Hash2 {
             poseidon_params: pasta.circuit_poseidon(),

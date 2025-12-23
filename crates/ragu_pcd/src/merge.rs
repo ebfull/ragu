@@ -27,7 +27,7 @@ use crate::{
 };
 
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_SIZE> {
-    /// Merge two PCD into one using a provided [`Step`].
+    /// Fuse two PCD into one using a provided [`Step`].
     ///
     /// ## Parameters
     ///
@@ -39,11 +39,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     /// * `step`: the [`Step`] instance that has been registered in this
     ///   [`Application`].
     /// * `witness`: the witness data for the [`Step`]
-    /// * `left`: the left PCD to merge in this step; must correspond to the
+    /// * `left`: the left PCD to fuse in this step; must correspond to the
     ///   [`Step::Left`] header.
-    /// * `right`: the right PCD to merge in this step; must correspond to the
+    /// * `right`: the right PCD to fuse in this step; must correspond to the
     ///   [`Step::Right`] header.
-    pub fn merge<'source, RNG: Rng, S: Step<C>>(
+    pub fn fuse<'source, RNG: Rng, S: Step<C>>(
         &self,
         rng: &mut RNG,
         step: S,
