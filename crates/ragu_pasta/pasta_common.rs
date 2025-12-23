@@ -14,11 +14,20 @@ const DOMAIN_PREFIX: &str = "Ragu-Parameters";
 pub const DEFAULT_EP_K: usize = 13;
 pub const DEFAULT_EQ_K: usize = 13;
 
-/// Contains parameters for the [Pasta
+/// Zero-sized marker type for the [Pasta
 /// curve](https://electriccoin.co/blog/the-pasta-curves-for-halo-2-and-beyond/)
 /// cycle.
-#[derive(Clone)]
-pub struct Pasta {
+///
+/// This type implements [`Clone`] and is used as the [`Cycle`](arithmetic::Cycle)
+/// type parameter. The actual curve parameters are stored in [`PastaParams`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Pasta;
+
+/// Contains the actual parameters for the Pasta curve cycle, including
+/// generators for both Pallas and Vesta curves.
+///
+/// This type is returned by [`Pasta::new()`] or [`Pasta::baked()`].
+pub struct PastaParams {
     pub(crate) pallas: PallasGenerators,
     pub(crate) vesta: VestaGenerators,
 }
@@ -56,12 +65,14 @@ fn params_for_curve<C: CurveExt>(n: usize) -> (Vec<C::AffineExt>, C::AffineExt) 
     (g, h)
 }
 
-impl Default for Pasta {
-    fn default() -> Self {
+impl PastaParams {
+    /// Creates new Pasta parameters by computing generators for both curves.
+    /// This is expensive; prefer [`Pasta::baked()`] when available.
+    pub fn new() -> Self {
         let (ep_g, ep_h) = params_for_curve::<Ep>(1usize << DEFAULT_EP_K);
         let (eq_g, eq_h) = params_for_curve::<Eq>(1usize << DEFAULT_EQ_K);
 
-        Pasta {
+        PastaParams {
             pallas: PallasGenerators {
                 g: ep_g,
                 h: ep_h,

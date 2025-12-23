@@ -113,7 +113,17 @@ pub use u128 as Uendo;
 ///
 /// Implementations of this trait provide the types, their relationships, and
 /// the ability to conveniently access common parameters.
-pub trait Cycle: Default + Send + Sync + 'static {
+///
+/// The `Cycle` type itself is a zero-sized marker type that implements `Clone`.
+/// The actual curve parameters (generators, Poseidon constants) are stored in
+/// the associated [`Params`](Cycle::Params) type, accessed via static methods.
+/// This design allows types parameterized by `C: Cycle` to derive `Clone`
+/// without requiring the expensive parameters to be cloneable.
+pub trait Cycle: Clone + Default + Send + Sync + 'static {
+    /// The parameters for this cycle, containing generators and Poseidon constants.
+    /// Users can store this however they prefer.
+    type Params: Send + Sync + 'static;
+
     /// The field that circuit developers will primarily work with, and the
     /// scalar field of the [`HostCurve`](Cycle::HostCurve).
     type CircuitField: WithSmallOrderMulGroup<3>;
@@ -138,13 +148,6 @@ pub trait Cycle: Default + Send + Sync + 'static {
     /// Fixed generators for the [`HostCurve`](Cycle::HostCurve).
     type HostGenerators: FixedGenerators<Self::HostCurve>;
 
-    /// Initialized fixed generators for the
-    /// [`NestedCurve`](Cycle::NestedCurve).
-    fn nested_generators(&self) -> &Self::NestedGenerators;
-
-    /// Initialized fixed generators for the [`HostCurve`](Cycle::HostCurve).
-    fn host_generators(&self) -> &Self::HostGenerators;
-
     /// Poseidon permutation parameters for the
     /// [`CircuitField`](Cycle::CircuitField).
     type CircuitPoseidon: PoseidonPermutation<Self::CircuitField>;
@@ -153,13 +156,23 @@ pub trait Cycle: Default + Send + Sync + 'static {
     /// [`ScalarField`](Cycle::ScalarField).
     type ScalarPoseidon: PoseidonPermutation<Self::ScalarField>;
 
-    /// Initialized Poseidon parameter constants for the
-    /// [`CircuitField`](Cycle::CircuitField).
-    fn circuit_poseidon(&self) -> &Self::CircuitPoseidon;
+    /// Creates new cycle parameters. This is typically expensive as it
+    /// computes curve generators. Prefer [`baked`](Pasta::baked) when available.
+    fn new() -> Self::Params;
 
-    /// Initialized Poseidon parameter constants for the
+    /// Returns the fixed generators for the [`NestedCurve`](Cycle::NestedCurve).
+    fn nested_generators(params: &Self::Params) -> &Self::NestedGenerators;
+
+    /// Returns the fixed generators for the [`HostCurve`](Cycle::HostCurve).
+    fn host_generators(params: &Self::Params) -> &Self::HostGenerators;
+
+    /// Returns Poseidon parameter constants for the
+    /// [`CircuitField`](Cycle::CircuitField).
+    fn circuit_poseidon(params: &Self::Params) -> &Self::CircuitPoseidon;
+
+    /// Returns Poseidon parameter constants for the
     /// [`ScalarField`](Cycle::ScalarField).
-    fn scalar_poseidon(&self) -> &Self::ScalarPoseidon;
+    fn scalar_poseidon(params: &Self::Params) -> &Self::ScalarPoseidon;
 }
 
 /// Contains various fixed generators for elliptic curves, all of which have

@@ -16,6 +16,7 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 
 // Header A (suffix 0)
+#[derive(Clone)]
 struct HeaderA;
 
 impl<F: Field> Header<F> for HeaderA {
