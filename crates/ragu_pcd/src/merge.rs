@@ -51,26 +51,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         left: Pcd<'source, C, R, S::Left>,
         right: Pcd<'source, C, R, S::Right>,
     ) -> Result<(Proof<C, R>, S::Aux<'source>)> {
-        // PHASE ONE: Application circuit.
-        //
-        // We process the application circuit first because it consumes the
-        // `Pcd`'s `data` fields inside of the `Step` circuit. The adaptor
-        // handles encoding for us, so that we can use the resulting (encoded)
-        // headers to construct the proof. We can also then use the encoded
-        // headers later to construct witnesses for other internal circuits
-        // constructed during the merge step.
-        //
-        // This block will return the enclosed left/right `Proof` structures.
+        // Phase 1: Application circuit.
         let (left, right, application_proof, application_aux) =
             self.compute_application_proof(rng, step, witness, left, right)?;
 
-        // The preamble stage commits to all of the C::CircuitField elements
-        // used as public inputs to the circuits being merged together. This
-        // includes the unified instance values for both proofs, but also their
-        // circuit IDs (the omega^j value that corresponds to each element of
-        // the mesh domain that corresponds to the Step circuit being checked).
-        //
-        // Let's assemble the witness needed to generate the preamble stage.
+        // Phase 2: Preamble.
         let (preamble, preamble_witness) = self.compute_preamble(
             rng,
             &left,
@@ -92,9 +77,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             .write(&mut dr, &mut sponge)?;
         let w = *sponge.squeeze(&mut dr)?.value().take();
 
-        // In order to check that the two proofs' commitments to s (the mesh polynomial
-        // evaluated at (x_0, y_0) and (x_1, y_1)) are correct, we need to
-        // compute s' = m(w, x_i, Y) for both proofs.
+        // Phase 3: S-prime.
         let s_prime = self.compute_s_prime(rng, w, &left, &right)?;
 
         // Once S' is committed, we can compute the challenges (y, z).
@@ -104,7 +87,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let y = *sponge.squeeze(&mut dr)?.value().take();
         let z = *sponge.squeeze(&mut dr)?.value().take();
 
-        // Compute k(y) values for the folding claims
+        // Phase 4: K(y) values for the folding claims.
         let (
             left_application_ky,
             right_application_ky,
@@ -114,17 +97,17 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             right_bridge_ky,
         ) = self.compute_ky_values(&preamble_witness, y)?;
 
-        // Given (w, y), we can compute m(w, X, y) and commit to it.
+        // Phase 5: Mesh WY.
         let mesh_wy = self.compute_mesh_wy(rng, w, y);
 
-        // Compute error_m stage (Layer 1: N instances of M-sized reductions).
+        // Phase 6: Error M (Layer 1: N instances of M-sized reductions).
         let (
             (native_error_m_rx, native_error_m_blind, native_error_m_commitment),
             (nested_error_m_rx, nested_error_m_blind, nested_error_m_commitment),
             error_m_witness,
         ) = self.compute_error_m(rng, mesh_wy.mesh_wy_commitment)?;
 
-        // Absorb nested_error_m_commitment, then save sponge state for bridging
+        // Absorb nested_error_m_commitment, save sponge state for bridging.
         Point::constant(&mut dr, nested_error_m_commitment)?.write(&mut dr, &mut sponge)?;
 
         // Save sponge state for bridging transcript between hashes_1 and hashes_2
@@ -139,7 +122,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             .map(|e| *e.value().take())
             .collect_fixed()?;
 
-        // Resume sponge to derive (mu, nu) = H(nested_error_m_commitment)
+        // Derive (mu, nu) = H(nested_error_m_commitment).
         let (mu, mut sponge) = Sponge::resume_and_squeeze(
             &mut dr,
             saved_sponge_state,
@@ -148,7 +131,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let mu = *mu.value().take();
         let nu = *sponge.squeeze(&mut dr)?.value().take();
 
-        // Compute collapsed values (layer 1 folding) now that mu, nu are known.
+        // Phase 7: Collapsed values (layer 1 folding).
         let collapsed = self.compute_collapsed(
             &error_m_witness,
             left_application_ky,
@@ -161,7 +144,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             nu,
         )?;
 
-        // Compute error_n stage (Layer 2: Single N-sized reduction).
+        // Phase 8: Error N (Layer 2: Single N-sized reduction).
         let (
             (native_error_n_rx, native_error_n_blind, native_error_n_commitment),
             (nested_error_n_rx, nested_error_n_blind, nested_error_n_commitment),
@@ -178,48 +161,46 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             sponge_state_elements,
         )?;
 
-        // Derive (mu', nu') = H(nested_error_n_commitment)
+        // Derive (mu', nu') = H(nested_error_n_commitment).
         Point::constant(&mut dr, nested_error_n_commitment)?.write(&mut dr, &mut sponge)?;
         let mu_prime = *sponge.squeeze(&mut dr)?.value().take();
         let nu_prime = *sponge.squeeze(&mut dr)?.value().take();
 
-        // Compute c, the folded revdot product claim (layer 2 only).
-        // Layer 1 was already computed above to produce the collapsed values.
+        // Phase 9: Compute C, the folded revdot product claim.w
         let c = self.compute_c(mu_prime, nu_prime, &error_n_witness)?;
 
-        // Compute the A/B polynomials (depend on mu, nu).
+        // Phase 10: A/B polynomials.
         let ab = self.compute_ab(rng)?;
 
-        // Continue using the same sponge transcript (bridged from hashes_1)
         // Derive x = H(nested_ab_commitment).
         Point::constant(&mut dr, ab.nested_ab_commitment)?.write(&mut dr, &mut sponge)?;
         let x = *sponge.squeeze(&mut dr)?.value().take();
 
-        // Compute commitment to mesh polynomial at (x, y).
+        // Phase 11: Mesh XY.
         let mesh_xy = self.compute_mesh_xy(rng, x, y);
 
-        // Compute query witness (stubbed for now).
+        // Phase 12: Query.
         let query = self.compute_query(rng, mesh_xy.mesh_xy_commitment)?;
 
-        // Derive challenge alpha = H(nested_query_commitment).
+        // Derive alpha = H(nested_query_commitment).
         Point::constant(&mut dr, query.nested_query_commitment)?.write(&mut dr, &mut sponge)?;
         let alpha = *sponge.squeeze(&mut dr)?.value().take();
 
-        // Compute the F polynomial commitment (stubbed for now).
+        // Phase 13: F polynomial.
         let f = self.compute_f(rng)?;
 
         // Derive u = H(nested_f_commitment).
         Point::constant(&mut dr, f.nested_f_commitment)?.write(&mut dr, &mut sponge)?;
         let u = *sponge.squeeze(&mut dr)?.value().take();
 
-        // Compute eval witness (stubbed for now).
+        // Phase 14: Eval.
         let eval = self.compute_eval(rng)?;
 
         // Derive beta = H(nested_eval_commitment).
         Point::constant(&mut dr, eval.nested_eval_commitment)?.write(&mut dr, &mut sponge)?;
         let beta = *sponge.squeeze(&mut dr)?.value().take();
 
-        // Create the unified instance.
+        // Phase 15: Unified instance.
         let unified_instance = &unified::Instance {
             nested_preamble_commitment: preamble.nested_preamble_commitment,
             w,
@@ -243,7 +224,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             beta,
         };
 
-        // Compute internal circuits.
+        // Phase 16: Internal circuits.
         let internal_circuits = self.compute_internal_circuits(
             rng,
             unified_instance,
@@ -298,6 +279,16 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     }
 
     /// Compute the application circuit proof.
+    ///
+    /// We process the application circuit first because it consumes the
+    /// `Pcd`'s `data` fields inside of the `Step` circuit. The adaptor
+    /// handles encoding for us, so that we can use the resulting (encoded)
+    /// headers to construct the proof. We can also then use the encoded
+    /// headers later to construct witnesses for other internal circuits
+    /// constructed during the merge step.
+    ///
+    /// Returns the enclosed left/right `Proof` structures along with the
+    /// application proof and auxiliary data.
     fn compute_application_proof<'source, RNG: Rng, S: Step<C>>(
         &self,
         rng: &mut RNG,
@@ -338,9 +329,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
     /// Compute the preamble proof.
     ///
-    /// The preamble commits to all the C::CircuitField elements used as public
-    /// inputs to the circuits being merged, including unified instance values
-    /// and circuit IDs.
+    /// The preamble stage commits to all of the `C::CircuitField` elements
+    /// used as public inputs to the circuits being merged together. This
+    /// includes the unified instance values for both proofs, but also their
+    /// circuit IDs (the ω^j value that corresponds to each element of
+    /// the mesh domain that corresponds to the Step circuit being checked).
     fn compute_preamble<'a, RNG: Rng>(
         &self,
         rng: &mut RNG,
@@ -415,6 +408,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     }
 
     /// Compute the S' proof.
+    ///
+    /// In order to check that the two proofs' commitments to s (the mesh
+    /// polynomial evaluated at (x_0, y_0) and (x_1, y_1)) are correct, we need
+    /// to compute s' = m(w, x_i, Y) for both proofs.
     fn compute_s_prime<RNG: Rng>(
         &self,
         rng: &mut RNG,
@@ -456,7 +453,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         })
     }
 
-    /// Compute k(y) values from preamble witness.
+    /// Compute k(y) header values from preamble witness.
     fn compute_ky_values(
         &self,
         preamble_witness: &stages::native::preamble::Witness<'_, C, R, HEADER_SIZE>,
@@ -492,7 +489,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         })
     }
 
-    /// Compute mesh_wy proof.
+    /// Given (w, y), we can compute m(w, X, y) and commit to it.
     fn compute_mesh_wy<RNG: Rng>(
         &self,
         rng: &mut RNG,
@@ -510,8 +507,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         }
     }
 
-    /// Compute error_m proof (layer 1 of the fold).
-    #[allow(clippy::type_complexity)]
+    /// Compute error_m stage (Layer 1: N instances of M-sized reductions).
     fn compute_error_m<RNG: Rng>(
         &self,
         rng: &mut RNG,
@@ -567,6 +563,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     }
 
     /// Compute collapsed values from layer 1 folding.
+    ///
+    /// Performs N M-sized reductions using the error_m witness and k(y) values,
+    /// producing N collapsed values for layer 2.
     fn compute_collapsed(
         &self,
         error_m_witness: &stages::native::error_m::Witness<C, NativeParameters>,
@@ -633,7 +632,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         )
     }
 
-    // Compute error_n proof (layer 2 of the fold).
+    /// Compute error_n stage (Layer 2: Single N-sized reduction).
     fn compute_error_n<RNG: Rng>(
         &self,
         rng: &mut RNG,
@@ -706,6 +705,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     }
 
     /// Compute c, the folded revdot product claim (layer 2 only).
+    ///
+    /// Performs a single N-sized reduction using the collapsed values from
+    /// layer 1 as the k(y) values.
     fn compute_c(
         &self,
         mu_prime: C::CircuitField,
@@ -742,6 +744,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     }
 
     /// Compute the A/B polynomials proof.
+    ///
+    /// Commits to A and B polynomials, then creates the nested commitment.
     fn compute_ab<RNG: Rng>(&self, rng: &mut RNG) -> Result<ABProof<C, R>> {
         // TODO: For now, stub out fake A and B polynomials.
         let a = ragu_circuits::polynomials::structured::Polynomial::<C::CircuitField, R>::new();
@@ -776,6 +780,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     }
 
     /// Compute mesh_xy proof.
+    ///
+    /// Computes commitment to mesh polynomial m(x, y) at the challenge points.
     fn compute_mesh_xy<RNG: Rng>(
         &self,
         rng: &mut RNG,
@@ -794,6 +800,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     }
 
     /// Compute query proof.
+    ///
+    /// Creates native and nested query commitments.
     fn compute_query<RNG: Rng>(
         &self,
         rng: &mut RNG,
@@ -890,7 +898,6 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     }
 
     /// Compute internal circuits.
-    #[allow(clippy::too_many_arguments)]
     fn compute_internal_circuits<RNG: Rng>(
         &self,
         rng: &mut RNG,
