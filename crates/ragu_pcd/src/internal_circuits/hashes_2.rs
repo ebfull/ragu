@@ -7,24 +7,19 @@
 //! This circuit completes the Fiat-Shamir transcript started in
 //! [`hashes_1`][super::hashes_1], invoking $5$ Poseidon permutations:
 //! - Resume sponge from saved state (after `hashes_1` absorbed
-//!   [`nested_error_m_commitment`](unified::Output::nested_error_m_commitment)
-//!   and applied the permutation to move it into squeeze mode).
-//! - Squeeze [$\mu$](unified::Output::mu) challenge.
-//! - Squeeze [$\nu$](unified::Output::nu) challenge.
-//! - Absorb
-//!   [`nested_error_n_commitment`](unified::Output::nested_error_n_commitment).
-//! - Squeeze [$\mu'$](unified::Output::mu_prime) challenge.
-//! - Squeeze [$\nu'$](unified::Output::nu_prime) challenge.
-//! - Absorb [`nested_ab_commitment`](unified::Output::nested_ab_commitment).
-//! - Squeeze [$x$](unified::Output::x) challenge.
-//! - Absorb
-//!   [`nested_query_commitment`](unified::Output::nested_query_commitment).
-//! - Squeeze [$\alpha$](unified::Output::alpha) challenge.
-//! - Absorb [`nested_f_commitment`](unified::Output::nested_f_commitment).
-//! - Squeeze [$u$](unified::Output::u) challenge.
-//! - Absorb
-//!   [`nested_eval_commitment`](unified::Output::nested_eval_commitment).
-//! - Squeeze [$\beta$](unified::Output::beta) challenge.
+//!   [`nested_error_m_commitment`] and applied the permutation to move it into
+//!   squeeze mode).
+//! - Squeeze [$\mu$] and [$\nu$] challenges.
+//! - Absorb [`nested_error_n_commitment`].
+//! - Squeeze [$\mu'$] and [$\nu'$] challenges.
+//! - Absorb [`nested_ab_commitment`].
+//! - Squeeze [$x$] challenge.
+//! - Absorb [`nested_query_commitment`].
+//! - Squeeze [$\alpha$] challenge.
+//! - Absorb [`nested_f_commitment`].
+//! - Squeeze [$u$] challenge.
+//! - Absorb [`nested_eval_commitment`].
+//! - Squeeze [$\beta$] challenge.
 //!
 //! The squeezed $\mu, \nu, \mu', \nu', x, \alpha, u, \beta$ challenges are set
 //! in the unified instance by this circuit.
@@ -40,11 +35,22 @@
 //!
 //! ## Public Inputs
 //!
-//! Unlike [`hashes_1`][super::hashes_1] which includes `left` and `right`
-//! output headers, this circuit uses only the [`unified::Output`] as public
-//! inputs. This avoids the overhead of witnessing headers in a circuit that
-//! does not require access to the [`preamble`][super::stages::native::preamble]
-//! stage outputs.
+//! This circuit uses the [`unified::Output`] as its public inputs.
+//!
+//! [`nested_error_m_commitment`]: unified::Output::nested_error_m_commitment
+//! [$\mu$]: unified::Output::mu
+//! [$\nu$]: unified::Output::nu
+//! [`nested_error_n_commitment`]: unified::Output::nested_error_n_commitment
+//! [$\mu'$]: unified::Output::mu_prime
+//! [$\nu'$]: unified::Output::nu_prime
+//! [`nested_ab_commitment`]: unified::Output::nested_ab_commitment
+//! [$x$]: unified::Output::x
+//! [`nested_query_commitment`]: unified::Output::nested_query_commitment
+//! [$\alpha$]: unified::Output::alpha
+//! [`nested_f_commitment`]: unified::Output::nested_f_commitment
+//! [$u$]: unified::Output::u
+//! [`nested_eval_commitment`]: unified::Output::nested_eval_commitment
+//! [$\beta$]: unified::Output::beta
 
 use arithmetic::Cycle;
 use ragu_circuits::{
@@ -74,8 +80,10 @@ pub use crate::internal_circuits::InternalCircuitIndex::Hashes2Staged as STAGED_
 
 /// Second hash circuit for Fiat-Shamir challenge derivation.
 ///
-/// See the [module-level documentation](self) for details on the operations
+/// See the [module-level documentation] for details on the operations
 /// performed by this circuit.
+///
+/// [module-level documentation]: self
 pub struct Circuit<'params, C: Cycle, R, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {
     params: &'params C,
     _marker: PhantomData<(R, FP)>,

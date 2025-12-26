@@ -106,75 +106,78 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             },
         )?;
 
-        // compute_c circuit verification with ky.
-        // compute_c's final stage is error_n, so combine preamble_rx + error_m_rx + error_n_rx with c_rx.
-        let c_circuit_valid = {
-            let mut c_combined_rx = pcd.proof.preamble.native_preamble_rx.clone();
-            c_combined_rx.add_assign(&pcd.proof.error.native_error_m_rx);
-            c_combined_rx.add_assign(&pcd.proof.error.native_error_n_rx);
-            c_combined_rx.add_assign(&pcd.proof.internal_circuits.c_rx);
+        // See `internal_circuits::hashes_1` documentation.
+        let hashes_1_circuit_valid = {
+            let mut rx = pcd.proof.internal_circuits.hashes_1_rx.clone();
+            rx.add_assign(&pcd.proof.preamble.native_preamble_rx);
+            // NB: pcd.proof.error.native_error_m_rx is skipped.
+            rx.add_assign(&pcd.proof.error.native_error_n_rx);
 
             verifier.check_internal_circuit(
-                &c_combined_rx,
-                internal_circuits::compute_c::CIRCUIT_ID,
-                unified_ky,
-            )
-        };
-
-        // compute_v circuit verification with ky.
-        // compute_v skips all stages (preamble, query, eval), so only check v_rx.
-        let v_circuit_valid = verifier.check_internal_circuit(
-            &pcd.proof.internal_circuits.v_rx,
-            internal_circuits::compute_v::CIRCUIT_ID,
-            unified_ky,
-        );
-
-        // Hashes_1 circuit verification with unified_bridge_ky.
-        // Hashes_1's final stage is error_n, so combine preamble_rx + error_m_rx + error_n_rx with hashes_1_rx.
-        // Uses unified_bridge_ky to bind ApplicationProof headers to preamble output headers.
-        let hashes_1_valid = {
-            let mut hashes_1_combined_rx = pcd.proof.preamble.native_preamble_rx.clone();
-            hashes_1_combined_rx.add_assign(&pcd.proof.error.native_error_n_rx);
-            hashes_1_combined_rx.add_assign(&pcd.proof.internal_circuits.hashes_1_rx);
-
-            verifier.check_internal_circuit(
-                &hashes_1_combined_rx,
+                &rx,
                 internal_circuits::hashes_1::CIRCUIT_ID,
+                // Note: The hashes_1 circuit uses unified_bridge_ky, unlike the
+                // other internal circuits.
                 unified_bridge_ky,
             )
         };
 
-        // Hashes_2 circuit verification with ky.
-        // Hashes_2 skips preamble and error_m, so only combine error_n_rx with hashes_2_rx.
-        let hashes_2_valid = {
-            let mut hashes_2_combined_rx = pcd.proof.error.native_error_n_rx.clone();
-            hashes_2_combined_rx.add_assign(&pcd.proof.internal_circuits.hashes_2_rx);
+        // See `internal_circuits::hashes_2` documentation.
+        let hashes_2_circuit_valid = {
+            let mut rx = pcd.proof.internal_circuits.hashes_2_rx.clone();
+            // NB: pcd.proof.preamble.native_preamble_rx is skipped.
+            // NB: pcd.proof.error.native_error_m_rx is skipped.
+            rx.add_assign(&pcd.proof.error.native_error_n_rx);
 
             verifier.check_internal_circuit(
-                &hashes_2_combined_rx,
+                &rx,
                 internal_circuits::hashes_2::CIRCUIT_ID,
                 unified_ky,
             )
         };
 
-        // fold circuit verification with ky.
-        // fold skips preamble, so only combine error_m_rx + error_n_rx with ky_rx.
+        // See `internal_circuits::fold` documentation.
         let fold_circuit_valid = {
-            let mut fold_combined_rx = pcd.proof.error.native_error_m_rx.clone();
-            fold_combined_rx.add_assign(&pcd.proof.error.native_error_n_rx);
-            fold_combined_rx.add_assign(&pcd.proof.internal_circuits.ky_rx);
+            let mut rx = pcd.proof.internal_circuits.ky_rx.clone();
+            // NB: pcd.proof.preamble.native_preamble_rx is skipped.
+            rx.add_assign(&pcd.proof.error.native_error_m_rx);
+            rx.add_assign(&pcd.proof.error.native_error_n_rx);
+
+            verifier.check_internal_circuit(&rx, internal_circuits::fold::CIRCUIT_ID, unified_ky)
+        };
+
+        // See `internal_circuits::compute_c` documentation.
+        let c_circuit_valid = {
+            let mut rx = pcd.proof.internal_circuits.c_rx.clone();
+            rx.add_assign(&pcd.proof.preamble.native_preamble_rx);
+            rx.add_assign(&pcd.proof.error.native_error_m_rx);
+            rx.add_assign(&pcd.proof.error.native_error_n_rx);
 
             verifier.check_internal_circuit(
-                &fold_combined_rx,
-                internal_circuits::fold::CIRCUIT_ID,
+                &rx,
+                internal_circuits::compute_c::CIRCUIT_ID,
                 unified_ky,
             )
         };
 
-        // Application verification (application_ky was computed earlier with unified_ky)
-        let application_valid = verifier.check_circuit(
+        // See `internal_circuits::compute_v` documentation.
+        let v_circuit_valid = {
+            let rx = pcd.proof.internal_circuits.v_rx.clone();
+            // NB: pcd.proof.preamble.native_preamble_rx is skipped.
+            // NB: pcd.proof.error.native_error_m_rx is skipped.
+            // NB: pcd.proof.error.native_error_n_rx is skipped.
+
+            verifier.check_internal_circuit(
+                &rx,
+                internal_circuits::compute_v::CIRCUIT_ID,
+                unified_ky,
+            )
+        };
+
+        // Application (Step circuit) verification.
+        let application_circuit_valid = verifier.check_circuit(
             &pcd.proof.application.rx,
-            pcd.proof.application.circuit_id,
+            pcd.proof.application.circuit_id, // TODO: circuit_id must be in the mesh domain
             application_ky,
         );
 
@@ -190,10 +193,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             && hashes_2_stage_valid
             && c_circuit_valid
             && v_circuit_valid
-            && hashes_1_valid
-            && hashes_2_valid
+            && hashes_1_circuit_valid
+            && hashes_2_circuit_valid
             && fold_circuit_valid
-            && application_valid)
+            && application_circuit_valid)
     }
 }
 
