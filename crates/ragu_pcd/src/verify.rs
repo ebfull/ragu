@@ -177,7 +177,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // Application (Step circuit) verification.
         let application_circuit_valid = verifier.check_circuit(
             &pcd.proof.application.rx,
-            pcd.proof.application.circuit_id, // TODO: circuit_id must be in the mesh domain
+            pcd.proof.application.circuit_id,
             application_ky,
         );
 
@@ -256,6 +256,10 @@ impl<'a, F: PrimeField, R: Rank> Verifier<'a, F, R> {
         circuit_id: CircuitIndex,
         ky: F,
     ) -> bool {
+        if !self.circuit_mesh.circuit_in_domain(circuit_id) {
+            return false;
+        }
+
         let sy = self.circuit_mesh.circuit_y(circuit_id, self.y);
 
         let mut rhs = rx.clone();

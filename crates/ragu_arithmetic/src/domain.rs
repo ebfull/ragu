@@ -87,6 +87,11 @@ impl<F: PrimeField> Domain<F> {
         self.omega
     }
 
+    /// Returns true if `x` is an element of this domain.
+    pub fn contains(&self, x: F) -> bool {
+        x.pow([self.n as u64]) == F::ONE
+    }
+
     /// Computes the radix2 discrete Fourier transform (DFT) of a slice of
     /// generic ring elements using the Cooley-Tukey FFT algorithm.
     pub fn ring_fft<R: crate::fft::Ring<F = F>>(&self, input: &mut [R::R]) {
@@ -249,4 +254,24 @@ fn test_ell() {
     for (i, expected) in expected.iter().enumerate() {
         assert_eq!(eval(&lagrange_polys[i], x), *expected);
     }
+}
+
+#[test]
+fn test_contains() {
+    use ff::Field;
+    use pasta_curves::Fp as F;
+
+    let domain = Domain::<F>::new(5);
+
+    // All powers of omega should be in the domain
+    let mut omega_pow = F::ONE;
+    for _ in 0..domain.n() {
+        assert!(domain.contains(omega_pow), "omega^i should be in domain");
+        omega_pow *= domain.omega();
+    }
+
+    // Random field elements should (almost certainly) not be in the domain
+    assert!(!domain.contains(F::from(2u64)));
+    assert!(!domain.contains(F::from(3u64)));
+    assert!(!domain.contains(F::DELTA));
 }

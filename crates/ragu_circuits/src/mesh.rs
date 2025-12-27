@@ -220,6 +220,14 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
         self.wy(w, y)
     }
 
+    /// Returns true if the circuit's $\omega^j$ value is in the mesh domain.
+    ///
+    /// See [`CircuitIndex::omega_j`] for details on the $\omega^j$ mapping.
+    pub fn circuit_in_domain(&self, i: CircuitIndex) -> bool {
+        let w: F = i.omega_j();
+        self.domain.contains(w)
+    }
+
     /// Evaluate the mesh polynomial unrestricted at $X$.
     pub fn wy(&self, w: F, y: F) -> structured::Polynomial<F, R> {
         self.w(
@@ -510,6 +518,41 @@ mod tests {
             let wxy = mesh.wxy(w, x, y);
             let xy = mesh.xy(x, y);
             assert_eq!(wxy, xy.eval(w), "Failed for num_circuits={}", num_circuits);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_circuit_in_domain() -> Result<()> {
+        let poseidon = Pasta::circuit_poseidon(Pasta::baked());
+
+        let mesh = MeshBuilder::<Fp, TestRank>::new()
+            .register_circuit(SquareCircuit { times: 2 })?
+            .register_circuit(SquareCircuit { times: 5 })?
+            .register_circuit(SquareCircuit { times: 10 })?
+            .register_circuit(SquareCircuit { times: 11 })?
+            .finalize(poseidon)?;
+
+        // All registered circuit indices should be in the domain
+        for i in 0..4 {
+            assert!(
+                mesh.circuit_in_domain(CircuitIndex::new(i)),
+                "Circuit {} should be in domain",
+                i
+            );
+        }
+
+        // Indices beyond the domain size should not be in the domain
+        // The mesh has 4 circuits, so domain size is 4 (2^2)
+        // CircuitIndex::omega_j uses F::S-bit reversal, which maps indices
+        // beyond the domain to non-domain elements
+        for i in [1 << 16, 1 << 20, 1 << 30] {
+            assert!(
+                !mesh.circuit_in_domain(CircuitIndex::new(i)),
+                "Circuit {} should not be in domain",
+                i
+            );
         }
 
         Ok(())
