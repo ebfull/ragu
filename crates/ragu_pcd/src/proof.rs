@@ -456,7 +456,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 native_blind: host_blind,
                 native_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
-                nested_blind: nested_blind,
+                nested_blind,
                 nested_commitment: nested_g,
             },
             s_prime: SPrimeProof {
@@ -480,7 +480,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 native_blind: host_blind,
                 native_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
-                nested_blind: nested_blind,
+                nested_blind,
                 nested_commitment: nested_g,
             },
             error_n: ErrorNProof {
@@ -488,7 +488,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 native_blind: host_blind,
                 native_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
-                nested_blind: nested_blind,
+                nested_blind,
                 nested_commitment: nested_g,
             },
             ab: ABProof {
@@ -499,7 +499,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 native_b_blind: host_blind,
                 native_b_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
-                nested_blind: nested_blind,
+                nested_blind,
                 nested_commitment: nested_g,
             },
             mesh_xy: MeshXyProof {
@@ -512,7 +512,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 native_blind: host_blind,
                 native_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
-                nested_blind: nested_blind,
+                nested_blind,
                 nested_commitment: nested_g,
             },
             f: FProof {
@@ -520,7 +520,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 native_blind: host_blind,
                 native_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
-                nested_blind: nested_blind,
+                nested_blind,
                 nested_commitment: nested_g,
             },
             eval: EvalProof {
@@ -528,7 +528,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 native_blind: host_blind,
                 native_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
-                nested_blind: nested_blind,
+                nested_blind,
                 nested_commitment: nested_g,
             },
             challenges: Challenges {
