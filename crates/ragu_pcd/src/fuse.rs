@@ -239,9 +239,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 circuit_id,
                 left_header: left_header.into_inner(),
                 right_header: right_header.into_inner(),
-                native_rx: rx,
-                native_blind: blind,
-                native_commitment: commitment,
+                rx,
+                blind,
+                commitment,
             },
             aux,
         ))
@@ -274,23 +274,22 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         // Now, compute the partial witness polynomial (stage polynomial) for
         // the preamble.
-        let native_rx =
-            stages::native::preamble::Stage::<C, R, HEADER_SIZE>::rx(&preamble_witness)?;
+        let stage_rx = stages::native::preamble::Stage::<C, R, HEADER_SIZE>::rx(&preamble_witness)?;
         // ... and commit to it, with a random blinding factor.
-        let native_blind = C::CircuitField::random(&mut *rng);
-        let native_commitment = native_rx.commit(self.params.host_generators(), native_blind);
+        let stage_blind = C::CircuitField::random(&mut *rng);
+        let stage_commitment = stage_rx.commit(self.params.host_generators(), stage_blind);
 
         // In order to circle back to C::CircuitField, because our
-        // `native_commitment` has base points in C::ScalarField, we
+        // `stage_commitment` has base points in C::ScalarField, we
         // need to commit to a stage polynomial over the C::NestedCurve that
         // contains all of the `C::HostCurve` points. This includes the
-        // native_commitment we just computed, but also contains
+        // stage_commitment we just computed, but also contains
         // commitments to circuit and stage polynomials that were created in the
         // fuse operations that produced each of the two input proofs.
         let nested_preamble_witness = stages::nested::preamble::Witness {
-            native_preamble: native_commitment,
-            left_application: left.application.native_commitment,
-            right_application: right.application.native_commitment,
+            native_preamble: stage_commitment,
+            left_application: left.application.commitment,
+            right_application: right.application.commitment,
             left_ky: left.circuits.ky_commitment,
             right_ky: right.circuits.ky_commitment,
             left_c: left.circuits.c_commitment,
@@ -315,9 +314,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         Ok((
             PreambleProof {
-                native_rx,
-                native_commitment,
-                native_blind,
+                stage_rx,
+                stage_commitment,
+                stage_blind,
                 nested_rx,
                 nested_commitment,
                 nested_blind,
@@ -342,12 +341,14 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let x1 = right.challenges.x;
 
         // ... commit to both...
-        let mesh_wx0_rx = self.circuit_mesh.wx(w, x0);
+        let mesh_wx0_poly = self.circuit_mesh.wx(w, x0);
         let mesh_wx0_blind = C::CircuitField::random(&mut *rng);
-        let mesh_wx0_commitment = mesh_wx0_rx.commit(self.params.host_generators(), mesh_wx0_blind);
-        let mesh_wx1_rx = self.circuit_mesh.wx(w, x1);
+        let mesh_wx0_commitment =
+            mesh_wx0_poly.commit(self.params.host_generators(), mesh_wx0_blind);
+        let mesh_wx1_poly = self.circuit_mesh.wx(w, x1);
         let mesh_wx1_blind = C::CircuitField::random(&mut *rng);
-        let mesh_wx1_commitment = mesh_wx1_rx.commit(self.params.host_generators(), mesh_wx1_blind);
+        let mesh_wx1_commitment =
+            mesh_wx1_poly.commit(self.params.host_generators(), mesh_wx1_blind);
         // ... and then compute the nested commitment S' that contains them.
         let nested_s_prime_witness = stages::nested::s_prime::Witness {
             mesh_wx0: mesh_wx0_commitment,
@@ -360,10 +361,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             nested_s_prime_rx.commit(self.params.nested_generators(), nested_s_prime_blind);
 
         Ok(SPrimeProof {
-            mesh_wx0_rx,
+            mesh_wx0_poly,
             mesh_wx0_blind,
             mesh_wx0_commitment,
-            mesh_wx1_rx,
+            mesh_wx1_poly,
             mesh_wx1_blind,
             mesh_wx1_commitment,
             nested_s_prime_rx,
@@ -386,23 +387,23 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         stages::native::error_m::Witness<C, NativeParameters>,
     )> {
         // Compute mesh_wy components
-        let mesh_wy_rx = self.circuit_mesh.wy(w, y);
+        let mesh_wy_poly = self.circuit_mesh.wy(w, y);
         let mesh_wy_blind = C::CircuitField::random(&mut *rng);
-        let mesh_wy_commitment = mesh_wy_rx.commit(self.params.host_generators(), mesh_wy_blind);
+        let mesh_wy_commitment = mesh_wy_poly.commit(self.params.host_generators(), mesh_wy_blind);
 
-        // Native error_m commitment
+        // Error M stage commitment
         let error_m_witness = stages::native::error_m::Witness::<C, NativeParameters> {
             error_terms: FixedVec::from_fn(|_| FixedVec::from_fn(|_| C::CircuitField::todo())),
         };
-        let native_rx = stages::native::error_m::Stage::<C, R, HEADER_SIZE, NativeParameters>::rx(
+        let stage_rx = stages::native::error_m::Stage::<C, R, HEADER_SIZE, NativeParameters>::rx(
             &error_m_witness,
         )?;
-        let native_blind = C::CircuitField::random(&mut *rng);
-        let native_commitment = native_rx.commit(self.params.host_generators(), native_blind);
+        let stage_blind = C::CircuitField::random(&mut *rng);
+        let stage_commitment = stage_rx.commit(self.params.host_generators(), stage_blind);
 
-        // Nested error_m commitment (bundles mesh_wy_commitment + native_commitment)
+        // Nested error_m commitment (bundles mesh_wy_commitment + stage_commitment)
         let nested_error_m_witness = stages::nested::error_m::Witness {
-            native_error_m: native_commitment,
+            native_error_m: stage_commitment,
             mesh_wy: mesh_wy_commitment,
         };
         let nested_rx =
@@ -412,12 +413,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         Ok((
             ErrorMProof {
-                mesh_wy_rx,
+                mesh_wy_poly,
                 mesh_wy_blind,
                 mesh_wy_commitment,
-                native_rx,
-                native_blind,
-                native_commitment,
+                stage_rx,
+                stage_blind,
+                stage_commitment,
                 nested_rx,
                 nested_blind,
                 nested_commitment,
@@ -513,15 +514,15 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             ky,
             sponge_state_elements,
         };
-        let native_rx = stages::native::error_n::Stage::<C, R, HEADER_SIZE, NativeParameters>::rx(
+        let stage_rx = stages::native::error_n::Stage::<C, R, HEADER_SIZE, NativeParameters>::rx(
             &error_n_witness,
         )?;
-        let native_blind = C::CircuitField::random(&mut *rng);
-        let native_commitment = native_rx.commit(self.params.host_generators(), native_blind);
+        let stage_blind = C::CircuitField::random(&mut *rng);
+        let stage_commitment = stage_rx.commit(self.params.host_generators(), stage_blind);
 
         // Nested error_n commitment
         let nested_error_n_witness = stages::nested::error_n::Witness {
-            native_error_n: native_commitment,
+            native_error_n: stage_commitment,
         };
         let nested_rx =
             stages::nested::error_n::Stage::<C::HostCurve, R>::rx(&nested_error_n_witness)?;
@@ -530,9 +531,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         Ok((
             ErrorNProof {
-                native_rx,
-                native_blind,
-                native_commitment,
+                stage_rx,
+                stage_blind,
+                stage_commitment,
                 nested_rx,
                 nested_blind,
                 nested_commitment,
@@ -585,32 +586,32 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     /// Commits to A and B polynomials, then creates the nested commitment.
     fn compute_ab<RNG: Rng>(&self, rng: &mut RNG) -> Result<ABProof<C, R>> {
         // TODO: For now, stub out fake A and B polynomials.
-        let native_a_rx =
+        let a_poly =
             ragu_circuits::polynomials::structured::Polynomial::<C::CircuitField, R>::new();
-        let native_b_rx =
+        let b_poly =
             ragu_circuits::polynomials::structured::Polynomial::<C::CircuitField, R>::new();
 
         // Commit to A and B, then create the nested commitment.
-        let native_a_blind = C::CircuitField::random(&mut *rng);
-        let native_a_commitment = native_a_rx.commit(self.params.host_generators(), native_a_blind);
-        let native_b_blind = C::CircuitField::random(&mut *rng);
-        let native_b_commitment = native_b_rx.commit(self.params.host_generators(), native_b_blind);
+        let a_blind = C::CircuitField::random(&mut *rng);
+        let a_commitment = a_poly.commit(self.params.host_generators(), a_blind);
+        let b_blind = C::CircuitField::random(&mut *rng);
+        let b_commitment = b_poly.commit(self.params.host_generators(), b_blind);
 
         let nested_ab_witness = stages::nested::ab::Witness {
-            a: native_a_commitment,
-            b: native_b_commitment,
+            a: a_commitment,
+            b: b_commitment,
         };
         let nested_rx = stages::nested::ab::Stage::<C::HostCurve, R>::rx(&nested_ab_witness)?;
         let nested_blind = C::ScalarField::random(&mut *rng);
         let nested_commitment = nested_rx.commit(self.params.nested_generators(), nested_blind);
 
         Ok(ABProof {
-            native_a_rx,
-            native_a_blind,
-            native_a_commitment,
-            native_b_rx,
-            native_b_blind,
-            native_b_commitment,
+            a_poly,
+            a_blind,
+            a_commitment,
+            b_poly,
+            b_blind,
+            b_commitment,
             nested_rx,
             nested_blind,
             nested_commitment,
@@ -628,24 +629,24 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         y: C::CircuitField,
     ) -> Result<QueryProof<C, R>> {
         // Compute mesh_xy components
-        let mesh_xy_rx = self.circuit_mesh.xy(x, y);
+        let mesh_xy_poly = self.circuit_mesh.xy(x, y);
         let mesh_xy_blind = C::CircuitField::random(&mut *rng);
-        let mesh_xy_commitment = mesh_xy_rx.commit(self.params.host_generators(), mesh_xy_blind);
+        let mesh_xy_commitment = mesh_xy_poly.commit(self.params.host_generators(), mesh_xy_blind);
 
-        // Native query commitment
+        // Query stage commitment
         let query_witness = internal_circuits::stages::native::query::Witness {
             queries: FixedVec::from_fn(|_| C::CircuitField::todo()),
         };
 
-        let native_rx = internal_circuits::stages::native::query::Stage::<C, R, HEADER_SIZE>::rx(
+        let stage_rx = internal_circuits::stages::native::query::Stage::<C, R, HEADER_SIZE>::rx(
             &query_witness,
         )?;
-        let native_blind = C::CircuitField::random(&mut *rng);
-        let native_commitment = native_rx.commit(self.params.host_generators(), native_blind);
+        let stage_blind = C::CircuitField::random(&mut *rng);
+        let stage_commitment = stage_rx.commit(self.params.host_generators(), stage_blind);
 
-        // Nested query commitment (bundles mesh_xy_commitment + native_commitment)
+        // Nested query commitment (bundles mesh_xy_commitment + stage_commitment)
         let nested_query_witness = stages::nested::query::Witness {
-            native_query: native_commitment,
+            native_query: stage_commitment,
             mesh_xy: mesh_xy_commitment,
         };
         let nested_rx = stages::nested::query::Stage::<C::HostCurve, R>::rx(&nested_query_witness)?;
@@ -653,12 +654,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let nested_commitment = nested_rx.commit(self.params.nested_generators(), nested_blind);
 
         Ok(QueryProof {
-            mesh_xy_rx,
+            mesh_xy_poly,
             mesh_xy_blind,
             mesh_xy_commitment,
-            native_rx,
-            native_blind,
-            native_commitment,
+            stage_rx,
+            stage_blind,
+            stage_commitment,
             nested_rx,
             nested_blind,
             nested_commitment,
@@ -667,13 +668,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
     /// Compute the F polynomial proof.
     fn compute_f<RNG: Rng>(&self, rng: &mut RNG) -> Result<FProof<C, R>> {
-        let native_rx =
-            ragu_circuits::polynomials::structured::Polynomial::<C::CircuitField, R>::new();
-        let native_blind = C::CircuitField::random(&mut *rng);
-        let native_commitment = native_rx.commit(self.params.host_generators(), native_blind);
+        let poly = ragu_circuits::polynomials::structured::Polynomial::<C::CircuitField, R>::new();
+        let blind = C::CircuitField::random(&mut *rng);
+        let commitment = poly.commit(self.params.host_generators(), blind);
 
         let nested_f_witness = internal_circuits::stages::nested::f::Witness {
-            native_f: native_commitment,
+            native_f: commitment,
         };
         let nested_rx =
             internal_circuits::stages::nested::f::Stage::<C::HostCurve, R>::rx(&nested_f_witness)?;
@@ -681,9 +681,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let nested_commitment = nested_rx.commit(self.params.nested_generators(), nested_blind);
 
         Ok(FProof {
-            native_rx,
-            native_blind,
-            native_commitment,
+            poly,
+            blind,
+            commitment,
             nested_rx,
             nested_blind,
             nested_commitment,
@@ -695,13 +695,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let eval_witness = internal_circuits::stages::native::eval::Witness {
             evals: FixedVec::from_fn(|_| C::CircuitField::todo()),
         };
-        let native_rx =
+        let stage_rx =
             internal_circuits::stages::native::eval::Stage::<C, R, HEADER_SIZE>::rx(&eval_witness)?;
-        let native_blind = C::CircuitField::random(&mut *rng);
-        let native_commitment = native_rx.commit(self.params.host_generators(), native_blind);
+        let stage_blind = C::CircuitField::random(&mut *rng);
+        let stage_commitment = stage_rx.commit(self.params.host_generators(), stage_blind);
 
         let nested_eval_witness = internal_circuits::stages::nested::eval::Witness {
-            native_eval: native_commitment,
+            native_eval: stage_commitment,
         };
         let nested_rx = internal_circuits::stages::nested::eval::Stage::<C::HostCurve, R>::rx(
             &nested_eval_witness,
@@ -710,9 +710,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let nested_commitment = nested_rx.commit(self.params.nested_generators(), nested_blind);
 
         Ok(EvalProof {
-            native_rx,
-            native_blind,
-            native_commitment,
+            stage_rx,
+            stage_blind,
+            stage_commitment,
             nested_rx,
             nested_blind,
             nested_commitment,

@@ -31,20 +31,20 @@ pub(crate) struct ApplicationProof<C: Cycle, R: Rank> {
     pub(crate) circuit_id: CircuitIndex,
     pub(crate) left_header: Vec<C::CircuitField>,
     pub(crate) right_header: Vec<C::CircuitField>,
-    pub(crate) native_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) native_blind: C::CircuitField,
-    pub(crate) native_commitment: C::HostCurve,
+    pub(crate) rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) blind: C::CircuitField,
+    pub(crate) commitment: C::HostCurve,
 }
 
 /// Preamble stage proof with native and nested layer commitments.
 pub(crate) struct PreambleProof<C: Cycle, R: Rank> {
-    pub(crate) native_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) native_blind: C::CircuitField,
-    /// This can be computed using native_rx / native_blind
-    pub(crate) native_commitment: C::HostCurve,
+    pub(crate) stage_rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) stage_blind: C::CircuitField,
+    /// This can be computed using stage_rx / stage_blind
+    pub(crate) stage_commitment: C::HostCurve,
 
     pub(crate) nested_blind: C::ScalarField,
-    /// This can be computed using native_commitment
+    /// This can be computed using stage_commitment
     pub(crate) nested_rx: structured::Polynomial<C::ScalarField, R>,
     /// This can be computed using nested_rx / nested_blind
     pub(crate) nested_commitment: C::NestedCurve,
@@ -88,16 +88,16 @@ pub(crate) struct CircuitCommitments<C: Cycle, R: Rank> {
 /// Query stage proof with mesh_xy bundled.
 pub(crate) struct QueryProof<C: Cycle, R: Rank> {
     // Mesh m(x, y) components
-    pub(crate) mesh_xy_rx: unstructured::Polynomial<C::CircuitField, R>,
+    pub(crate) mesh_xy_poly: unstructured::Polynomial<C::CircuitField, R>,
     pub(crate) mesh_xy_blind: C::CircuitField,
     pub(crate) mesh_xy_commitment: C::HostCurve,
 
-    // Native query components
-    pub(crate) native_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) native_blind: C::CircuitField,
-    pub(crate) native_commitment: C::HostCurve,
+    // Query stage components
+    pub(crate) stage_rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) stage_blind: C::CircuitField,
+    pub(crate) stage_commitment: C::HostCurve,
 
-    // Nested layer (bundles mesh_xy_commitment + native_commitment)
+    // Nested layer (bundles mesh_xy_commitment + stage_commitment)
     pub(crate) nested_rx: structured::Polynomial<C::ScalarField, R>,
     pub(crate) nested_blind: C::ScalarField,
     pub(crate) nested_commitment: C::NestedCurve,
@@ -105,9 +105,9 @@ pub(crate) struct QueryProof<C: Cycle, R: Rank> {
 
 /// F polynomial proof with native and nested layer commitments.
 pub(crate) struct FProof<C: Cycle, R: Rank> {
-    pub(crate) native_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) native_blind: C::CircuitField,
-    pub(crate) native_commitment: C::HostCurve,
+    pub(crate) poly: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) blind: C::CircuitField,
+    pub(crate) commitment: C::HostCurve,
 
     pub(crate) nested_rx: structured::Polynomial<C::ScalarField, R>,
     pub(crate) nested_blind: C::ScalarField,
@@ -116,9 +116,9 @@ pub(crate) struct FProof<C: Cycle, R: Rank> {
 
 /// Evaluation stage proof with native and nested layer commitments.
 pub(crate) struct EvalProof<C: Cycle, R: Rank> {
-    pub(crate) native_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) native_blind: C::CircuitField,
-    pub(crate) native_commitment: C::HostCurve,
+    pub(crate) stage_rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) stage_blind: C::CircuitField,
+    pub(crate) stage_commitment: C::HostCurve,
 
     pub(crate) nested_rx: structured::Polynomial<C::ScalarField, R>,
     pub(crate) nested_blind: C::ScalarField,
@@ -128,16 +128,16 @@ pub(crate) struct EvalProof<C: Cycle, R: Rank> {
 /// Error M stage proof with mesh_wy bundled (Layer 1: N instances of M-sized reductions).
 pub(crate) struct ErrorMProof<C: Cycle, R: Rank> {
     // Mesh m(w, X, y) components
-    pub(crate) mesh_wy_rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) mesh_wy_poly: structured::Polynomial<C::CircuitField, R>,
     pub(crate) mesh_wy_blind: C::CircuitField,
     pub(crate) mesh_wy_commitment: C::HostCurve,
 
-    // Native error_m components
-    pub(crate) native_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) native_blind: C::CircuitField,
-    pub(crate) native_commitment: C::HostCurve,
+    // Error M stage components
+    pub(crate) stage_rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) stage_blind: C::CircuitField,
+    pub(crate) stage_commitment: C::HostCurve,
 
-    // Nested layer (bundles mesh_wy_commitment + native_commitment)
+    // Nested layer (bundles mesh_wy_commitment + stage_commitment)
     pub(crate) nested_rx: structured::Polynomial<C::ScalarField, R>,
     pub(crate) nested_blind: C::ScalarField,
     pub(crate) nested_commitment: C::NestedCurve,
@@ -145,9 +145,9 @@ pub(crate) struct ErrorMProof<C: Cycle, R: Rank> {
 
 /// Error N stage proof (Layer 2: Single N-sized reduction).
 pub(crate) struct ErrorNProof<C: Cycle, R: Rank> {
-    pub(crate) native_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) native_blind: C::CircuitField,
-    pub(crate) native_commitment: C::HostCurve,
+    pub(crate) stage_rx: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) stage_blind: C::CircuitField,
+    pub(crate) stage_commitment: C::HostCurve,
     pub(crate) nested_rx: structured::Polynomial<C::ScalarField, R>,
     pub(crate) nested_blind: C::ScalarField,
     pub(crate) nested_commitment: C::NestedCurve,
@@ -155,13 +155,13 @@ pub(crate) struct ErrorNProof<C: Cycle, R: Rank> {
 
 /// A/B polynomial proof for folding. A and B depend on (mu, nu).
 pub(crate) struct ABProof<C: Cycle, R: Rank> {
-    pub(crate) native_a_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) native_a_blind: C::CircuitField,
-    pub(crate) native_a_commitment: C::HostCurve,
+    pub(crate) a_poly: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) a_blind: C::CircuitField,
+    pub(crate) a_commitment: C::HostCurve,
 
-    pub(crate) native_b_rx: structured::Polynomial<C::CircuitField, R>,
-    pub(crate) native_b_blind: C::CircuitField,
-    pub(crate) native_b_commitment: C::HostCurve,
+    pub(crate) b_poly: structured::Polynomial<C::CircuitField, R>,
+    pub(crate) b_blind: C::CircuitField,
+    pub(crate) b_commitment: C::HostCurve,
 
     pub(crate) nested_rx: structured::Polynomial<C::ScalarField, R>,
     pub(crate) nested_blind: C::ScalarField,
@@ -170,11 +170,11 @@ pub(crate) struct ABProof<C: Cycle, R: Rank> {
 
 /// S' stage proof: m(w, x_i, Y) and nested commitment.
 pub(crate) struct SPrimeProof<C: Cycle, R: Rank> {
-    pub(crate) mesh_wx0_rx: unstructured::Polynomial<C::CircuitField, R>,
+    pub(crate) mesh_wx0_poly: unstructured::Polynomial<C::CircuitField, R>,
     pub(crate) mesh_wx0_blind: C::CircuitField,
     pub(crate) mesh_wx0_commitment: C::HostCurve,
 
-    pub(crate) mesh_wx1_rx: unstructured::Polynomial<C::CircuitField, R>,
+    pub(crate) mesh_wx1_poly: unstructured::Polynomial<C::CircuitField, R>,
     pub(crate) mesh_wx1_blind: C::CircuitField,
     pub(crate) mesh_wx1_commitment: C::HostCurve,
 
@@ -207,9 +207,9 @@ impl<C: Cycle, R: Rank> Clone for ApplicationProof<C, R> {
             circuit_id: self.circuit_id,
             left_header: self.left_header.clone(),
             right_header: self.right_header.clone(),
-            native_rx: self.native_rx.clone(),
-            native_blind: self.native_blind,
-            native_commitment: self.native_commitment,
+            rx: self.rx.clone(),
+            blind: self.blind,
+            commitment: self.commitment,
         }
     }
 }
@@ -217,9 +217,9 @@ impl<C: Cycle, R: Rank> Clone for ApplicationProof<C, R> {
 impl<C: Cycle, R: Rank> Clone for PreambleProof<C, R> {
     fn clone(&self) -> Self {
         PreambleProof {
-            native_rx: self.native_rx.clone(),
-            native_commitment: self.native_commitment,
-            native_blind: self.native_blind,
+            stage_rx: self.stage_rx.clone(),
+            stage_commitment: self.stage_commitment,
+            stage_blind: self.stage_blind,
             nested_rx: self.nested_rx.clone(),
             nested_commitment: self.nested_commitment,
             nested_blind: self.nested_blind,
@@ -230,10 +230,10 @@ impl<C: Cycle, R: Rank> Clone for PreambleProof<C, R> {
 impl<C: Cycle, R: Rank> Clone for SPrimeProof<C, R> {
     fn clone(&self) -> Self {
         SPrimeProof {
-            mesh_wx0_rx: self.mesh_wx0_rx.clone(),
+            mesh_wx0_poly: self.mesh_wx0_poly.clone(),
             mesh_wx0_blind: self.mesh_wx0_blind,
             mesh_wx0_commitment: self.mesh_wx0_commitment,
-            mesh_wx1_rx: self.mesh_wx1_rx.clone(),
+            mesh_wx1_poly: self.mesh_wx1_poly.clone(),
             mesh_wx1_blind: self.mesh_wx1_blind,
             mesh_wx1_commitment: self.mesh_wx1_commitment,
             nested_s_prime_rx: self.nested_s_prime_rx.clone(),
@@ -246,12 +246,12 @@ impl<C: Cycle, R: Rank> Clone for SPrimeProof<C, R> {
 impl<C: Cycle, R: Rank> Clone for ErrorMProof<C, R> {
     fn clone(&self) -> Self {
         ErrorMProof {
-            mesh_wy_rx: self.mesh_wy_rx.clone(),
+            mesh_wy_poly: self.mesh_wy_poly.clone(),
             mesh_wy_blind: self.mesh_wy_blind,
             mesh_wy_commitment: self.mesh_wy_commitment,
-            native_rx: self.native_rx.clone(),
-            native_blind: self.native_blind,
-            native_commitment: self.native_commitment,
+            stage_rx: self.stage_rx.clone(),
+            stage_blind: self.stage_blind,
+            stage_commitment: self.stage_commitment,
             nested_rx: self.nested_rx.clone(),
             nested_blind: self.nested_blind,
             nested_commitment: self.nested_commitment,
@@ -262,9 +262,9 @@ impl<C: Cycle, R: Rank> Clone for ErrorMProof<C, R> {
 impl<C: Cycle, R: Rank> Clone for ErrorNProof<C, R> {
     fn clone(&self) -> Self {
         ErrorNProof {
-            native_rx: self.native_rx.clone(),
-            native_blind: self.native_blind,
-            native_commitment: self.native_commitment,
+            stage_rx: self.stage_rx.clone(),
+            stage_blind: self.stage_blind,
+            stage_commitment: self.stage_commitment,
             nested_rx: self.nested_rx.clone(),
             nested_blind: self.nested_blind,
             nested_commitment: self.nested_commitment,
@@ -275,12 +275,12 @@ impl<C: Cycle, R: Rank> Clone for ErrorNProof<C, R> {
 impl<C: Cycle, R: Rank> Clone for ABProof<C, R> {
     fn clone(&self) -> Self {
         ABProof {
-            native_a_rx: self.native_a_rx.clone(),
-            native_a_blind: self.native_a_blind,
-            native_a_commitment: self.native_a_commitment,
-            native_b_rx: self.native_b_rx.clone(),
-            native_b_blind: self.native_b_blind,
-            native_b_commitment: self.native_b_commitment,
+            a_poly: self.a_poly.clone(),
+            a_blind: self.a_blind,
+            a_commitment: self.a_commitment,
+            b_poly: self.b_poly.clone(),
+            b_blind: self.b_blind,
+            b_commitment: self.b_commitment,
             nested_rx: self.nested_rx.clone(),
             nested_blind: self.nested_blind,
             nested_commitment: self.nested_commitment,
@@ -332,12 +332,12 @@ impl<C: Cycle, R: Rank> Clone for CircuitCommitments<C, R> {
 impl<C: Cycle, R: Rank> Clone for QueryProof<C, R> {
     fn clone(&self) -> Self {
         QueryProof {
-            mesh_xy_rx: self.mesh_xy_rx.clone(),
+            mesh_xy_poly: self.mesh_xy_poly.clone(),
             mesh_xy_blind: self.mesh_xy_blind,
             mesh_xy_commitment: self.mesh_xy_commitment,
-            native_rx: self.native_rx.clone(),
-            native_blind: self.native_blind,
-            native_commitment: self.native_commitment,
+            stage_rx: self.stage_rx.clone(),
+            stage_blind: self.stage_blind,
+            stage_commitment: self.stage_commitment,
             nested_rx: self.nested_rx.clone(),
             nested_blind: self.nested_blind,
             nested_commitment: self.nested_commitment,
@@ -348,9 +348,9 @@ impl<C: Cycle, R: Rank> Clone for QueryProof<C, R> {
 impl<C: Cycle, R: Rank> Clone for FProof<C, R> {
     fn clone(&self) -> Self {
         FProof {
-            native_rx: self.native_rx.clone(),
-            native_blind: self.native_blind,
-            native_commitment: self.native_commitment,
+            poly: self.poly.clone(),
+            blind: self.blind,
+            commitment: self.commitment,
             nested_rx: self.nested_rx.clone(),
             nested_blind: self.nested_blind,
             nested_commitment: self.nested_commitment,
@@ -361,9 +361,9 @@ impl<C: Cycle, R: Rank> Clone for FProof<C, R> {
 impl<C: Cycle, R: Rank> Clone for EvalProof<C, R> {
     fn clone(&self) -> Self {
         EvalProof {
-            native_rx: self.native_rx.clone(),
-            native_blind: self.native_blind,
-            native_commitment: self.native_commitment,
+            stage_rx: self.stage_rx.clone(),
+            stage_blind: self.stage_blind,
+            stage_commitment: self.stage_commitment,
             nested_rx: self.nested_rx.clone(),
             nested_blind: self.nested_blind,
             nested_commitment: self.nested_commitment,
@@ -435,18 +435,18 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         Proof {
             preamble: PreambleProof {
-                native_rx: zero_structured_host.clone(),
-                native_blind: host_blind,
-                native_commitment: host_g,
+                stage_rx: zero_structured_host.clone(),
+                stage_blind: host_blind,
+                stage_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
                 nested_blind,
                 nested_commitment: nested_g,
             },
             s_prime: SPrimeProof {
-                mesh_wx0_rx: zero_unstructured.clone(),
+                mesh_wx0_poly: zero_unstructured.clone(),
                 mesh_wx0_blind: host_blind,
                 mesh_wx0_commitment: host_g,
-                mesh_wx1_rx: zero_unstructured.clone(),
+                mesh_wx1_poly: zero_unstructured.clone(),
                 mesh_wx1_blind: host_blind,
                 mesh_wx1_commitment: host_g,
                 nested_s_prime_rx: zero_structured_nested.clone(),
@@ -454,58 +454,58 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 nested_s_prime_commitment: nested_g,
             },
             error_m: ErrorMProof {
-                mesh_wy_rx: zero_structured_host.clone(),
+                mesh_wy_poly: zero_structured_host.clone(),
                 mesh_wy_blind: host_blind,
                 mesh_wy_commitment: host_g,
-                native_rx: zero_structured_host.clone(),
-                native_blind: host_blind,
-                native_commitment: host_g,
+                stage_rx: zero_structured_host.clone(),
+                stage_blind: host_blind,
+                stage_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
                 nested_blind,
                 nested_commitment: nested_g,
             },
             error_n: ErrorNProof {
-                native_rx: zero_structured_host.clone(),
-                native_blind: host_blind,
-                native_commitment: host_g,
+                stage_rx: zero_structured_host.clone(),
+                stage_blind: host_blind,
+                stage_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
                 nested_blind,
                 nested_commitment: nested_g,
             },
             ab: ABProof {
-                native_a_rx: zero_structured_host.clone(),
-                native_a_blind: host_blind,
-                native_a_commitment: host_g,
-                native_b_rx: zero_structured_host.clone(),
-                native_b_blind: host_blind,
-                native_b_commitment: host_g,
+                a_poly: zero_structured_host.clone(),
+                a_blind: host_blind,
+                a_commitment: host_g,
+                b_poly: zero_structured_host.clone(),
+                b_blind: host_blind,
+                b_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
                 nested_blind,
                 nested_commitment: nested_g,
             },
             query: QueryProof {
-                mesh_xy_rx: zero_unstructured.clone(),
+                mesh_xy_poly: zero_unstructured.clone(),
                 mesh_xy_blind: host_blind,
                 mesh_xy_commitment: host_g,
-                native_rx: zero_structured_host.clone(),
-                native_blind: host_blind,
-                native_commitment: host_g,
+                stage_rx: zero_structured_host.clone(),
+                stage_blind: host_blind,
+                stage_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
                 nested_blind,
                 nested_commitment: nested_g,
             },
             f: FProof {
-                native_rx: zero_structured_host.clone(),
-                native_blind: host_blind,
-                native_commitment: host_g,
+                poly: zero_structured_host.clone(),
+                blind: host_blind,
+                commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
                 nested_blind,
                 nested_commitment: nested_g,
             },
             eval: EvalProof {
-                native_rx: zero_structured_host.clone(),
-                native_blind: host_blind,
-                native_commitment: host_g,
+                stage_rx: zero_structured_host.clone(),
+                stage_blind: host_blind,
+                stage_commitment: host_g,
                 nested_rx: zero_structured_nested.clone(),
                 nested_blind,
                 nested_commitment: nested_g,
@@ -545,9 +545,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 circuit_id: dummy_circuit_id,
                 left_header: vec![C::CircuitField::ZERO; HEADER_SIZE],
                 right_header: vec![C::CircuitField::ZERO; HEADER_SIZE],
-                native_rx: dummy_rx,
-                native_blind: host_blind,
-                native_commitment: dummy_commitment,
+                rx: dummy_rx,
+                blind: host_blind,
+                commitment: dummy_commitment,
             },
         }
     }

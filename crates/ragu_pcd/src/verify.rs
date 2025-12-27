@@ -30,31 +30,31 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         // Preamble verification
         let preamble_valid = verifier.check_stage(
-            &pcd.proof.preamble.native_rx,
+            &pcd.proof.preamble.stage_rx,
             internal_circuits::stages::native::preamble::STAGING_ID,
         );
 
         // Error_m stage verification (Layer 1).
         let error_m_valid = verifier.check_stage(
-            &pcd.proof.error_m.native_rx,
+            &pcd.proof.error_m.stage_rx,
             internal_circuits::stages::native::error_m::STAGING_ID,
         );
 
         // Error_n stage verification (Layer 2).
         let error_n_valid = verifier.check_stage(
-            &pcd.proof.error_n.native_rx,
+            &pcd.proof.error_n.stage_rx,
             internal_circuits::stages::native::error_n::STAGING_ID,
         );
 
         // Query verification.
         let query_valid = verifier.check_stage(
-            &pcd.proof.query.native_rx,
+            &pcd.proof.query.stage_rx,
             internal_circuits::stages::native::query::STAGING_ID,
         );
 
         // Eval verification.
         let eval_valid = verifier.check_stage(
-            &pcd.proof.eval.native_rx,
+            &pcd.proof.eval.stage_rx,
             internal_circuits::stages::native::eval::STAGING_ID,
         );
 
@@ -109,9 +109,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // See `internal_circuits::hashes_1` documentation.
         let hashes_1_circuit_valid = {
             let mut rx = pcd.proof.circuits.hashes_1_rx.clone();
-            rx.add_assign(&pcd.proof.preamble.native_rx);
-            // NB: pcd.proof.error_m.native_rx is skipped.
-            rx.add_assign(&pcd.proof.error_n.native_rx);
+            rx.add_assign(&pcd.proof.preamble.stage_rx);
+            // NB: pcd.proof.error_m.stage_rx is skipped.
+            rx.add_assign(&pcd.proof.error_n.stage_rx);
 
             verifier.check_internal_circuit(
                 &rx,
@@ -125,9 +125,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // See `internal_circuits::hashes_2` documentation.
         let hashes_2_circuit_valid = {
             let mut rx = pcd.proof.circuits.hashes_2_rx.clone();
-            // NB: pcd.proof.preamble.native_rx is skipped.
-            // NB: pcd.proof.error_m.native_rx is skipped.
-            rx.add_assign(&pcd.proof.error_n.native_rx);
+            // NB: pcd.proof.preamble.stage_rx is skipped.
+            // NB: pcd.proof.error_m.stage_rx is skipped.
+            rx.add_assign(&pcd.proof.error_n.stage_rx);
 
             verifier.check_internal_circuit(
                 &rx,
@@ -139,9 +139,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // See `internal_circuits::fold` documentation.
         let fold_circuit_valid = {
             let mut rx = pcd.proof.circuits.ky_rx.clone();
-            // NB: pcd.proof.preamble.native_rx is skipped.
-            rx.add_assign(&pcd.proof.error_m.native_rx);
-            rx.add_assign(&pcd.proof.error_n.native_rx);
+            // NB: pcd.proof.preamble.stage_rx is skipped.
+            rx.add_assign(&pcd.proof.error_m.stage_rx);
+            rx.add_assign(&pcd.proof.error_n.stage_rx);
 
             verifier.check_internal_circuit(&rx, internal_circuits::fold::CIRCUIT_ID, unified_ky)
         };
@@ -149,9 +149,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // See `internal_circuits::compute_c` documentation.
         let c_circuit_valid = {
             let mut rx = pcd.proof.circuits.c_rx.clone();
-            rx.add_assign(&pcd.proof.preamble.native_rx);
-            rx.add_assign(&pcd.proof.error_m.native_rx);
-            rx.add_assign(&pcd.proof.error_n.native_rx);
+            rx.add_assign(&pcd.proof.preamble.stage_rx);
+            rx.add_assign(&pcd.proof.error_m.stage_rx);
+            rx.add_assign(&pcd.proof.error_n.stage_rx);
 
             verifier.check_internal_circuit(
                 &rx,
@@ -163,9 +163,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // See `internal_circuits::compute_v` documentation.
         let v_circuit_valid = {
             let rx = pcd.proof.circuits.v_rx.clone();
-            // NB: pcd.proof.preamble.native_rx is skipped.
-            // NB: pcd.proof.error_m.native_rx is skipped.
-            // NB: pcd.proof.error_n.native_rx is skipped.
+            // NB: pcd.proof.preamble.stage_rx is skipped.
+            // NB: pcd.proof.error_m.stage_rx is skipped.
+            // NB: pcd.proof.error_n.stage_rx is skipped.
 
             verifier.check_internal_circuit(
                 &rx,
@@ -176,7 +176,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         // Application (Step circuit) verification.
         let application_circuit_valid = verifier.check_circuit(
-            &pcd.proof.application.native_rx,
+            &pcd.proof.application.rx,
             pcd.proof.application.circuit_id, // TODO: circuit_id must be in the mesh domain
             application_ky,
         );
