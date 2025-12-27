@@ -5,7 +5,11 @@ use ragu_circuits::{
     polynomials::Rank,
     staging::{Stage, StageExt},
 };
-use ragu_core::{Result, drivers::emulator::Emulator, maybe::Maybe};
+use ragu_core::{
+    Result,
+    drivers::{Driver, emulator::Emulator},
+    maybe::{Always, Maybe},
+};
 use ragu_primitives::{
     Element, GadgetExt, Point,
     poseidon::Sponge,
@@ -72,17 +76,17 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let (preamble, preamble_witness) =
             self.compute_preamble(rng, &left, &right, &application)?;
         Point::constant(&mut dr, preamble.nested_commitment)?.write(&mut dr, &mut transcript)?;
-        let w = *transcript.squeeze(&mut dr)?.value().take();
+        let w = transcript.squeeze(&mut dr)?;
 
         // Phase 3: S' commitment to m(w, x_i, Y).
-        let s_prime = self.compute_s_prime(rng, w, &left, &right)?;
+        let s_prime = self.compute_s_prime(rng, &w, &left, &right)?;
         Point::constant(&mut dr, s_prime.nested_s_prime_commitment)?
             .write(&mut dr, &mut transcript)?;
-        let y = *transcript.squeeze(&mut dr)?.value().take();
-        let z = *transcript.squeeze(&mut dr)?.value().take();
+        let y = transcript.squeeze(&mut dr)?;
+        let z = transcript.squeeze(&mut dr)?;
 
         // Phase 4: Error M with mesh_wy (Layer 1: N instances of M-sized reductions).
-        let (error_m, error_m_witness) = self.compute_error_m(rng, w, y)?;
+        let (error_m, error_m_witness) = self.compute_error_m(rng, &w, &y)?;
         Point::constant(&mut dr, error_m.nested_commitment)?.write(&mut dr, &mut transcript)?;
 
         // Save a copy of the transcript state. This is used as part of the
@@ -97,69 +101,59 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             .map(|e| *e.value().take())
             .collect_fixed()?;
 
-        let mu = *transcript.squeeze(&mut dr)?.value().take();
-        let nu = *transcript.squeeze(&mut dr)?.value().take();
+        let mu = transcript.squeeze(&mut dr)?;
+        let nu = transcript.squeeze(&mut dr)?;
 
         // Phase 5: Error N (k(y) computation, layer 1 folding, and N-sized reduction).
         let (error_n, error_n_witness) = self.compute_error_n(
             rng,
             &preamble_witness,
             &error_m_witness,
-            y,
-            mu,
-            nu,
+            &y,
+            &mu,
+            &nu,
             saved_transcript_state,
         )?;
 
         // Derive (mu', nu') = H(nested_error_n_commitment).
         Point::constant(&mut dr, error_n.nested_commitment)?.write(&mut dr, &mut transcript)?;
-        let mu_prime = *transcript.squeeze(&mut dr)?.value().take();
-        let nu_prime = *transcript.squeeze(&mut dr)?.value().take();
+        let mu_prime = transcript.squeeze(&mut dr)?;
+        let nu_prime = transcript.squeeze(&mut dr)?;
 
         // Phase 6: Compute C, the folded revdot product claim.
-        let c = self.compute_c(mu_prime, nu_prime, &error_n_witness)?;
+        let c_value = self.compute_c(&mu_prime, &nu_prime, &error_n_witness)?;
+        let c = Element::constant(&mut dr, c_value);
 
         // Phase 7: A/B polynomials.
         let ab = self.compute_ab(rng)?;
 
         // Derive x = H(nested_ab_commitment).
         Point::constant(&mut dr, ab.nested_commitment)?.write(&mut dr, &mut transcript)?;
-        let x = *transcript.squeeze(&mut dr)?.value().take();
+        let x = transcript.squeeze(&mut dr)?;
 
         // Phase 8: Query with mesh_xy.
-        let query = self.compute_query(rng, x, y)?;
+        let query = self.compute_query(rng, &x, &y)?;
 
         // Derive alpha = H(nested_query_commitment).
         Point::constant(&mut dr, query.nested_commitment)?.write(&mut dr, &mut transcript)?;
-        let alpha = *transcript.squeeze(&mut dr)?.value().take();
+        let alpha = transcript.squeeze(&mut dr)?;
 
         // Phase 9: F polynomial.
         let f = self.compute_f(rng)?;
 
         // Derive u = H(nested_f_commitment).
         Point::constant(&mut dr, f.nested_commitment)?.write(&mut dr, &mut transcript)?;
-        let u = *transcript.squeeze(&mut dr)?.value().take();
+        let u = transcript.squeeze(&mut dr)?;
 
         // Phase 10: Eval.
         let eval = self.compute_eval(rng)?;
         Point::constant(&mut dr, eval.nested_commitment)?.write(&mut dr, &mut transcript)?;
-        let beta = *transcript.squeeze(&mut dr)?.value().take();
+        let beta = transcript.squeeze(&mut dr)?;
 
         // Phase 11: Challenges.
-        let challenges = Challenges {
-            w,
-            y,
-            z,
-            mu,
-            nu,
-            mu_prime,
-            nu_prime,
-            c,
-            x,
-            alpha,
-            u,
-            beta,
-        };
+        let challenges = Challenges::new(
+            &w, &y, &z, &mu, &nu, &mu_prime, &nu_prime, &c, &x, &alpha, &u, &beta,
+        );
 
         // Phase 12: Internal circuits.
         let circuits = self.compute_internal_circuits(
@@ -330,13 +324,17 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     /// In order to check that the two proofs' commitments to s (the mesh
     /// polynomial evaluated at (x_0, y_0) and (x_1, y_1)) are correct, we need
     /// to compute s' = m(w, x_i, Y) for both proofs.
-    fn compute_s_prime<RNG: Rng>(
+    fn compute_s_prime<'dr, D, RNG: Rng>(
         &self,
         rng: &mut RNG,
-        w: C::CircuitField,
+        w: &Element<'dr, D>,
         left: &Proof<C, R>,
         right: &Proof<C, R>,
-    ) -> Result<SPrimeProof<C, R>> {
+    ) -> Result<SPrimeProof<C, R>>
+    where
+        D: Driver<'dr, F = C::CircuitField, MaybeKind = Always<()>>,
+    {
+        let w = *w.value().take();
         let x0 = left.challenges.x;
         let x1 = right.challenges.x;
 
@@ -377,15 +375,21 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     ///
     /// Given (w, y), computes m(w, X, y), commits to it, then creates the error_m
     /// stage with the mesh_wy commitment bundled into the nested layer.
-    fn compute_error_m<RNG: Rng>(
+    fn compute_error_m<'dr, D, RNG: Rng>(
         &self,
         rng: &mut RNG,
-        w: C::CircuitField,
-        y: C::CircuitField,
+        w: &Element<'dr, D>,
+        y: &Element<'dr, D>,
     ) -> Result<(
         ErrorMProof<C, R>,
         stages::native::error_m::Witness<C, NativeParameters>,
-    )> {
+    )>
+    where
+        D: Driver<'dr, F = C::CircuitField, MaybeKind = Always<()>>,
+    {
+        let w = *w.value().take();
+        let y = *y.value().take();
+
         // Compute mesh_wy components
         let mesh_wy_poly = self.circuit_mesh.wy(w, y);
         let mesh_wy_blind = C::CircuitField::random(&mut *rng);
@@ -433,14 +437,14 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     /// Computes k(y) values from the preamble witness, performs layer 1 folding
     /// to get collapsed values, then builds the error_n stage witness and
     /// commitments.
-    fn compute_error_n<RNG: Rng>(
+    fn compute_error_n<'dr, D, RNG: Rng>(
         &self,
         rng: &mut RNG,
         preamble_witness: &stages::native::preamble::Witness<'_, C, R, HEADER_SIZE>,
         error_m_witness: &stages::native::error_m::Witness<C, NativeParameters>,
-        y: C::CircuitField,
-        mu: C::CircuitField,
-        nu: C::CircuitField,
+        y: &Element<'dr, D>,
+        mu: &Element<'dr, D>,
+        nu: &Element<'dr, D>,
         sponge_state_elements: FixedVec<
             C::CircuitField,
             ragu_primitives::poseidon::PoseidonStateLen<C::CircuitField, C::CircuitPoseidon>,
@@ -448,7 +452,14 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     ) -> Result<(
         ErrorNProof<C, R>,
         stages::native::error_n::Witness<C, NativeParameters>,
-    )> {
+    )>
+    where
+        D: Driver<'dr, F = C::CircuitField, MaybeKind = Always<()>>,
+    {
+        let y = *y.value().take();
+        let mu = *mu.value().take();
+        let nu = *nu.value().take();
+
         let (ky, collapsed) = Emulator::emulate_wireless(
             (preamble_witness, &error_m_witness.error_terms, y, mu, nu),
             |dr, witness| {
@@ -547,12 +558,18 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     ///
     /// Performs a single N-sized reduction using the collapsed values from
     /// layer 1 as the k(y) values.
-    fn compute_c(
+    fn compute_c<'dr, D>(
         &self,
-        mu_prime: C::CircuitField,
-        nu_prime: C::CircuitField,
+        mu_prime: &Element<'dr, D>,
+        nu_prime: &Element<'dr, D>,
         error_n_witness: &stages::native::error_n::Witness<C, NativeParameters>,
-    ) -> Result<C::CircuitField> {
+    ) -> Result<C::CircuitField>
+    where
+        D: Driver<'dr, F = C::CircuitField, MaybeKind = Always<()>>,
+    {
+        let mu_prime = *mu_prime.value().take();
+        let nu_prime = *nu_prime.value().take();
+
         Emulator::emulate_wireless(
             (
                 mu_prime,
@@ -624,12 +641,18 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     ///
     /// Computes m(x, y), commits to it, then creates native and nested query commitments
     /// with the mesh_xy commitment bundled into the nested layer.
-    fn compute_query<RNG: Rng>(
+    fn compute_query<'dr, D, RNG: Rng>(
         &self,
         rng: &mut RNG,
-        x: C::CircuitField,
-        y: C::CircuitField,
-    ) -> Result<QueryProof<C, R>> {
+        x: &Element<'dr, D>,
+        y: &Element<'dr, D>,
+    ) -> Result<QueryProof<C, R>>
+    where
+        D: Driver<'dr, F = C::CircuitField, MaybeKind = Always<()>>,
+    {
+        let x = *x.value().take();
+        let y = *y.value().take();
+
         // Compute mesh_xy components
         let mesh_xy_poly = self.circuit_mesh.xy(x, y);
         let mesh_xy_blind = C::CircuitField::random(&mut *rng);

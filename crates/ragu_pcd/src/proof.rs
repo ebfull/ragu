@@ -7,6 +7,11 @@ use ragu_circuits::{
     mesh::CircuitIndex,
     polynomials::{Rank, structured, unstructured},
 };
+use ragu_core::{
+    drivers::Driver,
+    maybe::{Always, Maybe},
+};
+use ragu_primitives::Element;
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -177,6 +182,63 @@ pub(crate) struct Challenges<C: Cycle> {
     pub(crate) beta: C::CircuitField,
 }
 
+impl<C: Cycle> Challenges<C> {
+    /// Creates a new set of Fiat-Shamir challenges from Element gadgets.
+    ///
+    /// The `MaybeKind = Always<()>` constraint ensures this can only be called
+    /// in contexts where witness values are guaranteed to exist.
+    pub(crate) fn new<'dr, D>(
+        w: &Element<'dr, D>,
+        y: &Element<'dr, D>,
+        z: &Element<'dr, D>,
+        mu: &Element<'dr, D>,
+        nu: &Element<'dr, D>,
+        mu_prime: &Element<'dr, D>,
+        nu_prime: &Element<'dr, D>,
+        c: &Element<'dr, D>,
+        x: &Element<'dr, D>,
+        alpha: &Element<'dr, D>,
+        u: &Element<'dr, D>,
+        beta: &Element<'dr, D>,
+    ) -> Self
+    where
+        D: Driver<'dr, F = C::CircuitField, MaybeKind = Always<()>>,
+    {
+        Self {
+            w: *w.value().take(),
+            y: *y.value().take(),
+            z: *z.value().take(),
+            mu: *mu.value().take(),
+            nu: *nu.value().take(),
+            mu_prime: *mu_prime.value().take(),
+            nu_prime: *nu_prime.value().take(),
+            c: *c.value().take(),
+            x: *x.value().take(),
+            alpha: *alpha.value().take(),
+            u: *u.value().take(),
+            beta: *beta.value().take(),
+        }
+    }
+
+    /// Creates trivial challenges with all zero values (for dummy proofs).
+    pub(crate) fn trivial() -> Self {
+        Self {
+            w: C::CircuitField::ZERO,
+            y: C::CircuitField::ZERO,
+            z: C::CircuitField::ZERO,
+            mu: C::CircuitField::ZERO,
+            nu: C::CircuitField::ZERO,
+            mu_prime: C::CircuitField::ZERO,
+            nu_prime: C::CircuitField::ZERO,
+            c: C::CircuitField::ZERO,
+            x: C::CircuitField::ZERO,
+            alpha: C::CircuitField::ZERO,
+            u: C::CircuitField::ZERO,
+            beta: C::CircuitField::ZERO,
+        }
+    }
+}
+
 /// Circuit polynomial commitments (C, V, hashes, ky).
 #[derive(Clone)]
 pub(crate) struct CircuitCommitments<C: Cycle, R: Rank> {
@@ -344,20 +406,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 nested_blind,
                 nested_commitment: nested_g,
             },
-            challenges: Challenges {
-                w: C::CircuitField::ZERO,
-                y: C::CircuitField::ZERO,
-                z: C::CircuitField::ZERO,
-                mu: C::CircuitField::ZERO,
-                nu: C::CircuitField::ZERO,
-                mu_prime: C::CircuitField::ZERO,
-                nu_prime: C::CircuitField::ZERO,
-                c: C::CircuitField::ZERO,
-                x: C::CircuitField::ZERO,
-                alpha: C::CircuitField::ZERO,
-                u: C::CircuitField::ZERO,
-                beta: C::CircuitField::ZERO,
-            },
+            challenges: Challenges::trivial(),
             circuits: CircuitCommitments {
                 c_rx: dummy_rx.clone(),
                 c_blind: host_blind,
