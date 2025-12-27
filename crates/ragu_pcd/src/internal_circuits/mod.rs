@@ -21,26 +21,26 @@ pub use crate::components::fold_revdot::NativeParameters;
 #[repr(usize)]
 pub enum InternalCircuitIndex {
     DummyCircuit = 0,
-    Hashes1Staged = 1,
-    Hashes1Circuit = 2,
-    Hashes2Staged = 3,
+    // Final stage objects
+    ErrorNFinalStaged = 1,
+    EvalFinalStaged = 2,
+    // Actual circuits
+    Hashes1Circuit = 3,
     Hashes2Circuit = 4,
-    FoldStaged = 5,
-    FoldCircuit = 6,
-    ComputeCStaged = 7,
-    ComputeCCircuit = 8,
-    ComputeVStaged = 9,
-    ComputeVCircuit = 10,
-    PreambleStage = 11,
-    ErrorMStage = 12,
-    ErrorNStage = 13,
-    QueryStage = 14,
-    EvalStage = 15,
+    FoldCircuit = 5,
+    ComputeCCircuit = 6,
+    ComputeVCircuit = 7,
+    // Native stages
+    PreambleStage = 8,
+    ErrorMStage = 9,
+    ErrorNStage = 10,
+    QueryStage = 11,
+    EvalStage = 12,
 }
 
 /// The number of internal circuits registered by [`register_all`],
 /// and the number of variants in [`InternalCircuitIndex`].
-pub const NUM_INTERNAL_CIRCUITS: usize = 16;
+pub const NUM_INTERNAL_CIRCUITS: usize = 13;
 
 /// Compute the total circuit count and log2 domain size from the number of
 /// application-defined steps.
@@ -57,62 +57,92 @@ impl InternalCircuitIndex {
     }
 }
 
+/// Register internal polynomials into the provided mesh.
 pub fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
-    mesh: MeshBuilder<'params, C::CircuitField, R>,
+    mut mesh: MeshBuilder<'params, C::CircuitField, R>,
     params: &'params C::Params,
     log2_circuits: u32,
 ) -> Result<MeshBuilder<'params, C::CircuitField, R>> {
     let initial_num_circuits = mesh.num_circuits();
 
-    let mesh = mesh.register_circuit(dummy::Circuit)?;
-    let mesh = {
-        let hashes_1 =
-            hashes_1::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params, log2_circuits);
-        mesh.register_circuit_object(hashes_1.final_into_object()?)?
-            .register_circuit(hashes_1)?
-    };
-    let mesh = {
-        let hashes_2 = hashes_2::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params);
-        mesh.register_circuit_object(hashes_2.final_into_object()?)?
-            .register_circuit(hashes_2)?
-    };
-    let mesh = {
-        let fold = fold::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
-        mesh.register_circuit_object(fold.final_into_object()?)?
-            .register_circuit(fold)?
-    };
-    let mesh = {
-        let compute_c = compute_c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new();
-        mesh.register_circuit_object(compute_c.final_into_object()?)?
-            .register_circuit(compute_c)?
-    };
-    let mesh = {
-        let compute_v = compute_v::Circuit::<C, R, HEADER_SIZE>::new();
-        mesh.register_circuit_object(compute_v.final_into_object()?)?
-            .register_circuit(compute_v)?
-    };
+    // Insert the dummy circuit.
+    mesh = mesh.register_circuit(dummy::Circuit)?;
 
-    let mesh = mesh.register_circuit_object(
-        stages::native::preamble::Stage::<C, R, HEADER_SIZE>::into_object()?,
-    )?;
-    let mesh = mesh.register_circuit_object(stages::native::error_m::Stage::<
-        C,
-        R,
-        HEADER_SIZE,
-        NativeParameters,
-    >::into_object()?)?;
-    let mesh = mesh.register_circuit_object(stages::native::error_n::Stage::<
-        C,
-        R,
-        HEADER_SIZE,
-        NativeParameters,
-    >::into_object()?)?;
-    let mesh = mesh.register_circuit_object(
-        stages::native::query::Stage::<C, R, HEADER_SIZE>::into_object()?,
-    )?;
-    let mesh = mesh.register_circuit_object(
-        stages::native::eval::Stage::<C, R, HEADER_SIZE>::into_object()?,
-    )?;
+    // Insert the "final stage polynomials" for each stage.
+    //
+    // These are sometimes shared by multiple circuits. Each unique `Final`
+    // stage is only registered once here.
+    {
+        // preamble -> error_m -> error_n -> [CIRCUIT]
+        mesh = mesh.register_circuit_object(stages::native::error_n::Stage::<
+            C,
+            R,
+            HEADER_SIZE,
+            NativeParameters,
+        >::final_into_object()?)?;
+
+        // preamble -> query -> eval -> [CIRCUIT]
+        mesh = mesh.register_circuit_object(
+            stages::native::eval::Stage::<C, R, HEADER_SIZE>::final_into_object()?,
+        )?;
+    }
+
+    // Insert the internal circuits.
+    {
+        // hashes_1
+        mesh = mesh.register_circuit(
+            hashes_1::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params, log2_circuits),
+        )?;
+
+        // hashes_2
+        mesh = mesh.register_circuit(
+            hashes_2::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params),
+        )?;
+
+        // fold
+        mesh = mesh.register_circuit(fold::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new())?;
+
+        // compute_c
+        mesh = mesh
+            .register_circuit(compute_c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new())?;
+
+        // compute_v
+        mesh = mesh.register_circuit(compute_v::Circuit::<C, R, HEADER_SIZE>::new())?;
+    }
+
+    // Insert the stages.
+    {
+        // preamble stage
+        mesh = mesh.register_circuit_object(
+            stages::native::preamble::Stage::<C, R, HEADER_SIZE>::into_object()?,
+        )?;
+
+        // error_m stage
+        mesh = mesh.register_circuit_object(stages::native::error_m::Stage::<
+            C,
+            R,
+            HEADER_SIZE,
+            NativeParameters,
+        >::into_object()?)?;
+
+        // error_n stage
+        mesh = mesh.register_circuit_object(stages::native::error_n::Stage::<
+            C,
+            R,
+            HEADER_SIZE,
+            NativeParameters,
+        >::into_object()?)?;
+
+        // query stage
+        mesh = mesh.register_circuit_object(
+            stages::native::query::Stage::<C, R, HEADER_SIZE>::into_object()?,
+        )?;
+
+        // eval stage
+        mesh = mesh.register_circuit_object(
+            stages::native::eval::Stage::<C, R, HEADER_SIZE>::into_object()?,
+        )?;
+    }
 
     // Verify we registered the expected number of circuits.
     assert_eq!(
@@ -182,7 +212,7 @@ mod test_params {
         }
 
         check_constraints!(DummyCircuit,    mul = 1   , lin = 3);
-        check_constraints!(Hashes1Circuit,  mul = 1931, lin = 2800);
+        check_constraints!(Hashes1Circuit,  mul = 1929, lin = 2796);
         check_constraints!(Hashes2Circuit,  mul = 2048, lin = 2951);
         check_constraints!(FoldCircuit,     mul = 1892, lin = 2649);
         check_constraints!(ComputeCCircuit, mul = 1873, lin = 2610);

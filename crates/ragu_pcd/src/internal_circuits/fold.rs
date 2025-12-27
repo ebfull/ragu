@@ -31,8 +31,8 @@ use super::{
 };
 use crate::components::fold_revdot;
 
+pub use crate::internal_circuits::InternalCircuitIndex::ErrorNFinalStaged as STAGED_ID;
 pub use crate::internal_circuits::InternalCircuitIndex::FoldCircuit as CIRCUIT_ID;
-pub use crate::internal_circuits::InternalCircuitIndex::FoldStaged as STAGED_ID;
 
 /// Circuit that verifies layer 1 revdot folding.
 pub struct Circuit<C: Cycle, R, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {

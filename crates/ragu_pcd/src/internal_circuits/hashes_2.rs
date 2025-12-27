@@ -75,8 +75,8 @@ use super::{
 };
 use crate::components::fold_revdot;
 
+pub use crate::internal_circuits::InternalCircuitIndex::ErrorNFinalStaged as STAGED_ID;
 pub use crate::internal_circuits::InternalCircuitIndex::Hashes2Circuit as CIRCUIT_ID;
-pub use crate::internal_circuits::InternalCircuitIndex::Hashes2Staged as STAGED_ID;
 
 /// Second hash circuit for Fiat-Shamir challenge derivation.
 ///
