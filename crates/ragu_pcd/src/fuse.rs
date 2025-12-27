@@ -27,7 +27,7 @@ use crate::{
 };
 
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_SIZE> {
-    /// Fuse two PCD into one using a provided [`Step`].
+    /// Fuse two [`Pcd`] into one using a provided [`Step`].
     ///
     /// ## Parameters
     ///
@@ -39,10 +39,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     /// * `step`: the [`Step`] instance that has been registered in this
     ///   [`Application`].
     /// * `witness`: the witness data for the [`Step`]
-    /// * `left`: the left PCD to fuse in this step; must correspond to the
+    /// * `left`: the left [`Pcd`] to fuse in this step; must correspond to the
     ///   [`Step::Left`] header.
-    /// * `right`: the right PCD to fuse in this step; must correspond to the
-    ///   [`Step::Right`] header.
+    /// * `right`: the right [`Pcd`] to fuse in this step; must correspond to
+    ///   the [`Step::Right`] header.
     pub fn fuse<'source, RNG: Rng, S: Step<C>>(
         &self,
         rng: &mut RNG,
@@ -51,6 +51,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         left: Pcd<'source, C, R, S::Left>,
         right: Pcd<'source, C, R, S::Right>,
     ) -> Result<(Proof<C, R>, S::Aux<'source>)> {
+        // The two proofs being fused are checked simultaneously as part of the
+        // same transcript.
+        let mut dr = Emulator::execute();
+        let mut transcript = Sponge::new(&mut dr, self.params.circuit_poseidon());
+
         // Phase 1: Application circuit.
         let (left, right, application_proof, application_aux) =
             self.compute_application_proof(rng, step, witness, left, right)?;
@@ -63,31 +68,18 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             &application_proof.left_header,
             &application_proof.right_header,
         )?;
-
-        // We now simulate the computation of `w`, the first challenge of the
-        // protocol. The challenges we compute in this manner are produced so as
-        // to simulate the verification of the two proofs simultaneously.
-        //
-        // Create a long-lived emulator and sponge for all challenge derivations
-        let mut dr = Emulator::execute();
-        let mut sponge = Sponge::new(&mut dr, self.params.circuit_poseidon());
-
-        // Derive w = H(nested_preamble_commitment)
         Point::constant(&mut dr, preamble.nested_preamble_commitment)?
-            .write(&mut dr, &mut sponge)?;
-        let w = *sponge.squeeze(&mut dr)?.value().take();
+            .write(&mut dr, &mut transcript)?;
+        let w = *transcript.squeeze(&mut dr)?.value().take();
 
-        // Phase 3: S-prime.
+        // Phase 3: S' commitment to m(w, x_i, Y).
         let s_prime = self.compute_s_prime(rng, w, &left, &right)?;
+        Point::constant(&mut dr, s_prime.nested_s_prime_commitment)?
+            .write(&mut dr, &mut transcript)?;
+        let y = *transcript.squeeze(&mut dr)?.value().take();
+        let z = *transcript.squeeze(&mut dr)?.value().take();
 
-        // Once S' is committed, we can compute the challenges (y, z).
-        //
-        // Derive (y, z) = H(nested_s_prime_commitment).
-        Point::constant(&mut dr, s_prime.nested_s_prime_commitment)?.write(&mut dr, &mut sponge)?;
-        let y = *sponge.squeeze(&mut dr)?.value().take();
-        let z = *sponge.squeeze(&mut dr)?.value().take();
-
-        // Phase 4: K(y) values for the folding claims.
+        // Phase 4: Simulate k(y) values for the folding claims.
         let (
             left_application_ky,
             right_application_ky,
@@ -97,7 +89,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             right_unified_bridge_ky,
         ) = self.compute_ky_values(&preamble_witness, y)?;
 
-        // Phase 5: Mesh WY.
+        // Phase 5: Compute m(w, X, y).
         let mesh_wy = self.compute_mesh_wy(rng, w, y);
 
         // Phase 6: Error M (Layer 1: N instances of M-sized reductions).
@@ -106,16 +98,14 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             (nested_error_m_rx, nested_error_m_blind, nested_error_m_commitment),
             error_m_witness,
         ) = self.compute_error_m(rng, mesh_wy.mesh_wy_commitment)?;
+        Point::constant(&mut dr, nested_error_m_commitment)?.write(&mut dr, &mut transcript)?;
 
-        // Absorb nested_error_m_commitment, save sponge state for bridging.
-        Point::constant(&mut dr, nested_error_m_commitment)?.write(&mut dr, &mut sponge)?;
-
-        // Save sponge state for bridging transcript between hashes_1 and hashes_2
-        let saved_sponge_state = sponge
+        // Save transcript state for bridging transcript between hashes_1 and hashes_2
+        let saved_transcript_state = transcript
             .save_state(&mut dr)
             .expect("save_state should succeed after absorbing");
         // Extract raw field values for the error_n witness
-        let sponge_state_elements = saved_sponge_state
+        let transcript_state_elements = saved_transcript_state
             .clone()
             .into_elements()
             .into_iter()
@@ -123,14 +113,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             .collect_fixed()?;
 
         // Derive (mu, nu) = H(nested_error_m_commitment).
-        let (mu, mut sponge) = Sponge::resume_and_squeeze(
+        let (mu, mut transcript) = Sponge::resume_and_squeeze(
             &mut dr,
-            saved_sponge_state,
+            saved_transcript_state,
             self.params.circuit_poseidon(),
         )?;
         let mu = *mu.value().take();
-        let nu = *sponge.squeeze(&mut dr)?.value().take();
-
+        let nu = *transcript.squeeze(&mut dr)?.value().take();
         // Phase 7: Collapsed values (layer 1 folding).
         let collapsed = self.compute_collapsed(
             &error_m_witness,
@@ -158,13 +147,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             right_unified_ky,
             left_unified_bridge_ky,
             right_unified_bridge_ky,
-            sponge_state_elements,
+            transcript_state_elements,
         )?;
 
         // Derive (mu', nu') = H(nested_error_n_commitment).
-        Point::constant(&mut dr, nested_error_n_commitment)?.write(&mut dr, &mut sponge)?;
-        let mu_prime = *sponge.squeeze(&mut dr)?.value().take();
-        let nu_prime = *sponge.squeeze(&mut dr)?.value().take();
+        Point::constant(&mut dr, nested_error_n_commitment)?.write(&mut dr, &mut transcript)?;
+        let mu_prime = *transcript.squeeze(&mut dr)?.value().take();
+        let nu_prime = *transcript.squeeze(&mut dr)?.value().take();
 
         // Phase 9: Compute C, the folded revdot product claim.w
         let c = self.compute_c(mu_prime, nu_prime, &error_n_witness)?;
@@ -173,8 +162,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let ab = self.compute_ab(rng)?;
 
         // Derive x = H(nested_ab_commitment).
-        Point::constant(&mut dr, ab.nested_ab_commitment)?.write(&mut dr, &mut sponge)?;
-        let x = *sponge.squeeze(&mut dr)?.value().take();
+        Point::constant(&mut dr, ab.nested_ab_commitment)?.write(&mut dr, &mut transcript)?;
+        let x = *transcript.squeeze(&mut dr)?.value().take();
 
         // Phase 11: Mesh XY.
         let mesh_xy = self.compute_mesh_xy(rng, x, y);
@@ -183,22 +172,22 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let query = self.compute_query(rng, mesh_xy.mesh_xy_commitment)?;
 
         // Derive alpha = H(nested_query_commitment).
-        Point::constant(&mut dr, query.nested_query_commitment)?.write(&mut dr, &mut sponge)?;
-        let alpha = *sponge.squeeze(&mut dr)?.value().take();
+        Point::constant(&mut dr, query.nested_query_commitment)?.write(&mut dr, &mut transcript)?;
+        let alpha = *transcript.squeeze(&mut dr)?.value().take();
 
         // Phase 13: F polynomial.
         let f = self.compute_f(rng)?;
 
         // Derive u = H(nested_f_commitment).
-        Point::constant(&mut dr, f.nested_f_commitment)?.write(&mut dr, &mut sponge)?;
-        let u = *sponge.squeeze(&mut dr)?.value().take();
+        Point::constant(&mut dr, f.nested_f_commitment)?.write(&mut dr, &mut transcript)?;
+        let u = *transcript.squeeze(&mut dr)?.value().take();
 
         // Phase 14: Eval.
         let eval = self.compute_eval(rng)?;
 
         // Derive beta = H(nested_eval_commitment).
-        Point::constant(&mut dr, eval.nested_eval_commitment)?.write(&mut dr, &mut sponge)?;
-        let beta = *sponge.squeeze(&mut dr)?.value().take();
+        Point::constant(&mut dr, eval.nested_eval_commitment)?.write(&mut dr, &mut transcript)?;
+        let beta = *transcript.squeeze(&mut dr)?.value().take();
 
         // Phase 15: Unified instance.
         let unified_instance = &unified::Instance {
@@ -329,11 +318,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
     /// Compute the preamble proof.
     ///
-    /// The preamble stage commits to all of the `C::CircuitField` elements
-    /// used as public inputs to the circuits being fused together. This
-    /// includes the unified instance values for both proofs, but also their
-    /// circuit IDs (the ω^j value that corresponds to each element of
-    /// the mesh domain that corresponds to the Step circuit being checked).
+    /// The preamble stage commits to all of the `C::CircuitField` elements used
+    /// as public inputs to the circuits being fused together. This includes the
+    /// unified instance values for both proofs, but also their circuit IDs (the
+    /// ω^j value that corresponds to each element of the mesh domain that
+    /// corresponds to the Step circuit being checked).
     fn compute_preamble<'a, RNG: Rng>(
         &self,
         rng: &mut RNG,

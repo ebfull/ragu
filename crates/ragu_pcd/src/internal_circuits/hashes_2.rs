@@ -80,8 +80,8 @@ pub use crate::internal_circuits::InternalCircuitIndex::Hashes2Staged as STAGED_
 
 /// Second hash circuit for Fiat-Shamir challenge derivation.
 ///
-/// See the [module-level documentation] for details on the operations
-/// performed by this circuit.
+/// See the [module-level documentation] for details on the operations performed
+/// by this circuit.
 ///
 /// [module-level documentation]: self
 pub struct Circuit<'params, C: Cycle, R, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {
@@ -113,6 +113,7 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Para
 pub struct Witness<'a, C: Cycle, FP: fold_revdot::Parameters> {
     /// The unified instance containing expected challenge values.
     pub unified_instance: &'a unified::Instance<C>,
+
     /// Witness for the [`error_n`](super::stages::native::error_n) stage
     /// (unenforced).
     ///

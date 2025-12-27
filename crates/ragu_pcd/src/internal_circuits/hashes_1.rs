@@ -156,21 +156,23 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Para
 
 /// Witness data for the first hash circuit.
 ///
-/// Combines the unified instance with stage witnesses needed to perform
-/// the Fiat-Shamir derivations and $k(y)$ consistency checks.
+/// Combines the unified instance with stage witnesses needed to perform the
+/// Fiat-Shamir derivations and $k(y)$ consistency checks.
 pub struct Witness<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {
     /// The unified instance containing expected challenge values.
     pub unified_instance: &'a unified::Instance<C>,
+
     /// Witness for the [`preamble`](super::stages::native::preamble) stage
     /// (unenforced).
     ///
     /// Provides output headers and data for computing $k(y)$ evaluations.
     pub preamble_witness: &'a native_preamble::Witness<'a, C, R, HEADER_SIZE>,
+
     /// Witness for the [`error_n`](super::stages::native::error_n) stage
     /// (unenforced).
     ///
-    /// Provides the saved sponge state and pre-computed $k(y)$ values
-    /// for consistency verification.
+    /// Provides the saved sponge state and pre-computed $k(y)$ values for
+    /// consistency verification.
     pub error_n_witness: &'a native_error_n::Witness<C, FP>,
 }
 
@@ -285,9 +287,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
                 .enforce_equal(dr, &error_n.sponge_state)?;
         }
 
-        // Output headers from preamble + unified instance.
-        // Verification with `unified_bridge_ky` ensures preamble headers match
-        // ApplicationProof headers.
+        // Output headers from preamble + unified instance. Verification with
+        // `unified_bridge_ky` ensures preamble headers match ApplicationProof
+        // headers.
         let output = Output {
             left_header: preamble.left.output_header,
             right_header: preamble.right.output_header,
