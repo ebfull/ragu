@@ -157,49 +157,37 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         Point::constant(&mut dr, eval.nested_commitment)?.write(&mut dr, &mut transcript)?;
         let beta = *transcript.squeeze(&mut dr)?.value().take();
 
-        // Phase 13: Unified instance.
-        let unified_instance = &unified::Instance {
-            nested_preamble_commitment: preamble.nested_commitment,
+        // Phase 13: Challenges.
+        let challenges = Challenges {
             w,
-            nested_s_prime_commitment: s_prime.nested_s_prime_commitment,
             y,
             z,
-            nested_error_m_commitment: error_m.nested_commitment,
+            c,
             mu,
             nu,
-            nested_error_n_commitment: error_n.nested_commitment,
             mu_prime,
             nu_prime,
-            c,
-            nested_ab_commitment: ab.nested_commitment,
             x,
-            nested_query_commitment: query.nested_commitment,
             alpha,
-            nested_f_commitment: f.nested_commitment,
             u,
-            nested_eval_commitment: eval.nested_commitment,
             beta,
         };
 
         // Phase 14: Internal circuits.
-        let (challenges, circuits) = self.compute_internal_circuits(
+        let circuits = self.compute_internal_circuits(
             rng,
-            unified_instance,
+            &preamble,
+            &s_prime,
+            &error_m,
+            &error_n,
+            &ab,
+            &query,
+            &f,
+            &eval,
             &preamble_witness,
             &error_m_witness,
             &error_n_witness,
-            w,
-            y,
-            z,
-            c,
-            mu,
-            nu,
-            mu_prime,
-            nu_prime,
-            x,
-            alpha,
-            u,
-            beta,
+            &challenges,
         )?;
 
         Ok((
@@ -760,23 +748,43 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     fn compute_internal_circuits<RNG: Rng>(
         &self,
         rng: &mut RNG,
-        unified_instance: &unified::Instance<C>,
+        preamble: &PreambleProof<C, R>,
+        s_prime: &SPrimeProof<C, R>,
+        error_m: &ErrorMProof<C, R>,
+        error_n: &ErrorNProof<C, R>,
+        ab: &ABProof<C, R>,
+        query: &QueryProof<C, R>,
+        f: &FProof<C, R>,
+        eval: &EvalProof<C, R>,
         preamble_witness: &stages::native::preamble::Witness<'_, C, R, HEADER_SIZE>,
         error_m_witness: &stages::native::error_m::Witness<C, NativeParameters>,
         error_n_witness: &stages::native::error_n::Witness<C, NativeParameters>,
-        w: C::CircuitField,
-        y: C::CircuitField,
-        z: C::CircuitField,
-        c: C::CircuitField,
-        mu: C::CircuitField,
-        nu: C::CircuitField,
-        mu_prime: C::CircuitField,
-        nu_prime: C::CircuitField,
-        x: C::CircuitField,
-        alpha: C::CircuitField,
-        u: C::CircuitField,
-        beta: C::CircuitField,
-    ) -> Result<(Challenges<C>, CircuitCommitments<C, R>)> {
+        challenges: &Challenges<C>,
+    ) -> Result<CircuitCommitments<C, R>> {
+        // Build unified instance from proof structs and challenges.
+        let unified_instance = &unified::Instance {
+            nested_preamble_commitment: preamble.nested_commitment,
+            w: challenges.w,
+            nested_s_prime_commitment: s_prime.nested_s_prime_commitment,
+            y: challenges.y,
+            z: challenges.z,
+            nested_error_m_commitment: error_m.nested_commitment,
+            mu: challenges.mu,
+            nu: challenges.nu,
+            nested_error_n_commitment: error_n.nested_commitment,
+            mu_prime: challenges.mu_prime,
+            nu_prime: challenges.nu_prime,
+            c: challenges.c,
+            nested_ab_commitment: ab.nested_commitment,
+            x: challenges.x,
+            nested_query_commitment: query.nested_commitment,
+            alpha: challenges.alpha,
+            nested_f_commitment: f.nested_commitment,
+            u: challenges.u,
+            nested_eval_commitment: eval.nested_commitment,
+            beta: challenges.beta,
+        };
+
         // compute_c staged circuit.
         let (c_rx, _) =
             internal_circuits::compute_c::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new()
@@ -848,22 +856,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let ky_rx_blind = C::CircuitField::random(&mut *rng);
         let ky_rx_commitment = ky_rx.commit(self.params.host_generators(), ky_rx_blind);
 
-        let challenges = Challenges {
-            w,
-            y,
-            z,
-            c,
-            mu,
-            nu,
-            mu_prime,
-            nu_prime,
-            x,
-            alpha,
-            u,
-            beta,
-        };
-
-        let circuits = CircuitCommitments {
+        Ok(CircuitCommitments {
             c_rx,
             c_blind: c_rx_blind,
             c_commitment: c_rx_commitment,
@@ -879,8 +872,6 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             ky_rx,
             ky_blind: ky_rx_blind,
             ky_commitment: ky_rx_commitment,
-        };
-
-        Ok((challenges, circuits))
+        })
     }
 }
