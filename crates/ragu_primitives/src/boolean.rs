@@ -113,22 +113,22 @@ impl<'dr, D: Driver<'dr>> Boolean<'dr, D> {
 
 /// Returns a boolean indicating whether the element is zero, using the standard
 /// "inverse trick" for zero checking in arithmetic circuits.
-///
-/// We enforce the constraints:
-///
-/// - x * is_zero = 0
-/// - x * inv = 1 - is_zero
-///
-/// Given `x != 0`, the first constraint guarantees `is_zero = 0` as desired.
-/// Given `x == 0`, the first constraint leaves `is_zero` unconstrained, but
-/// the second constraint reduces to `0 = 1 - is_zero`, which reduces to
-/// `is_zero = 1`, as desired. `inv` always has a solution, meaning it is
-/// complete. By construction, `is_zero` is boolean constrained for all
-/// satisfying assignments of these two constraints.
 pub(crate) fn is_zero<'dr, D: Driver<'dr>>(
     dr: &mut D,
     x: &Element<'dr, D>,
 ) -> Result<Boolean<'dr, D>> {
+    // We enforce the constraints:
+    //
+    // - x * is_zero = 0
+    // - x * inv = 1 - is_zero
+    //
+    // Given `x != 0`, the first constraint guarantees `is_zero = 0` as desired.
+    // Given `x == 0`, the first constraint leaves `is_zero` unconstrained, but
+    // the second constraint reduces to `0 = 1 - is_zero`, which reduces to
+    // `is_zero = 1`, as desired. `inv` always has a solution, meaning it is
+    // complete. By construction, `is_zero` is boolean constrained for all
+    // satisfying assignments of these two constraints.
+
     let is_zero = x.value().map(|v| *v == D::F::ZERO);
 
     // Constraint 1: x * is_zero = 0.
