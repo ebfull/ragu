@@ -80,18 +80,18 @@ impl<'dr, D: Driver<'dr>> Boolean<'dr, D> {
     }
 
     /// Selects between two elements based on this boolean's value.
-    /// Returns `if_true` when true, `if_false` when false.
+    /// Returns `a` when false, `b` when true.
     /// This costs one multiplication constraint and two linear constraints.
-    pub fn select(
+    pub fn conditional_select(
         &self,
         dr: &mut D,
-        if_true: &Element<'dr, D>,
-        if_false: &Element<'dr, D>,
+        a: &Element<'dr, D>,
+        b: &Element<'dr, D>,
     ) -> Result<Element<'dr, D>> {
-        // Result = if_false + cond * (if_true - if_false)
-        let diff = if_true.sub(dr, if_false);
+        // Result = a + cond * (b - a)
+        let diff = b.sub(dr, a);
         let cond_times_diff = self.element().mul(dr, &diff)?;
-        Ok(if_false.add(dr, &cond_times_diff))
+        Ok(a.add(dr, &cond_times_diff))
     }
 
     /// Returns the witness value of this boolean.
@@ -255,30 +255,32 @@ fn test_boolean_alloc() -> Result<()> {
 }
 
 #[test]
-fn test_select() -> Result<()> {
+fn test_conditional_select() -> Result<()> {
     type F = ragu_pasta::Fp;
     type Simulator = crate::Simulator<F>;
 
+    // condition = true (returns b)
     Simulator::simulate((true, F::from(1u64), F::from(2u64)), |dr, witness| {
         let (cond, a, b) = witness.cast();
         let cond = Boolean::alloc(dr, cond)?;
         let a = Element::alloc(dr, a)?;
         let b = Element::alloc(dr, b)?;
 
-        let result = cond.select(dr, &a, &b)?;
-        assert_eq!(*result.value().take(), F::from(1u64));
+        let result = cond.conditional_select(dr, &a, &b)?;
+        assert_eq!(*result.value().take(), F::from(2u64));
 
         Ok(())
     })?;
 
+    // condition = false (returns a)
     Simulator::simulate((false, F::from(1u64), F::from(2u64)), |dr, witness| {
         let (cond, a, b) = witness.cast();
         let cond = Boolean::alloc(dr, cond)?;
         let a = Element::alloc(dr, a)?;
         let b = Element::alloc(dr, b)?;
 
-        let result = cond.select(dr, &a, &b)?;
-        assert_eq!(*result.value().take(), F::from(2u64));
+        let result = cond.conditional_select(dr, &a, &b)?;
+        assert_eq!(*result.value().take(), F::from(1u64));
 
         Ok(())
     })?;
