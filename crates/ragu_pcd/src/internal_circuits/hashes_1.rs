@@ -98,8 +98,8 @@ use super::{
 };
 use crate::components::{fold_revdot, root_of_unity, suffix::Suffix};
 
+pub use crate::internal_circuits::InternalCircuitIndex::ErrorNFinalStaged as STAGED_ID;
 pub use crate::internal_circuits::InternalCircuitIndex::Hashes1Circuit as CIRCUIT_ID;
-pub use crate::internal_circuits::InternalCircuitIndex::Hashes1Staged as STAGED_ID;
 
 /// Public output of the first hash circuit.
 ///
@@ -130,7 +130,7 @@ pub struct Output<'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize> {
 ///
 /// [module-level documentation]: self
 pub struct Circuit<'params, C: Cycle, R, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {
-    params: &'params C,
+    params: &'params C::Params,
     log2_circuits: u32,
     _marker: PhantomData<(R, FP)>,
 }
@@ -145,7 +145,7 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Para
     /// - `params`: Curve cycle parameters providing Poseidon configuration.
     /// - `log2_circuits`: Log₂ of the mesh domain size (number of circuits).
     ///   Used to verify circuit IDs are valid roots of unity.
-    pub fn new(params: &'params C, log2_circuits: u32) -> Staged<C::CircuitField, R, Self> {
+    pub fn new(params: &'params C::Params, log2_circuits: u32) -> Staged<C::CircuitField, R, Self> {
         Staged::new(Circuit {
             params,
             log2_circuits,
@@ -156,21 +156,23 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Para
 
 /// Witness data for the first hash circuit.
 ///
-/// Combines the unified instance with stage witnesses needed to perform
-/// the Fiat-Shamir derivations and $k(y)$ consistency checks.
+/// Combines the unified instance with stage witnesses needed to perform the
+/// Fiat-Shamir derivations and $k(y)$ consistency checks.
 pub struct Witness<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {
     /// The unified instance containing expected challenge values.
     pub unified_instance: &'a unified::Instance<C>,
+
     /// Witness for the [`preamble`](super::stages::native::preamble) stage
     /// (unenforced).
     ///
     /// Provides output headers and data for computing $k(y)$ evaluations.
     pub preamble_witness: &'a native_preamble::Witness<'a, C, R, HEADER_SIZE>,
+
     /// Witness for the [`error_n`](super::stages::native::error_n) stage
     /// (unenforced).
     ///
-    /// Provides the saved sponge state and pre-computed $k(y)$ values
-    /// for consistency verification.
+    /// Provides the saved sponge state and pre-computed $k(y)$ values for
+    /// consistency verification.
     pub error_n_witness: &'a native_error_n::Witness<C, FP>,
 }
 
@@ -224,7 +226,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
         let mut unified_output = OutputBuilder::new();
 
         // Create a single long-lived sponge for all challenge derivations
-        let mut sponge = Sponge::new(dr, self.params.circuit_poseidon());
+        let mut sponge = Sponge::new(dr, C::circuit_poseidon(self.params));
 
         // Derive w by absorbing nested_preamble_commitment and squeezing
         let w = {
@@ -285,9 +287,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
                 .enforce_equal(dr, &error_n.sponge_state)?;
         }
 
-        // Output headers from preamble + unified instance.
-        // Verification with `unified_bridge_ky` ensures preamble headers match
-        // ApplicationProof headers.
+        // Output headers from preamble + unified instance. Verification with
+        // `unified_bridge_ky` ensures preamble headers match ApplicationProof
+        // headers.
         let output = Output {
             left_header: preamble.left.output_header,
             right_header: preamble.right.output_header,

@@ -31,8 +31,8 @@ use super::{
 };
 use crate::components::fold_revdot;
 
-pub use crate::internal_circuits::InternalCircuitIndex::FoldCircuit as CIRCUIT_ID;
-pub use crate::internal_circuits::InternalCircuitIndex::FoldStaged as STAGED_ID;
+pub use crate::internal_circuits::InternalCircuitIndex::ErrorNFinalStaged as STAGED_ID;
+pub use crate::internal_circuits::InternalCircuitIndex::PartialCollapseCircuit as CIRCUIT_ID;
 
 /// Circuit that verifies layer 1 revdot folding.
 pub struct Circuit<C: Cycle, R, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {
@@ -42,7 +42,7 @@ pub struct Circuit<C: Cycle, R, const HEADER_SIZE: usize, FP: fold_revdot::Param
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
     Circuit<C, R, HEADER_SIZE, FP>
 {
-    /// Create a new ky circuit.
+    /// Create a new partial collapse circuit.
     pub fn new() -> Staged<C::CircuitField, R, Self> {
         Staged::new(Circuit {
             _marker: PhantomData,
@@ -50,7 +50,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
     }
 }
 
-/// Witness for the ky circuit.
+/// Witness for the partial collapse circuit.
 pub struct Witness<'a, C: Cycle, FP: fold_revdot::Parameters> {
     /// The unified instance containing challenges.
     pub unified_instance: &'a unified::Instance<C>,

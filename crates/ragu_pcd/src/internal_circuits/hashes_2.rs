@@ -75,17 +75,17 @@ use super::{
 };
 use crate::components::fold_revdot;
 
+pub use crate::internal_circuits::InternalCircuitIndex::ErrorNFinalStaged as STAGED_ID;
 pub use crate::internal_circuits::InternalCircuitIndex::Hashes2Circuit as CIRCUIT_ID;
-pub use crate::internal_circuits::InternalCircuitIndex::Hashes2Staged as STAGED_ID;
 
 /// Second hash circuit for Fiat-Shamir challenge derivation.
 ///
-/// See the [module-level documentation] for details on the operations
-/// performed by this circuit.
+/// See the [module-level documentation] for details on the operations performed
+/// by this circuit.
 ///
 /// [module-level documentation]: self
 pub struct Circuit<'params, C: Cycle, R, const HEADER_SIZE: usize, FP: fold_revdot::Parameters> {
-    params: &'params C,
+    params: &'params C::Params,
     _marker: PhantomData<(R, FP)>,
 }
 
@@ -97,7 +97,7 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Para
     /// # Parameters
     ///
     /// - `params`: Curve cycle parameters providing Poseidon configuration.
-    pub fn new(params: &'params C) -> Staged<C::CircuitField, R, Self> {
+    pub fn new(params: &'params C::Params) -> Staged<C::CircuitField, R, Self> {
         Staged::new(Circuit {
             params,
             _marker: PhantomData,
@@ -113,6 +113,7 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Para
 pub struct Witness<'a, C: Cycle, FP: fold_revdot::Parameters> {
     /// The unified instance containing expected challenge values.
     pub unified_instance: &'a unified::Instance<C>,
+
     /// Witness for the [`error_n`](super::stages::native::error_n) stage
     /// (unenforced).
     ///
@@ -166,7 +167,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
         // Resume sponge from saved state (error_m already absorbed in hashes_1)
         // and squeeze mu (first challenge from error_m absorption)
         let (mu, mut sponge) =
-            Sponge::resume_and_squeeze(dr, error_n.sponge_state, self.params.circuit_poseidon())?;
+            Sponge::resume_and_squeeze(dr, error_n.sponge_state, C::circuit_poseidon(self.params))?;
         unified_output.mu.set(mu);
 
         // Squeeze nu (second challenge from error_m absorption)

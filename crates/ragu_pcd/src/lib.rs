@@ -79,11 +79,24 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         Ok(self)
     }
 
+    /// Register `count` trivial circuits to simulate application steps.
+    ///
+    /// This is useful for testing internal circuit behavior with a non-zero
+    /// number of application steps, without needing real [`Step`] implementations.
+    #[cfg(test)]
+    pub(crate) fn register_dummy_circuits(mut self, count: usize) -> Result<Self> {
+        for _ in 0..count {
+            self.circuit_mesh = self.circuit_mesh.register_circuit(())?;
+            self.num_application_steps += 1;
+        }
+        Ok(self)
+    }
+
     /// Perform finalization and optimization steps to produce the
     /// [`Application`].
     pub fn finalize(
         mut self,
-        params: &'params C,
+        params: &'params C::Params,
     ) -> Result<Application<'params, C, R, HEADER_SIZE>> {
         // First, insert all of the internal steps.
         self.circuit_mesh =
@@ -116,7 +129,7 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         }
 
         Ok(Application {
-            circuit_mesh: self.circuit_mesh.finalize(params.circuit_poseidon())?,
+            circuit_mesh: self.circuit_mesh.finalize(C::circuit_poseidon(params))?,
             params,
             num_application_steps: self.num_application_steps,
             _marker: PhantomData,
@@ -144,7 +157,7 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
 /// The recursion context that is used to create and verify proof-carrying data.
 pub struct Application<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize> {
     circuit_mesh: Mesh<'params, C::CircuitField, R>,
-    params: &'params C,
+    params: &'params C::Params,
     num_application_steps: usize,
     _marker: PhantomData<[(); HEADER_SIZE]>,
 }
