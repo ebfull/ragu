@@ -42,10 +42,6 @@ runs:
 
     - id: cargo-cache
       name: Cache cargo (restore)
-      # TODO: remove next line after working again
-      #  temporarily work around https://github.com/actions/runner-images/issues/13341
-      #  by disabling caching for macOS
-      if: runner.os != 'macos'
       uses: actions/cache@v4
       with:
         path: |
@@ -55,7 +51,7 @@ runs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('rust-toolchain.toml', 'rust-toolchain') }}-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Cache dependency builds
-      if: steps.cargo-cache.outputs.cache-hit != 'true' && runner.os != 'macos'
+      if: steps.cargo-cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         set -euo pipefail
