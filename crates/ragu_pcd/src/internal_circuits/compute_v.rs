@@ -96,7 +96,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> StagedCircuit<C::CircuitField,
         let z = unified_output.z.get(dr, unified_instance)?;
         let x = unified_output.x.get(dr, unified_instance)?;
 
-        let _txz = dr.routine(Evaluate::new(R::RANK), (x.clone(), z))?;
+        let _txz = dr.routine(Evaluate::new(R::RANK), (x.clone(), z.clone()))?;
 
         // Enforce the claimed value `v` in the unified instance is correctly
         // computed based on committed evaluation claims and verifier
@@ -106,8 +106,16 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> StagedCircuit<C::CircuitField,
             let fu = {
                 let alpha = unified_output.alpha.get(dr, unified_instance)?;
                 let u = unified_output.u.get(dr, unified_instance)?;
-                let denominators =
-                    Denominators::new(dr, &u, &w, &x, &y, &preamble, self.num_application_steps)?;
+                let denominators = Denominators::new(
+                    dr,
+                    &u,
+                    &w,
+                    &x,
+                    &y,
+                    &z,
+                    &preamble,
+                    self.num_application_steps,
+                )?;
                 let mut horner = Horner::new(dr, &alpha);
                 for (pu, v, denominator) in poly_queries(&eval, &query, &preamble, &denominators) {
                     pu.sub(dr, v).mul(dr, denominator)?.write(dr, &mut horner)?;
@@ -168,6 +176,9 @@ struct Denominators<'dr, D: Driver<'dr>> {
     // Child proof circuit_id denominators
     left_circuit_id: Element<'dr, D>,
     right_circuit_id: Element<'dr, D>,
+
+    // xz denominator for circuit polynomial checks
+    xz: Element<'dr, D>,
 }
 
 impl<'dr, D: Driver<'dr>> Denominators<'dr, D> {
@@ -178,6 +189,7 @@ impl<'dr, D: Driver<'dr>> Denominators<'dr, D> {
         w: &Element<'dr, D>,
         x: &Element<'dr, D>,
         y: &Element<'dr, D>,
+        z: &Element<'dr, D>,
         preamble: &native_preamble::Output<'dr, D, C, HEADER_SIZE>,
         num_application_steps: usize,
     ) -> Result<Self>
@@ -190,6 +202,8 @@ impl<'dr, D: Driver<'dr>> Denominators<'dr, D> {
             let omega_j = Element::constant(dr, idx.circuit_index(num_application_steps).omega_j());
             u.sub(dr, &omega_j).invert(dr)
         };
+
+        let xz = x.mul(dr, z)?;
 
         Ok(Denominators {
             left_u:  u.sub(dr, &preamble.left.unified.u).invert(dr)?,
@@ -215,6 +229,7 @@ impl<'dr, D: Driver<'dr>> Denominators<'dr, D> {
             internal_compute_v_circuit:        internal_denom(dr, ComputeVCircuit)?,
             left_circuit_id:  u.sub(dr, &preamble.left.circuit_id).invert(dr)?,
             right_circuit_id: u.sub(dr, &preamble.right.circuit_id).invert(dr)?,
+            xz:              u.sub(dr, &xz).invert(dr)?,
         })
     }
 }
@@ -262,10 +277,46 @@ fn poly_queries<'a, 'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize>(
         (&eval.mesh_xy,            &query.left.new_mesh_xy_at_old_circuit_id,  &d.left_circuit_id),
         (&eval.mesh_xy,            &query.right.new_mesh_xy_at_old_circuit_id, &d.right_circuit_id),
         // Child A/B polynomial queries at current x
-        (&eval.left.a_poly,        &query.left.a_poly_at_x,                    &d.x),
-        (&eval.left.b_poly,        &query.left.b_poly_at_x,                    &d.x),
-        (&eval.right.a_poly,       &query.right.a_poly_at_x,                   &d.x),
-        (&eval.right.b_poly,       &query.right.b_poly_at_x,                   &d.x),
+        (&eval.left.a_poly,           &query.left.a_poly_at_x,           &d.x),
+        (&eval.left.b_poly,           &query.left.b_poly_at_x,           &d.x),
+        (&eval.right.a_poly,          &query.right.a_poly_at_x,          &d.x),
+        (&eval.right.b_poly,          &query.right.b_poly_at_x,          &d.x),
+        // Left child proof stage/circuit polynomials
+        (&eval.left.preamble,         &query.left.preamble_at_x,         &d.x),
+        (&eval.left.error_m,          &query.left.error_m_at_x,          &d.x),
+        (&eval.left.error_n,          &query.left.error_n_at_x,          &d.x),
+        (&eval.left.query,            &query.left.query_at_x,            &d.x),
+        (&eval.left.eval,             &query.left.eval_at_x,             &d.x),
+        (&eval.left.application,      &query.left.application_at_x,      &d.x),
+        (&eval.left.application,      &query.left.application_at_xz,     &d.xz),
+        (&eval.left.hashes_1,         &query.left.hashes_1_at_x,         &d.x),
+        (&eval.left.hashes_1,         &query.left.hashes_1_at_xz,        &d.xz),
+        (&eval.left.hashes_2,         &query.left.hashes_2_at_x,         &d.x),
+        (&eval.left.hashes_2,         &query.left.hashes_2_at_xz,        &d.xz),
+        (&eval.left.partial_collapse, &query.left.partial_collapse_at_x, &d.x),
+        (&eval.left.partial_collapse, &query.left.partial_collapse_at_xz,&d.xz),
+        (&eval.left.full_collapse,    &query.left.full_collapse_at_x,    &d.x),
+        (&eval.left.full_collapse,    &query.left.full_collapse_at_xz,   &d.xz),
+        (&eval.left.compute_v,        &query.left.compute_v_at_x,        &d.x),
+        (&eval.left.compute_v,        &query.left.compute_v_at_xz,       &d.xz),
+        // Right child proof stage/circuit polynomials
+        (&eval.right.preamble,        &query.right.preamble_at_x,        &d.x),
+        (&eval.right.error_m,         &query.right.error_m_at_x,         &d.x),
+        (&eval.right.error_n,         &query.right.error_n_at_x,         &d.x),
+        (&eval.right.query,           &query.right.query_at_x,           &d.x),
+        (&eval.right.eval,            &query.right.eval_at_x,            &d.x),
+        (&eval.right.application,     &query.right.application_at_x,     &d.x),
+        (&eval.right.application,     &query.right.application_at_xz,    &d.xz),
+        (&eval.right.hashes_1,        &query.right.hashes_1_at_x,        &d.x),
+        (&eval.right.hashes_1,        &query.right.hashes_1_at_xz,       &d.xz),
+        (&eval.right.hashes_2,        &query.right.hashes_2_at_x,        &d.x),
+        (&eval.right.hashes_2,        &query.right.hashes_2_at_xz,       &d.xz),
+        (&eval.right.partial_collapse,&query.right.partial_collapse_at_x,&d.x),
+        (&eval.right.partial_collapse,&query.right.partial_collapse_at_xz,&d.xz),
+        (&eval.right.full_collapse,   &query.right.full_collapse_at_x,   &d.x),
+        (&eval.right.full_collapse,   &query.right.full_collapse_at_xz,  &d.xz),
+        (&eval.right.compute_v,       &query.right.compute_v_at_x,       &d.x),
+        (&eval.right.compute_v,       &query.right.compute_v_at_xz,      &d.xz),
     ]
     .into_iter()
 }

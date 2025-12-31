@@ -1050,8 +1050,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         let w = *w.value().take();
         let y = *y.value().take();
-        let _z = *z.value().take();
+        let z = *z.value().take();
         let x = *x.value().take();
+        let xz = x * z;
         let alpha = *alpha.value().take();
 
         let omega_j = |idx: InternalCircuitIndex| -> C::CircuitField {
@@ -1107,6 +1108,42 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             factor_iter(left.ab.b_poly.iter_coeffs(), x),
             factor_iter(right.ab.a_poly.iter_coeffs(), x),
             factor_iter(right.ab.b_poly.iter_coeffs(), x),
+            // Left child proof stage/circuit polynomials
+            factor_iter(left.preamble.stage_rx.iter_coeffs(), x),
+            factor_iter(left.error_m.stage_rx.iter_coeffs(), x),
+            factor_iter(left.error_n.stage_rx.iter_coeffs(), x),
+            factor_iter(left.query.stage_rx.iter_coeffs(), x),
+            factor_iter(left.eval.stage_rx.iter_coeffs(), x),
+            factor_iter(left.application.rx.iter_coeffs(), x),
+            factor_iter(left.application.rx.iter_coeffs(), xz),
+            factor_iter(left.circuits.hashes_1_rx.iter_coeffs(), x),
+            factor_iter(left.circuits.hashes_1_rx.iter_coeffs(), xz),
+            factor_iter(left.circuits.hashes_2_rx.iter_coeffs(), x),
+            factor_iter(left.circuits.hashes_2_rx.iter_coeffs(), xz),
+            factor_iter(left.circuits.partial_collapse_rx.iter_coeffs(), x),
+            factor_iter(left.circuits.partial_collapse_rx.iter_coeffs(), xz),
+            factor_iter(left.circuits.full_collapse_rx.iter_coeffs(), x),
+            factor_iter(left.circuits.full_collapse_rx.iter_coeffs(), xz),
+            factor_iter(left.circuits.compute_v_rx.iter_coeffs(), x),
+            factor_iter(left.circuits.compute_v_rx.iter_coeffs(), xz),
+            // Right child proof stage/circuit polynomials
+            factor_iter(right.preamble.stage_rx.iter_coeffs(), x),
+            factor_iter(right.error_m.stage_rx.iter_coeffs(), x),
+            factor_iter(right.error_n.stage_rx.iter_coeffs(), x),
+            factor_iter(right.query.stage_rx.iter_coeffs(), x),
+            factor_iter(right.eval.stage_rx.iter_coeffs(), x),
+            factor_iter(right.application.rx.iter_coeffs(), x),
+            factor_iter(right.application.rx.iter_coeffs(), xz),
+            factor_iter(right.circuits.hashes_1_rx.iter_coeffs(), x),
+            factor_iter(right.circuits.hashes_1_rx.iter_coeffs(), xz),
+            factor_iter(right.circuits.hashes_2_rx.iter_coeffs(), x),
+            factor_iter(right.circuits.hashes_2_rx.iter_coeffs(), xz),
+            factor_iter(right.circuits.partial_collapse_rx.iter_coeffs(), x),
+            factor_iter(right.circuits.partial_collapse_rx.iter_coeffs(), xz),
+            factor_iter(right.circuits.full_collapse_rx.iter_coeffs(), x),
+            factor_iter(right.circuits.full_collapse_rx.iter_coeffs(), xz),
+            factor_iter(right.circuits.compute_v_rx.iter_coeffs(), x),
+            factor_iter(right.circuits.compute_v_rx.iter_coeffs(), xz),
         ];
 
         let mut coeffs = Vec::new();
