@@ -59,7 +59,7 @@ fn off_diagonal_pairs(n: usize) -> impl Iterator<Item = (usize, usize)> {
 }
 
 /// Returns an iterator over all (i, j) pairs with a boolean indicating if diagonal.
-fn matrix_pairs(n: usize) -> impl Iterator<Item = (usize, usize, bool)> {
+fn cartesian_products(n: usize) -> impl Iterator<Item = (usize, usize, bool)> {
     (0..n).flat_map(move |i| (0..n).map(move |j| (i, j, i == j)))
 }
 
@@ -218,7 +218,7 @@ fn fold_products_impl<'dr, D: Driver<'dr>, S: Len>(
     let mut col_power = row_power.clone();
 
     let n = S::len();
-    for (i, j, is_diagonal) in matrix_pairs(n) {
+    for (i, j, is_diagonal) in cartesian_products(n) {
         let term = if is_diagonal {
             ky_values.next().expect("should exist")
         } else {
