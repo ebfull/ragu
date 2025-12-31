@@ -230,7 +230,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         Point::constant(&mut dr, ab.nested_commitment)?.write(&mut dr, &mut transcript)?;
         let x = transcript.squeeze(&mut dr)?;
 
-        let query = self.compute_query(rng, &x, &y)?;
+        let (query, query_witness) = self.compute_query(rng, &x, &y)?;
         Point::constant(&mut dr, query.nested_commitment)?.write(&mut dr, &mut transcript)?;
         let alpha = transcript.squeeze(&mut dr)?;
 
@@ -238,7 +238,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         Point::constant(&mut dr, f.nested_commitment)?.write(&mut dr, &mut transcript)?;
         let u = transcript.squeeze(&mut dr)?;
 
-        let eval = self.compute_eval(rng)?;
+        let (eval, eval_witness) = self.compute_eval(rng)?;
         Point::constant(&mut dr, eval.nested_commitment)?.write(&mut dr, &mut transcript)?;
         let beta = transcript.squeeze(&mut dr)?;
 
@@ -261,6 +261,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             &preamble_witness,
             &error_m_witness,
             &error_n_witness,
+            &query_witness,
+            &eval_witness,
             &challenges,
             v,
         )?;
@@ -543,7 +545,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             );
             ctx.internal_circuit(
                 internal_circuits::compute_v::CIRCUIT_ID,
-                &[&proof.circuits.compute_v_rx],
+                &[
+                    &proof.circuits.compute_v_rx,
+                    &proof.preamble.stage_rx,
+                    &proof.query.stage_rx,
+                    &proof.eval.stage_rx,
+                ],
             );
         }
 
@@ -862,7 +869,10 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         rng: &mut RNG,
         x: &Element<'dr, D>,
         y: &Element<'dr, D>,
-    ) -> Result<QueryProof<C, R>>
+    ) -> Result<(
+        QueryProof<C, R>,
+        internal_circuits::stages::native::query::Witness<C>,
+    )>
     where
         D: Driver<'dr, F = C::CircuitField, MaybeKind = Always<()>>,
     {
@@ -895,17 +905,20 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let nested_blind = C::ScalarField::random(&mut *rng);
         let nested_commitment = nested_rx.commit(C::nested_generators(self.params), nested_blind);
 
-        Ok(QueryProof {
-            mesh_xy_poly,
-            mesh_xy_blind,
-            mesh_xy_commitment,
-            stage_rx,
-            stage_blind,
-            stage_commitment,
-            nested_rx,
-            nested_blind,
-            nested_commitment,
-        })
+        Ok((
+            QueryProof {
+                mesh_xy_poly,
+                mesh_xy_blind,
+                mesh_xy_commitment,
+                stage_rx,
+                stage_blind,
+                stage_commitment,
+                nested_rx,
+                nested_blind,
+                nested_commitment,
+            },
+            query_witness,
+        ))
     }
 
     /// Compute the F polynomial proof.
@@ -933,7 +946,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     }
 
     /// Compute the eval proof.
-    fn compute_eval<RNG: Rng>(&self, rng: &mut RNG) -> Result<EvalProof<C, R>> {
+    fn compute_eval<RNG: Rng>(
+        &self,
+        rng: &mut RNG,
+    ) -> Result<(
+        EvalProof<C, R>,
+        internal_circuits::stages::native::eval::Witness<C::CircuitField>,
+    )> {
         let eval_witness = internal_circuits::stages::native::eval::Witness {
             evals: FixedVec::from_fn(|_| C::CircuitField::todo()),
         };
@@ -951,14 +970,17 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let nested_blind = C::ScalarField::random(&mut *rng);
         let nested_commitment = nested_rx.commit(C::nested_generators(self.params), nested_blind);
 
-        Ok(EvalProof {
-            stage_rx,
-            stage_blind,
-            stage_commitment,
-            nested_rx,
-            nested_blind,
-            nested_commitment,
-        })
+        Ok((
+            EvalProof {
+                stage_rx,
+                stage_blind,
+                stage_commitment,
+                nested_rx,
+                nested_blind,
+                nested_commitment,
+            },
+            eval_witness,
+        ))
     }
 
     /// Compute internal circuits.
@@ -976,6 +998,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         preamble_witness: &stages::native::preamble::Witness<'_, C, R, HEADER_SIZE>,
         error_m_witness: &stages::native::error_m::Witness<C, NativeParameters>,
         error_n_witness: &stages::native::error_n::Witness<C, NativeParameters>,
+        query_witness: &internal_circuits::stages::native::query::Witness<C>,
+        eval_witness: &internal_circuits::stages::native::eval::Witness<C::CircuitField>,
         challenges: &Challenges<C>,
         v: C::CircuitField,
     ) -> Result<CircuitCommitments<C, R>> {
@@ -1077,7 +1101,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // compute_v staged circuit.
         let (compute_v_rx, _) = internal_circuits::compute_v::Circuit::<C, R, HEADER_SIZE>::new()
             .rx::<R>(
-            internal_circuits::compute_v::Witness { unified_instance },
+            internal_circuits::compute_v::Witness {
+                unified_instance,
+                preamble_witness,
+                query_witness,
+                eval_witness,
+            },
             self.circuit_mesh.get_key(),
         )?;
         let compute_v_rx_blind = C::CircuitField::random(&mut *rng);

@@ -30,8 +30,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Circuit<C, R, HEADER_SIZE> {
     }
 }
 
-pub struct Witness<'a, C: Cycle> {
+pub struct Witness<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize> {
     pub unified_instance: &'a unified::Instance<C>,
+    pub preamble_witness: &'a native_preamble::Witness<'a, C, R, HEADER_SIZE>,
+    pub query_witness: &'a native_query::Witness<C>,
+    pub eval_witness: &'a native_eval::Witness<C::CircuitField>,
 }
 
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> StagedCircuit<C::CircuitField, R>
@@ -40,7 +43,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> StagedCircuit<C::CircuitField,
     type Final = native_eval::Stage<C, R, HEADER_SIZE>;
 
     type Instance<'source> = &'source unified::Instance<C>;
-    type Witness<'source> = Witness<'source, C>;
+    type Witness<'source> = Witness<'source, C, R, HEADER_SIZE>;
     type Output = unified::InternalOutputKind<C>;
     type Aux<'source> = ();
 
@@ -66,10 +69,19 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> StagedCircuit<C::CircuitField,
     where
         Self: 'dr,
     {
-        let builder = builder.skip_stage::<native_preamble::Stage<C, R, HEADER_SIZE>>()?;
-        let builder = builder.skip_stage::<native_query::Stage<C, R, HEADER_SIZE>>()?;
-        let builder = builder.skip_stage::<native_eval::Stage<C, R, HEADER_SIZE>>()?;
+        let (preamble, builder) =
+            builder.add_stage::<native_preamble::Stage<C, R, HEADER_SIZE>>()?;
+        let (query, builder) = builder.add_stage::<native_query::Stage<C, R, HEADER_SIZE>>()?;
+        let (eval, builder) = builder.add_stage::<native_eval::Stage<C, R, HEADER_SIZE>>()?;
         let dr = builder.finish();
+
+        let _preamble = preamble.unenforced(dr, witness.view().map(|w| w.preamble_witness))?;
+
+        // TODO: these are unenforced for now, because query/eval stages aren't
+        // supposed to contain anything (yet) besides Elements, which require no
+        // enforcement logic. Re-evaluate this in the future.
+        let _query = query.unenforced(dr, witness.view().map(|w| w.query_witness))?;
+        let _eval = eval.unenforced(dr, witness.view().map(|w| w.eval_witness))?;
 
         let unified_instance = &witness.view().map(|w| w.unified_instance);
         let mut unified_output = OutputBuilder::new();
