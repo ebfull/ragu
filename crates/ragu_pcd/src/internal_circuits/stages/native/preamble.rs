@@ -201,6 +201,14 @@ pub struct Output<'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize> {
     pub right: ProofInputs<'dr, D, C, HEADER_SIZE>,
 }
 
+impl<'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize> Output<'dr, D, C, HEADER_SIZE> {
+    pub fn is_base_case(&self, dr: &mut D) -> Result<Boolean<'dr, D>> {
+        let left_is_trivial = self.left.is_trivial(dr)?;
+        let right_is_trivial = self.right.is_trivial(dr)?;
+        left_is_trivial.and(dr, &right_is_trivial)
+    }
+}
+
 #[derive(Default)]
 pub struct Stage<C: Cycle, R, const HEADER_SIZE: usize> {
     _marker: PhantomData<(C, R)>,

@@ -87,10 +87,6 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
         let unified_instance = &witness.view().map(|w| w.unified_instance);
         let mut unified_output = OutputBuilder::new();
 
-        let left_is_trivial = preamble.left.is_trivial(dr)?;
-        let right_is_trivial = preamble.right.is_trivial(dr)?;
-        let is_base = left_is_trivial.and(dr, &right_is_trivial)?;
-
         // Get mu_prime, nu_prime from unified instance
         let mu_prime = unified_output.mu_prime.get(dr, unified_instance)?;
         let nu_prime = unified_output.nu_prime.get(dr, unified_instance)?;
@@ -111,7 +107,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
 
             // When NOT in base case, enforce witnessed_c == computed_c.
             // In base case (both children trivial), prover may witness any c value.
-            is_base
+            preamble
+                .is_base_case(dr)?
                 .not(dr)
                 .conditional_enforce_equal(dr, &witnessed_c, &computed_c)?;
         }
