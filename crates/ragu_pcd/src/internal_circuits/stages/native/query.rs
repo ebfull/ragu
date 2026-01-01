@@ -12,7 +12,7 @@ use ragu_core::{
     gadgets::{Gadget, GadgetKind, Kind},
     maybe::Maybe,
 };
-use ragu_primitives::{Element, io::Write};
+use ragu_primitives::Element;
 
 use core::marker::PhantomData;
 
@@ -125,7 +125,7 @@ pub struct Witness<C: Cycle> {
 }
 
 /// Evaluations of mesh_xy at each internal circuit's circuit_id (omega^j).
-#[derive(Gadget, Write)]
+#[derive(Gadget)]
 pub struct FixedMeshEvaluations<'dr, D: Driver<'dr>> {
     #[ragu(gadget)]
     pub preamble_stage: Element<'dr, D>,
@@ -183,7 +183,7 @@ impl<'dr, D: Driver<'dr>> FixedMeshEvaluations<'dr, D> {
 }
 
 /// Gadget for a child proof's polynomial evaluations.
-#[derive(Gadget, Write)]
+#[derive(Gadget)]
 pub struct ChildEvaluations<'dr, D: Driver<'dr>> {
     #[ragu(gadget)]
     pub preamble_at_x: Element<'dr, D>,
@@ -295,7 +295,7 @@ impl<'dr, D: Driver<'dr>> ChildEvaluations<'dr, D> {
 }
 
 /// Output gadget for the query stage.
-#[derive(Gadget, Write)]
+#[derive(Gadget)]
 pub struct Output<'dr, D: Driver<'dr>> {
     /// Fixed mesh evaluations at each internal circuit's omega^j.
     #[ragu(gadget)]
