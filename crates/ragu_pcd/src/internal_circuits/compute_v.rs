@@ -303,89 +303,6 @@ impl<'dr, D: Driver<'dr>> SourceBuilder<'dr, D> {
         }
     }
 
-    fn child(
-        &mut self,
-        dr: &mut D,
-        fixed_mesh: &native_query::FixedMeshEvaluations<'dr, D>,
-        child: &native_query::ChildEvaluations<'dr, D>,
-    ) {
-        self.direct(&child.a_poly_at_x, &child.b_poly_at_x);
-        self.application(
-            dr,
-            &child.application_at_x,
-            &child.application_at_xz,
-            &child.new_mesh_xy_at_old_circuit_id,
-        );
-        self.internal(
-            dr,
-            [
-                &child.hashes_1_at_x,
-                &child.preamble_at_x,
-                &child.error_n_at_x,
-            ],
-            [
-                &child.hashes_1_at_xz,
-                &child.preamble_at_xz,
-                &child.error_n_at_xz,
-            ],
-            &fixed_mesh.hashes_1_circuit,
-        );
-        self.internal(
-            dr,
-            [&child.hashes_2_at_x, &child.error_n_at_x],
-            [&child.hashes_2_at_xz, &child.error_n_at_xz],
-            &fixed_mesh.hashes_2_circuit,
-        );
-        self.internal(
-            dr,
-            [
-                &child.partial_collapse_at_x,
-                &child.preamble_at_x,
-                &child.error_m_at_x,
-                &child.error_n_at_x,
-            ],
-            [
-                &child.partial_collapse_at_xz,
-                &child.preamble_at_xz,
-                &child.error_m_at_xz,
-                &child.error_n_at_xz,
-            ],
-            &fixed_mesh.partial_collapse_circuit,
-        );
-        self.internal(
-            dr,
-            [
-                &child.full_collapse_at_x,
-                &child.preamble_at_x,
-                &child.error_m_at_x,
-                &child.error_n_at_x,
-            ],
-            [
-                &child.full_collapse_at_xz,
-                &child.preamble_at_xz,
-                &child.error_m_at_xz,
-                &child.error_n_at_xz,
-            ],
-            &fixed_mesh.full_collapse_circuit,
-        );
-        self.internal(
-            dr,
-            [
-                &child.compute_v_at_x,
-                &child.preamble_at_x,
-                &child.query_at_x,
-                &child.eval_at_x,
-            ],
-            [
-                &child.compute_v_at_xz,
-                &child.preamble_at_xz,
-                &child.query_at_xz,
-                &child.eval_at_xz,
-            ],
-            &fixed_mesh.compute_v_circuit,
-        );
-    }
-
     fn direct(&mut self, ax_eval: &Element<'dr, D>, bx_eval: &Element<'dr, D>) {
         self.ax.push(ax_eval.clone());
         self.bx.push(bx_eval.clone());
@@ -435,6 +352,12 @@ impl<'dr, D: Driver<'dr>> SourceBuilder<'dr, D> {
     }
 }
 
+/// Computes the expected value of $a(x), b(x)$ given the evaluations at $x$ of
+/// every constituent polynomial at $x, xz$. This function is the authoritative
+/// source of the protocol's (recursive) description of the revdot folding
+/// structure and is what fundamentally binds the prover's behavior in their
+/// choice of $a(X), b(X)$ and thus the correctness of their folded revdot
+/// claim.
 fn compute_axbx<'dr, D: Driver<'dr>, P: Parameters>(
     dr: &mut D,
     query: &native_query::Output<'dr, D>,
@@ -445,52 +368,159 @@ fn compute_axbx<'dr, D: Driver<'dr>, P: Parameters>(
     munu: &Element<'dr, D>,
     mu_prime_nu_prime: &Element<'dr, D>,
 ) -> Result<(Element<'dr, D>, Element<'dr, D>)> {
+    let both = [&query.left, &query.right];
+
     let mut builder = SourceBuilder::new(z.clone(), txz.clone());
 
-    builder.child(dr, &query.fixed_mesh, &query.left);
-    builder.child(dr, &query.fixed_mesh, &query.right);
+    // Process the claims specific to each child proof.
+    for child in both.iter() {
+        // << a_i, b_i >> accumulation.
+        builder.direct(&child.a_poly_at_x, &child.b_poly_at_x);
+
+        // Application circuit check, given the evaluation m(circuit_id_i, x, y)
+        // for adversarially chosen omega^j = circuit_id.
+        builder.application(
+            dr,
+            &child.application_at_x,
+            &child.application_at_xz,
+            &child.new_mesh_xy_at_old_circuit_id,
+        );
+
+        // hashes_1 internal circuit
+        builder.internal(
+            dr,
+            [
+                &child.hashes_1_at_x,
+                &child.preamble_at_x,
+                &child.error_n_at_x,
+            ],
+            [
+                &child.hashes_1_at_xz,
+                &child.preamble_at_xz,
+                &child.error_n_at_xz,
+            ],
+            &query.fixed_mesh.hashes_1_circuit,
+        );
+
+        // hashes_2 internal circuit
+        builder.internal(
+            dr,
+            [&child.hashes_2_at_x, &child.error_n_at_x],
+            [&child.hashes_2_at_xz, &child.error_n_at_xz],
+            &query.fixed_mesh.hashes_2_circuit,
+        );
+
+        // partial_collapse internal circuit
+        builder.internal(
+            dr,
+            [
+                &child.partial_collapse_at_x,
+                &child.preamble_at_x,
+                &child.error_m_at_x,
+                &child.error_n_at_x,
+            ],
+            [
+                &child.partial_collapse_at_xz,
+                &child.preamble_at_xz,
+                &child.error_m_at_xz,
+                &child.error_n_at_xz,
+            ],
+            &query.fixed_mesh.partial_collapse_circuit,
+        );
+
+        // full_collapse internal circuit
+        builder.internal(
+            dr,
+            [
+                &child.full_collapse_at_x,
+                &child.preamble_at_x,
+                &child.error_m_at_x,
+                &child.error_n_at_x,
+            ],
+            [
+                &child.full_collapse_at_xz,
+                &child.preamble_at_xz,
+                &child.error_m_at_xz,
+                &child.error_n_at_xz,
+            ],
+            &query.fixed_mesh.full_collapse_circuit,
+        );
+
+        // compute_v internal circuit (recursively!)
+        builder.internal(
+            dr,
+            [
+                &child.compute_v_at_x,
+                &child.preamble_at_x,
+                &child.query_at_x,
+                &child.eval_at_x,
+            ],
+            [
+                &child.compute_v_at_xz,
+                &child.preamble_at_xz,
+                &child.query_at_xz,
+                &child.eval_at_xz,
+            ],
+            &query.fixed_mesh.compute_v_circuit,
+        );
+    }
+
+    // Stage checks; these each share the same revdot claim because they're of
+    // the form << r_i, s >> = 0.
+
+    // ErrorNFinalStaged
     builder.stage(
         dr,
-        [
-            &query.left.hashes_1_at_x,
-            &query.left.hashes_2_at_x,
-            &query.left.partial_collapse_at_x,
-            &query.left.full_collapse_at_x,
-            &query.right.hashes_1_at_x,
-            &query.right.hashes_2_at_x,
-            &query.right.partial_collapse_at_x,
-            &query.right.full_collapse_at_x,
-        ],
+        both.iter().flat_map(|child| {
+            [
+                &child.hashes_1_at_x,
+                &child.hashes_2_at_x,
+                &child.partial_collapse_at_x,
+                &child.full_collapse_at_x,
+            ]
+        }),
         &query.fixed_mesh.error_n_final_staged,
     )?;
+
+    // EvalFinalStaged
     builder.stage(
         dr,
-        [&query.left.compute_v_at_x, &query.right.compute_v_at_x],
+        both.iter().map(|child| &child.compute_v_at_x),
         &query.fixed_mesh.eval_final_staged,
     )?;
+
+    // PreambleStage (stages::native::preamble)
     builder.stage(
         dr,
-        [&query.left.preamble_at_x, &query.right.preamble_at_x],
+        both.iter().map(|child| &child.preamble_at_x),
         &query.fixed_mesh.preamble_stage,
     )?;
+
+    // ErrorMStage (stages::native::error_m)
     builder.stage(
         dr,
-        [&query.left.error_m_at_x, &query.right.error_m_at_x],
+        both.iter().map(|child| &child.error_m_at_x),
         &query.fixed_mesh.error_m_stage,
     )?;
+
+    // ErrorNStage (stages::native::error_n)
     builder.stage(
         dr,
-        [&query.left.error_n_at_x, &query.right.error_n_at_x],
+        both.iter().map(|child| &child.error_n_at_x),
         &query.fixed_mesh.error_n_stage,
     )?;
+
+    // QueryStage (stages::native::query)
     builder.stage(
         dr,
-        [&query.left.query_at_x, &query.right.query_at_x],
+        both.iter().map(|child| &child.query_at_x),
         &query.fixed_mesh.query_stage,
     )?;
+
+    // EvalStage (stages::native::eval)
     builder.stage(
         dr,
-        [&query.left.eval_at_x, &query.right.eval_at_x],
+        both.iter().map(|child| &child.eval_at_x),
         &query.fixed_mesh.eval_stage,
     )?;
 
