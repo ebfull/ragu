@@ -200,6 +200,7 @@ pub struct Output<'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize> {
 }
 
 impl<'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize> Output<'dr, D, C, HEADER_SIZE> {
+    /// Returns true if both child proofs are trivial proofs.
     pub fn is_base_case(&self, dr: &mut D) -> Result<Boolean<'dr, D>> {
         let left_is_trivial = self.left.is_trivial(dr)?;
         let right_is_trivial = self.right.is_trivial(dr)?;

@@ -84,7 +84,13 @@ const NUM_EVALS_PER_CHILD_PROOF: usize = 15;
 /// The number of evaluations at `u` for the current fuse step's polynomials.
 const NUM_EVALS_FOR_CURRENT_STEP: usize = 6;
 
-/// Output gadget for a single child proof's polynomial evaluations at `u`.
+/// Committed (claimed) polynomial evaluations at $u$ (from the parent fuse
+/// operation) for an individual child proof.
+///
+/// Note: The order of elements in this struct affects the expected evaluation
+/// of $v = p(u)$, via the [`Write`] implementation, since it defines the order
+/// of the coefficients for the weighted sum with $\beta$ via
+/// [`Horner`](crate::components::horner::Horner) evaluation.
 #[derive(Gadget, Write)]
 pub struct ChildEvaluations<'dr, D: Driver<'dr>> {
     #[ragu(gadget)]
