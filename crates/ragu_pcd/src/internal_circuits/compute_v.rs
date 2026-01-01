@@ -12,8 +12,7 @@ use ragu_core::{
 use ragu_primitives::{Element, GadgetExt, vec::Len};
 
 use alloc::vec::Vec;
-use core::borrow::Borrow;
-use core::marker::PhantomData;
+use core::{borrow::Borrow, iter, marker::PhantomData};
 
 use crate::components::fold_revdot::{NativeParameters, Parameters};
 
@@ -326,7 +325,6 @@ impl<'dr, D: Driver<'dr>> SourceBuilder<'dr, D> {
         bx_evals: impl IntoIterator<Item = &'b Element<'dr, D>>,
         bx_mesh: &'b Element<'dr, D>,
     ) {
-        use core::iter;
         self.ax.push(Element::sum(dr, ax_evals));
         self.bx.push(Element::sum(
             dr,
