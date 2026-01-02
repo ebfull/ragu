@@ -81,7 +81,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let w = transcript.squeeze(&mut dr)?;
 
         // After the `w` challenge is selected, we can evaluate m(w, x_i, Y) for
-        // both x_i (old proof challenges) and commit to them, to later
+        // both x_i (child proof challenges) and commit to them, to later
         // reduce/fold their consistency checks together.
         let s_prime = self.compute_s_prime(rng, &w, &left, &right)?;
         Point::constant(&mut dr, s_prime.nested_s_prime_commitment)?
@@ -93,15 +93,14 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // `error_m` stage which commits to:
         // 1. m(w, X, y) (mesh_wy)
         // 2. The first layer of the error terms for revdot products
-        // 3. The k(y) evaluations for the left and right proofs
         //
         // Crucially, by now every component of every revdot product claim being
         // folded has been committed to the transcript. Each proof's circuits
         // (via commitments) have been committed in the preamble stage (as part
-        // of the `nested_preamble_commitment`) and nested commitments to the
-        // remaining components (stage commitments, interstitial polynomials for
-        // things like s_prime or f(X)) are committed in the native preamble
-        // stage because they are also part of the unified instance.
+        // of the `nested_preamble_commitment`). Each proof's remaining nested
+        // commitments (stage commitments, interstitial polynomials like
+        // s_prime and f(X)) are witnessed from their unified instances and
+        // committed via the preamble stage.
         let (error_m, error_m_witness, prover_context) =
             self.compute_errors_m(rng, &w, &y, &z, &left, &right)?;
         Point::constant(&mut dr, error_m.nested_commitment)?.write(&mut dr, &mut transcript)?;
@@ -147,7 +146,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         Point::constant(&mut dr, ab.nested_commitment)?.write(&mut dr, &mut transcript)?;
         let x = transcript.squeeze(&mut dr)?;
 
-        // We can now commit to s(W, x, y), and the evaluations at x, xz, etc.
+        // We can now commit to m(W, x, y), and the evaluations at x, xz, etc.
         // that are needed to recompute the expected evaluation of the claimed
         // A/B polynomials.
         let (query, query_witness) =
@@ -186,7 +185,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         );
 
         // Compute the internal circuits that certify the correctness of the
-        // transcript simultated thus far.
+        // transcript simulated thus far.
         let circuits = self.compute_internal_circuits(
             rng,
             &preamble,

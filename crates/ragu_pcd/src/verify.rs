@@ -44,7 +44,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         // Validate that the `left_header` and `right_header` lengths match
         // `HEADER_SIZE`. Alternatively, the `Proof` structure could be
-        // parameterized on ths `HEADER_SIZE`, but this appeared to be simpler.
+        // parameterized on the `HEADER_SIZE`, but this appeared to be simpler.
         if pcd.proof.application.left_header.len() != HEADER_SIZE
             || pcd.proof.application.right_header.len() != HEADER_SIZE
         {
