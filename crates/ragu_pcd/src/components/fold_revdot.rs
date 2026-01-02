@@ -5,8 +5,11 @@ use ragu_circuits::polynomials::{Rank, structured};
 use ragu_core::{Result, drivers::Driver};
 use ragu_primitives::{
     Element,
+    io::Buffer,
     vec::{CollectFixed, ConstLen, FixedVec, Len},
 };
+
+use super::horner::Horner;
 
 use core::{borrow::Borrow, iter, marker::PhantomData};
 
@@ -17,8 +20,8 @@ use core::{borrow::Borrow, iter, marker::PhantomData};
 /// revdot reduction.
 ///
 /// The parameters here collapse as much as $m \cdot n$ claims into a single
-/// claim using roughly $f(m, n) = 2nm^2 + 2n^2 - n + 3$ multiplication
-/// constraints.
+/// claim using roughly $f(m, n) = nm^2 + n^2 - n + 3$ multiplication
+/// constraints (using nested Horner evaluation).
 pub trait Parameters: 'static + Send + Sync + Clone + Copy + Default {
     type N: Len;
     type M: Len;
@@ -55,12 +58,9 @@ impl<L: Len> Len for ErrorTermsLen<L> {
 
 /// Returns an iterator over off-diagonal (i, j) pairs where i != j.
 fn off_diagonal_pairs(n: usize) -> impl Iterator<Item = (usize, usize)> {
-    (0..n).flat_map(move |i| (0..n).filter_map(move |j| (i != j).then_some((i, j))))
-}
-
-/// Returns an iterator over all (i, j) pairs with a boolean indicating if diagonal.
-fn cartesian_products(n: usize) -> impl Iterator<Item = (usize, usize, bool)> {
-    (0..n).flat_map(move |i| (0..n).map(move |j| (i, j, i == j)))
+    (0..n)
+        .rev()
+        .flat_map(move |i| (0..n).rev().filter_map(move |j| (i != j).then_some((i, j))))
 }
 
 /// Reduction step for polynomials in the first layer of revdot folding.
@@ -85,7 +85,9 @@ pub fn fold_polys_m<F: Field, R: Rank, P: Parameters>(
 
     source
         .chunks(P::M::len())
-        .map(|chunk| structured::Polynomial::fold(chunk.iter().map(Borrow::borrow), scale_factor))
+        .map(|chunk| {
+            structured::Polynomial::fold(chunk.iter().rev().map(Borrow::borrow), scale_factor)
+        })
         .chain(iter::repeat_with(structured::Polynomial::new))
         .take(P::N::len())
         .collect_fixed()
@@ -101,7 +103,7 @@ pub fn fold_polys_n<F: Field, R: Rank, P: Parameters>(
     source: FixedVec<structured::Polynomial<F, R>, P::N>,
     scale_factor: F,
 ) -> structured::Polynomial<F, R> {
-    structured::Polynomial::fold(source.iter(), scale_factor)
+    structured::Polynomial::fold(source.iter().rev(), scale_factor)
 }
 
 /// Error computation for revdot folding.
@@ -213,31 +215,24 @@ fn fold_products_impl<'dr, D: Driver<'dr>, S: Len>(
     let mut error_terms = error_terms.iter();
     let mut ky_values = ky_values.iter();
 
-    let mut result = Element::zero(dr);
-    let mut row_power = Element::one();
-    let mut col_power = row_power.clone();
+    let mut outer_horner = Horner::new(mu_inv);
 
     let n = S::len();
-    for (i, j, is_diagonal) in cartesian_products(n) {
-        let term = if is_diagonal {
-            ky_values.next().expect("should exist")
-        } else {
-            error_terms.next().expect("should exist")
-        };
-
-        let contribution = col_power.mul(dr, term)?;
-        result = result.add(dr, &contribution);
-
-        // Update powers for next iteration.
-        if j < n - 1 {
-            col_power = col_power.mul(dr, munu)?;
-        } else if i < n - 1 {
-            row_power = row_power.mul(dr, mu_inv)?;
-            col_power = row_power.clone();
+    for i in (0..n).rev() {
+        let mut inner_horner = Horner::new(munu);
+        for j in (0..n).rev() {
+            let term = if i == j {
+                ky_values.next().expect("should exist")
+            } else {
+                error_terms.next().expect("should exist")
+            };
+            inner_horner.write(dr, term)?;
         }
+        let row_result = inner_horner.finish(dr);
+        outer_horner.write(dr, &row_result)?;
     }
 
-    Ok(result)
+    Ok(outer_horner.finish(dr))
 }
 
 #[cfg(test)]
@@ -282,7 +277,12 @@ mod tests {
             .collect();
 
         // Compute ky values: diagonal revdot products
-        let ky: Vec<Fp> = lhs.iter().zip(&rhs).map(|(l, r)| l.revdot(r)).collect();
+        let ky: Vec<Fp> = lhs
+            .iter()
+            .zip(&rhs)
+            .map(|(l, r)| l.revdot(r))
+            .rev()
+            .collect();
 
         // Compute error terms using compute_errors_n (single-layer N-sized reduction)
         let error_terms = compute_errors_n::<Fp, TestRank, P>(&lhs, &rhs);
@@ -294,8 +294,8 @@ mod tests {
         let munu = mu * nu;
 
         // Fold polynomials
-        let folded_lhs = structured::Polynomial::fold(lhs.iter(), mu_inv);
-        let folded_rhs = structured::Polynomial::fold(rhs.iter(), munu);
+        let folded_lhs = structured::Polynomial::fold(lhs.iter().rev(), mu_inv);
+        let folded_rhs = structured::Polynomial::fold(rhs.iter().rev(), munu);
 
         // Run routine with Emulator
         let dr = &mut Emulator::execute();
@@ -345,11 +345,11 @@ mod tests {
             Ok(sim.num_multiplications())
         }
 
-        // Formula: 2N^2 + 1
-        assert_eq!(measure::<TestParams<5, 1>>()?, 51);
-        assert_eq!(measure::<TestParams<15, 1>>()?, 451);
-        assert_eq!(measure::<TestParams<30, 1>>()?, 1801);
-        assert_eq!(measure::<TestParams<60, 1>>()?, 7201);
+        // Formula: N^2 + 1
+        assert_eq!(measure::<TestParams<5, 1>>()?, 26);
+        assert_eq!(measure::<TestParams<15, 1>>()?, 226);
+        assert_eq!(measure::<TestParams<30, 1>>()?, 901);
+        assert_eq!(measure::<TestParams<60, 1>>()?, 3601);
 
         Ok(())
     }
@@ -390,20 +390,19 @@ mod tests {
 
             // Compute collapsed values via FoldProducts
             let collapsed: FixedVec<Fp, P::N> =
-                Emulator::emulate_wireless((&error_m, &ky_values, mu, nu), |dr, witness| {
-                    let (error_m, ky_values, mu, nu) = witness.cast();
+                Emulator::emulate_wireless((&error_m, &ky_values, mu, nu, m), |dr, witness| {
+                    let (error_m, ky_values, mu, nu, m) = witness.cast();
                     let mu = Element::alloc(dr, mu)?;
                     let nu = Element::alloc(dr, nu)?;
                     let fold_products = FoldProducts::new(dr, &mu, &nu)?;
 
-                    let mut ky_idx = 0;
+                    let m = m.take();
                     let collapsed = FixedVec::try_from_fn(|group| {
                         let errors = FixedVec::try_from_fn(|j| {
                             Element::alloc(dr, error_m.view().map(|e| e[group][j]))
                         })?;
-                        let ky = FixedVec::try_from_fn(|_| {
-                            let idx = ky_idx;
-                            ky_idx += 1;
+                        let ky = FixedVec::try_from_fn(|idx_in_group| {
+                            let idx = group * m + (m - 1 - idx_in_group);
                             Element::alloc(dr, ky_values.view().map(|kv| kv[idx]))
                         })?;
                         let v = fold_products.fold_products_m::<P>(dr, &errors, &ky)?;
@@ -437,21 +436,23 @@ mod tests {
 
             // Compute final c via FoldProducts
             let final_c: Fp = Emulator::emulate_wireless(
-                (&error_n, &collapsed, mu_prime, nu_prime),
+                (&error_n, &collapsed, mu_prime, nu_prime, n),
                 |dr, witness| {
-                    let (error_n, collapsed, mu_prime, nu_prime) = witness.cast();
+                    let (error_n, collapsed, mu_prime, nu_prime, n) = witness.cast();
                     let mu_prime = Element::alloc(dr, mu_prime)?;
                     let nu_prime = Element::alloc(dr, nu_prime)?;
                     let fold_products = FoldProducts::new(dr, &mu_prime, &nu_prime)?;
 
+                    let n = n.take();
                     let error_terms = FixedVec::try_from_fn(|i| {
                         Element::alloc(dr, error_n.view().map(|e| e[i]))
                     })?;
-                    let collapsed = FixedVec::try_from_fn(|i| {
-                        Element::alloc(dr, collapsed.view().map(|c| c[i]))
+                    let collapsed_desc = FixedVec::try_from_fn(|i| {
+                        Element::alloc(dr, collapsed.view().map(|c| c[n - 1 - i]))
                     })?;
 
-                    let c = fold_products.fold_products_n::<P>(dr, &error_terms, &collapsed)?;
+                    let c =
+                        fold_products.fold_products_n::<P>(dr, &error_terms, &collapsed_desc)?;
                     Ok(*c.value().take())
                 },
             )?;
@@ -477,11 +478,11 @@ mod tests {
 
     /// Computes the number of multiplication constraints for given M, N.
     ///
-    /// Formula: 2NM^2 + 2N^2 - N + 3
-    /// - Layer 1: 2 + N(2M^2 - 1) = 2NM^2 - N + 2
-    /// - Layer 2: 2 + (2N^2 - 1) = 2N^2 + 1
+    /// Formula: NM^2 + N^2 - N + 3
+    /// - Layer 1: 2 + N(M^2 - 1) = NM^2 - N + 2
+    /// - Layer 2: 2 + (N^2 - 1) = N^2 + 1
     fn muls(m: usize, n: usize) -> usize {
-        2 * n * m * m + 2 * n * n - n + 3
+        n * m * m + n * n - n + 3
     }
 
     /// Computes the number of allocations for given M, N.
