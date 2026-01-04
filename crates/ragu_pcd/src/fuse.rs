@@ -14,7 +14,7 @@ use ragu_core::{
 use ragu_primitives::{
     Element, GadgetExt, Point,
     poseidon::Sponge,
-    vec::{CollectFixed, FixedVec, Len},
+    vec::{CollectFixed, FixedVec},
 };
 use rand::Rng;
 
@@ -658,12 +658,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                     let errors = FixedVec::try_from_fn(|j| {
                         Element::alloc(dr, error_terms_m.view().map(|et| et[i][j]))
                     })?;
-                    // Collect M ky elements in ascending order, then reverse for Horner evaluation
-                    let m = <NativeParameters as fold_revdot::Parameters>::M::len();
-                    let ky_vec: Vec<_> = (0..m)
-                        .map(|_| ky_elements.next().unwrap_or_else(|| Element::zero(dr)))
-                        .collect();
-                    let ky_values = FixedVec::from_fn(|idx| ky_vec[m - 1 - idx].clone());
+                    let ky_values = FixedVec::from_fn(|_| {
+                        ky_elements.next().unwrap_or_else(|| Element::zero(dr))
+                    });
 
                     let v = fold_products
                         .fold_products_m::<NativeParameters>(dr, &errors, &ky_values)?;
@@ -1426,10 +1423,7 @@ impl<'m, 'rx, F: PrimeField, R: Rank> ProverContext<'m, 'rx, F, R> {
         let a = if rxs.len() == 1 {
             Cow::Borrowed(rxs[0])
         } else {
-            Cow::Owned(structured::Polynomial::fold(
-                rxs.iter().rev().copied(),
-                self.z,
-            ))
+            Cow::Owned(structured::Polynomial::fold(rxs.iter().copied(), self.z))
         };
 
         self.a.push(a);

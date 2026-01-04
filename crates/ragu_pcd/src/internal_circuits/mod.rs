@@ -226,7 +226,7 @@ pub(crate) mod test_params {
         check_constraints!(Hashes2Circuit,         mul = 2047, lin = 2952);
         check_constraints!(PartialCollapseCircuit, mul = 1243, lin = 1354);
         check_constraints!(FullCollapseCircuit,    mul = 1552, lin = 1972);
-        check_constraints!(ComputeVCircuit,        mul = 597,  lin = 818);
+        check_constraints!(ComputeVCircuit,        mul = 603,  lin = 830);
     }
 
     #[rustfmt::skip]

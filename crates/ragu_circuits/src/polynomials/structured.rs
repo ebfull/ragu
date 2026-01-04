@@ -5,6 +5,7 @@ use ff::Field;
 use rand::Rng;
 
 use alloc::vec::Vec;
+use core::borrow::Borrow;
 
 use super::Rank;
 
@@ -99,16 +100,16 @@ impl<F: Field, R: Rank> Polynomial<F, R> {
         }
     }
 
-    /// Folds an iterator of polynomials into a single polynomial with
-    /// successive powers of the provided scale factor.
-    pub fn fold<I, P>(polys: I, scale_factor: F) -> Self
-    where
-        I: Iterator<Item = P>,
-        P: core::ops::Deref<Target = Self>,
-    {
-        polys.fold(Self::default(), |mut acc, poly| {
+    /// Computes a weighted sum of the polynomials yielded by an iterator by the
+    /// powers of the provided `scale_factor`.
+    ///
+    /// Horner's method is used to evaluate the weighted sum, effectively
+    /// scaling the first element by the highest power of `scale_factor` and the
+    /// last element by nothing at all.
+    pub fn fold<E: Borrow<Self>>(polys: impl IntoIterator<Item = E>, scale_factor: F) -> Self {
+        polys.into_iter().fold(Self::default(), |mut acc, poly| {
             acc.scale(scale_factor);
-            acc.add_assign(&*poly);
+            acc.add_assign(poly.borrow());
             acc
         })
     }

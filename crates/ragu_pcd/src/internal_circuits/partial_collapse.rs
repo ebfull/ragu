@@ -8,7 +8,6 @@
 //! and error_n (for layer 2 error terms, collapsed values, and k(y) values)
 //! native stages.
 
-use alloc::vec::Vec;
 use arithmetic::Cycle;
 use ragu_circuits::{
     polynomials::Rank,
@@ -20,10 +19,7 @@ use ragu_core::{
     gadgets::{Gadget, GadgetKind},
     maybe::Maybe,
 };
-use ragu_primitives::{
-    Element,
-    vec::{FixedVec, Len},
-};
+use ragu_primitives::{Element, vec::FixedVec};
 
 use core::{
     iter::{once, repeat_n},
@@ -134,13 +130,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
             .chain(repeat_n(error_n.right.unified, NUM_UNIFIED_CIRCUITS));
 
         for (i, error_terms) in error_m.error_terms.iter().enumerate() {
-            let ky_vec: Vec<_> = (0..FP::M::len())
-                .map(|_| ky_elements.next().unwrap_or_else(|| Element::zero(dr)))
-                .collect();
-            let ky_desc = FixedVec::from_fn(|idx| ky_vec[FP::M::len() - 1 - idx].clone());
+            let ky_elements =
+                FixedVec::from_fn(|_| ky_elements.next().unwrap_or_else(|| Element::zero(dr)));
 
             fold_products
-                .fold_products_m::<FP>(dr, error_terms, &ky_desc)?
+                .fold_products_m::<FP>(dr, error_terms, &ky_elements)?
                 .enforce_equal(dr, &error_n.collapsed[i])?;
         }
 
