@@ -302,70 +302,70 @@ impl<'a, 'dr, D: Driver<'dr>> ClaimSource for EvaluationSource<'a, 'dr, D> {
             .into_iter(),
             // Circuit claims: (at_x, at_xz) tuple
             Application => [
-                (&self.left.application_at_x, &self.left.application_at_xz),
-                (&self.right.application_at_x, &self.right.application_at_xz),
+                (&self.left.application.at_x, &self.left.application.at_xz),
+                (&self.right.application.at_x, &self.right.application.at_xz),
             ]
             .into_iter(),
             Hashes1 => [
-                (&self.left.hashes_1_at_x, &self.left.hashes_1_at_xz),
-                (&self.right.hashes_1_at_x, &self.right.hashes_1_at_xz),
+                (&self.left.hashes_1.at_x, &self.left.hashes_1.at_xz),
+                (&self.right.hashes_1.at_x, &self.right.hashes_1.at_xz),
             ]
             .into_iter(),
             Hashes2 => [
-                (&self.left.hashes_2_at_x, &self.left.hashes_2_at_xz),
-                (&self.right.hashes_2_at_x, &self.right.hashes_2_at_xz),
+                (&self.left.hashes_2.at_x, &self.left.hashes_2.at_xz),
+                (&self.right.hashes_2.at_x, &self.right.hashes_2.at_xz),
             ]
             .into_iter(),
             PartialCollapse => [
                 (
-                    &self.left.partial_collapse_at_x,
-                    &self.left.partial_collapse_at_xz,
+                    &self.left.partial_collapse.at_x,
+                    &self.left.partial_collapse.at_xz,
                 ),
                 (
-                    &self.right.partial_collapse_at_x,
-                    &self.right.partial_collapse_at_xz,
+                    &self.right.partial_collapse.at_x,
+                    &self.right.partial_collapse.at_xz,
                 ),
             ]
             .into_iter(),
             FullCollapse => [
                 (
-                    &self.left.full_collapse_at_x,
-                    &self.left.full_collapse_at_xz,
+                    &self.left.full_collapse.at_x,
+                    &self.left.full_collapse.at_xz,
                 ),
                 (
-                    &self.right.full_collapse_at_x,
-                    &self.right.full_collapse_at_xz,
+                    &self.right.full_collapse.at_x,
+                    &self.right.full_collapse.at_xz,
                 ),
             ]
             .into_iter(),
             ComputeV => [
-                (&self.left.compute_v_at_x, &self.left.compute_v_at_xz),
-                (&self.right.compute_v_at_x, &self.right.compute_v_at_xz),
+                (&self.left.compute_v.at_x, &self.left.compute_v.at_xz),
+                (&self.right.compute_v.at_x, &self.right.compute_v.at_xz),
             ]
             .into_iter(),
             PreambleStage => [
-                (&self.left.preamble_at_x, &self.left.preamble_at_xz),
-                (&self.right.preamble_at_x, &self.right.preamble_at_xz),
+                (&self.left.preamble.at_x, &self.left.preamble.at_xz),
+                (&self.right.preamble.at_x, &self.right.preamble.at_xz),
             ]
             .into_iter(),
             ErrorMStage => [
-                (&self.left.error_m_at_x, &self.left.error_m_at_xz),
-                (&self.right.error_m_at_x, &self.right.error_m_at_xz),
+                (&self.left.error_m.at_x, &self.left.error_m.at_xz),
+                (&self.right.error_m.at_x, &self.right.error_m.at_xz),
             ]
             .into_iter(),
             ErrorNStage => [
-                (&self.left.error_n_at_x, &self.left.error_n_at_xz),
-                (&self.right.error_n_at_x, &self.right.error_n_at_xz),
+                (&self.left.error_n.at_x, &self.left.error_n.at_xz),
+                (&self.right.error_n.at_x, &self.right.error_n.at_xz),
             ]
             .into_iter(),
             QueryStage => [
-                (&self.left.query_at_x, &self.left.query_at_xz),
-                (&self.right.query_at_x, &self.right.query_at_xz),
+                (&self.left.query.at_x, &self.left.query.at_xz),
+                (&self.right.query.at_x, &self.right.query.at_xz),
             ]
             .into_iter(),
             EvalStage => [
-                (&self.left.eval_at_x, &self.left.eval_at_xz),
-                (&self.right.eval_at_x, &self.right.eval_at_xz),
+                (&self.left.eval.at_x, &self.left.eval.at_xz),
+                (&self.right.eval.at_x, &self.right.eval.at_xz),
             ]
             .into_iter(),
         }
@@ -565,16 +565,16 @@ fn poly_queries<'a, 'dr, D: Driver<'dr>, C: Cycle, const HEADER_SIZE: usize>(
     .chain([(&eval.left, &query.left), (&eval.right, &query.right)]
         .into_iter()
         .flat_map(|(eval, query)| [
-            (&eval.preamble,         &query.preamble_at_x,         &query.preamble_at_xz),
-            (&eval.error_m,          &query.error_m_at_x,          &query.error_m_at_xz),
-            (&eval.error_n,          &query.error_n_at_x,          &query.error_n_at_xz),
-            (&eval.query,            &query.query_at_x,            &query.query_at_xz),
-            (&eval.eval,             &query.eval_at_x,             &query.eval_at_xz),
-            (&eval.application,      &query.application_at_x,      &query.application_at_xz),
-            (&eval.hashes_1,         &query.hashes_1_at_x,         &query.hashes_1_at_xz),
-            (&eval.hashes_2,         &query.hashes_2_at_x,         &query.hashes_2_at_xz),
-            (&eval.partial_collapse, &query.partial_collapse_at_x, &query.partial_collapse_at_xz),
-            (&eval.full_collapse,    &query.full_collapse_at_x,    &query.full_collapse_at_xz),
-            (&eval.compute_v,        &query.compute_v_at_x,        &query.compute_v_at_xz),
-        ].into_iter().flat_map(|(e, qx, qxz)| [(e, qx, &d.x), (e, qxz, &d.xz)])))
+            (&eval.preamble,         &query.preamble),
+            (&eval.error_m,          &query.error_m),
+            (&eval.error_n,          &query.error_n),
+            (&eval.query,            &query.query),
+            (&eval.eval,             &query.eval),
+            (&eval.application,      &query.application),
+            (&eval.hashes_1,         &query.hashes_1),
+            (&eval.hashes_2,         &query.hashes_2),
+            (&eval.partial_collapse, &query.partial_collapse),
+            (&eval.full_collapse,    &query.full_collapse),
+            (&eval.compute_v,        &query.compute_v),
+        ].into_iter().flat_map(|(e, q)| [(e, &q.at_x, &d.x), (e, &q.at_xz, &d.xz)])))
 }
