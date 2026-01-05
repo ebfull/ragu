@@ -20,6 +20,82 @@ use crate::{Proof, internal_circuits::NUM_INTERNAL_CIRCUITS};
 
 pub use crate::internal_circuits::InternalCircuitIndex::QueryStage as STAGING_ID;
 
+/// Witness for a polynomial evaluated at both x and xz.
+pub struct XzQueryWitness<T> {
+    /// Evaluation at x.
+    pub at_x: T,
+    /// Evaluation at xz.
+    pub at_xz: T,
+}
+
+impl<T> XzQueryWitness<T> {
+    /// Evaluate a polynomial at both x and xz.
+    ///
+    /// The closure `f` should evaluate the polynomial at the given point.
+    pub fn eval(x: T, xz: T, f: impl Fn(T) -> T) -> Self {
+        XzQueryWitness {
+            at_x: f(x),
+            at_xz: f(xz),
+        }
+    }
+}
+
+/// Gadget for a polynomial evaluated at both x and xz.
+#[derive(Gadget)]
+pub struct XzQuery<'dr, D: Driver<'dr>> {
+    /// Evaluation at x.
+    #[ragu(gadget)]
+    pub at_x: Element<'dr, D>,
+    /// Evaluation at xz.
+    #[ragu(gadget)]
+    pub at_xz: Element<'dr, D>,
+}
+
+impl<'dr, D: Driver<'dr>> XzQuery<'dr, D> {
+    /// Allocate an XzQuery from witness values.
+    pub fn alloc(dr: &mut D, witness: DriverValue<D, &XzQueryWitness<D::F>>) -> Result<Self> {
+        Ok(XzQuery {
+            at_x: Element::alloc(dr, witness.view().map(|w| w.at_x))?,
+            at_xz: Element::alloc(dr, witness.view().map(|w| w.at_xz))?,
+        })
+    }
+}
+
+/// Evaluation(s) of an rx polynomial at x and optionally xz.
+///
+/// For circuit claims, both x and xz evaluations are available. For raw a/b
+/// claims, only the x evaluation is available.
+pub enum RxEval<'a, 'dr, D: Driver<'dr>> {
+    /// Only the x evaluation is available (used for raw a/b queries).
+    X(&'a Element<'dr, D>),
+    /// Both x and xz evaluations are available.
+    Xz(&'a Element<'dr, D>, &'a Element<'dr, D>),
+}
+
+impl<'a, 'dr, D: Driver<'dr>> RxEval<'a, 'dr, D> {
+    /// Returns the evaluation at x.
+    pub fn x(&self) -> &'a Element<'dr, D> {
+        match self {
+            Self::X(x) | Self::Xz(x, _) => x,
+        }
+    }
+
+    /// Returns the evaluation at xz. Panics if only x is available.
+    pub fn xz(&self) -> &'a Element<'dr, D> {
+        match self {
+            Self::X(_) => panic!("xz evaluation not available for x-only RxEval"),
+            Self::Xz(_, xz) => xz,
+        }
+    }
+}
+
+impl<'dr, D: Driver<'dr>> XzQuery<'dr, D> {
+    /// Convert to an RxEval with both x and xz evaluations.
+    pub fn to_eval(&self) -> RxEval<'_, 'dr, D> {
+        RxEval::Xz(&self.at_x, &self.at_xz)
+    }
+}
+
 /// Pre-computed evaluations of mesh_xy at each internal circuit's omega^j.
 pub struct FixedMeshWitness<F> {
     pub preamble_stage: F,
@@ -38,33 +114,38 @@ pub struct FixedMeshWitness<F> {
 
 /// Witness for a child proof's polynomial evaluations.
 pub struct ChildEvaluationsWitness<F> {
-    pub preamble_at_x: F,
-    pub preamble_at_xz: F,
-    pub error_m_at_x: F,
-    pub error_m_at_xz: F,
-    pub error_n_at_x: F,
-    pub error_n_at_xz: F,
-    pub query_at_x: F,
-    pub query_at_xz: F,
-    pub eval_at_x: F,
-    pub eval_at_xz: F,
+    /// Preamble stage rx polynomial evaluations.
+    pub preamble: XzQueryWitness<F>,
+    /// Error M stage rx polynomial evaluations.
+    pub error_m: XzQueryWitness<F>,
+    /// Error N stage rx polynomial evaluations.
+    pub error_n: XzQueryWitness<F>,
+    /// Query stage rx polynomial evaluations.
+    pub query: XzQueryWitness<F>,
+    /// Eval stage rx polynomial evaluations.
+    pub eval: XzQueryWitness<F>,
+    /// Application circuit rx polynomial evaluations.
+    pub application: XzQueryWitness<F>,
+    /// Hashes 1 circuit rx polynomial evaluations.
+    pub hashes_1: XzQueryWitness<F>,
+    /// Hashes 2 circuit rx polynomial evaluations.
+    pub hashes_2: XzQueryWitness<F>,
+    /// Partial collapse circuit rx polynomial evaluations.
+    pub partial_collapse: XzQueryWitness<F>,
+    /// Full collapse circuit rx polynomial evaluations.
+    pub full_collapse: XzQueryWitness<F>,
+    /// Compute V circuit rx polynomial evaluations.
+    pub compute_v: XzQueryWitness<F>,
+    /// A polynomial evaluation at x.
     pub a_poly_at_x: F,
+    /// B polynomial evaluation at x.
     pub b_poly_at_x: F,
+    /// Old mesh_xy polynomial evaluation at new w.
     pub old_mesh_xy_at_new_w: F,
+    /// New mesh_xy polynomial evaluation at old circuit_id.
     pub new_mesh_xy_at_old_circuit_id: F,
+    /// New mesh_wy polynomial evaluation at old x.
     pub new_mesh_wy_at_old_x: F,
-    pub application_at_x: F,
-    pub hashes_1_at_x: F,
-    pub hashes_2_at_x: F,
-    pub partial_collapse_at_x: F,
-    pub full_collapse_at_x: F,
-    pub compute_v_at_x: F,
-    pub application_at_xz: F,
-    pub hashes_1_at_xz: F,
-    pub hashes_2_at_xz: F,
-    pub partial_collapse_at_xz: F,
-    pub full_collapse_at_xz: F,
-    pub compute_v_at_xz: F,
 }
 
 impl<F: PrimeField> ChildEvaluationsWitness<F> {
@@ -78,33 +159,26 @@ impl<F: PrimeField> ChildEvaluationsWitness<F> {
         mesh_wy: &structured::Polynomial<F, R>,
     ) -> Self {
         ChildEvaluationsWitness {
-            preamble_at_x: proof.preamble.stage_rx.eval(x),
-            preamble_at_xz: proof.preamble.stage_rx.eval(xz),
-            error_m_at_x: proof.error_m.stage_rx.eval(x),
-            error_m_at_xz: proof.error_m.stage_rx.eval(xz),
-            error_n_at_x: proof.error_n.stage_rx.eval(x),
-            error_n_at_xz: proof.error_n.stage_rx.eval(xz),
-            query_at_x: proof.query.stage_rx.eval(x),
-            query_at_xz: proof.query.stage_rx.eval(xz),
-            eval_at_x: proof.eval.stage_rx.eval(x),
-            eval_at_xz: proof.eval.stage_rx.eval(xz),
+            preamble: XzQueryWitness::eval(x, xz, |pt| proof.preamble.stage_rx.eval(pt)),
+            error_m: XzQueryWitness::eval(x, xz, |pt| proof.error_m.stage_rx.eval(pt)),
+            error_n: XzQueryWitness::eval(x, xz, |pt| proof.error_n.stage_rx.eval(pt)),
+            query: XzQueryWitness::eval(x, xz, |pt| proof.query.stage_rx.eval(pt)),
+            eval: XzQueryWitness::eval(x, xz, |pt| proof.eval.stage_rx.eval(pt)),
+            application: XzQueryWitness::eval(x, xz, |pt| proof.application.rx.eval(pt)),
+            hashes_1: XzQueryWitness::eval(x, xz, |pt| proof.circuits.hashes_1_rx.eval(pt)),
+            hashes_2: XzQueryWitness::eval(x, xz, |pt| proof.circuits.hashes_2_rx.eval(pt)),
+            partial_collapse: XzQueryWitness::eval(x, xz, |pt| {
+                proof.circuits.partial_collapse_rx.eval(pt)
+            }),
+            full_collapse: XzQueryWitness::eval(x, xz, |pt| {
+                proof.circuits.full_collapse_rx.eval(pt)
+            }),
+            compute_v: XzQueryWitness::eval(x, xz, |pt| proof.circuits.compute_v_rx.eval(pt)),
             a_poly_at_x: proof.ab.a_poly.eval(x),
             b_poly_at_x: proof.ab.b_poly.eval(x),
             old_mesh_xy_at_new_w: proof.query.mesh_xy_poly.eval(w),
             new_mesh_xy_at_old_circuit_id: mesh_xy.eval(proof.application.circuit_id.omega_j()),
             new_mesh_wy_at_old_x: mesh_wy.eval(proof.challenges.x),
-            application_at_x: proof.application.rx.eval(x),
-            hashes_1_at_x: proof.circuits.hashes_1_rx.eval(x),
-            hashes_2_at_x: proof.circuits.hashes_2_rx.eval(x),
-            partial_collapse_at_x: proof.circuits.partial_collapse_rx.eval(x),
-            full_collapse_at_x: proof.circuits.full_collapse_rx.eval(x),
-            compute_v_at_x: proof.circuits.compute_v_rx.eval(x),
-            application_at_xz: proof.application.rx.eval(xz),
-            hashes_1_at_xz: proof.circuits.hashes_1_rx.eval(xz),
-            hashes_2_at_xz: proof.circuits.hashes_2_rx.eval(xz),
-            partial_collapse_at_xz: proof.circuits.partial_collapse_rx.eval(xz),
-            full_collapse_at_xz: proof.circuits.full_collapse_rx.eval(xz),
-            compute_v_at_xz: proof.circuits.compute_v_rx.eval(xz),
         }
     }
 }
@@ -177,65 +251,81 @@ impl<'dr, D: Driver<'dr>> FixedMeshEvaluations<'dr, D> {
             compute_v_circuit: Element::alloc(dr, witness.view().map(|w| w.compute_v_circuit))?,
         })
     }
+
+    /// Look up the mesh evaluation for the given internal circuit index.
+    pub fn circuit_mesh(
+        &self,
+        id: crate::internal_circuits::InternalCircuitIndex,
+    ) -> &Element<'dr, D> {
+        use crate::internal_circuits::InternalCircuitIndex::*;
+        match id {
+            Hashes1Circuit => &self.hashes_1_circuit,
+            Hashes2Circuit => &self.hashes_2_circuit,
+            PartialCollapseCircuit => &self.partial_collapse_circuit,
+            FullCollapseCircuit => &self.full_collapse_circuit,
+            ComputeVCircuit => &self.compute_v_circuit,
+            PreambleStage => &self.preamble_stage,
+            ErrorMStage => &self.error_m_stage,
+            ErrorNStage => &self.error_n_stage,
+            QueryStage => &self.query_stage,
+            EvalStage => &self.eval_stage,
+            ErrorNFinalStaged => &self.error_n_final_staged,
+            EvalFinalStaged => &self.eval_final_staged,
+        }
+    }
 }
 
 /// Gadget for a child proof's polynomial evaluations.
 #[derive(Gadget)]
 pub struct ChildEvaluations<'dr, D: Driver<'dr>> {
+    /// Preamble stage rx polynomial evaluations.
     #[ragu(gadget)]
-    pub preamble_at_x: Element<'dr, D>,
+    pub preamble: XzQuery<'dr, D>,
+    /// Error M stage rx polynomial evaluations.
     #[ragu(gadget)]
-    pub preamble_at_xz: Element<'dr, D>,
+    pub error_m: XzQuery<'dr, D>,
+    /// Error N stage rx polynomial evaluations.
     #[ragu(gadget)]
-    pub error_m_at_x: Element<'dr, D>,
+    pub error_n: XzQuery<'dr, D>,
+    /// Query stage rx polynomial evaluations.
     #[ragu(gadget)]
-    pub error_m_at_xz: Element<'dr, D>,
+    pub query: XzQuery<'dr, D>,
+    /// Eval stage rx polynomial evaluations.
     #[ragu(gadget)]
-    pub error_n_at_x: Element<'dr, D>,
+    pub eval: XzQuery<'dr, D>,
+    /// Application circuit rx polynomial evaluations.
     #[ragu(gadget)]
-    pub error_n_at_xz: Element<'dr, D>,
+    pub application: XzQuery<'dr, D>,
+    /// Hashes 1 circuit rx polynomial evaluations.
     #[ragu(gadget)]
-    pub query_at_x: Element<'dr, D>,
+    pub hashes_1: XzQuery<'dr, D>,
+    /// Hashes 2 circuit rx polynomial evaluations.
     #[ragu(gadget)]
-    pub query_at_xz: Element<'dr, D>,
+    pub hashes_2: XzQuery<'dr, D>,
+    /// Partial collapse circuit rx polynomial evaluations.
     #[ragu(gadget)]
-    pub eval_at_x: Element<'dr, D>,
+    pub partial_collapse: XzQuery<'dr, D>,
+    /// Full collapse circuit rx polynomial evaluations.
     #[ragu(gadget)]
-    pub eval_at_xz: Element<'dr, D>,
+    pub full_collapse: XzQuery<'dr, D>,
+    /// Compute V circuit rx polynomial evaluations.
+    #[ragu(gadget)]
+    pub compute_v: XzQuery<'dr, D>,
+    /// A polynomial evaluation at x.
     #[ragu(gadget)]
     pub a_poly_at_x: Element<'dr, D>,
+    /// B polynomial evaluation at x.
     #[ragu(gadget)]
     pub b_poly_at_x: Element<'dr, D>,
+    /// Old mesh_xy polynomial evaluation at new w.
     #[ragu(gadget)]
     pub old_mesh_xy_at_new_w: Element<'dr, D>,
+    /// New mesh_xy polynomial evaluation at old circuit_id.
     #[ragu(gadget)]
     pub new_mesh_xy_at_old_circuit_id: Element<'dr, D>,
+    /// New mesh_wy polynomial evaluation at old x.
     #[ragu(gadget)]
     pub new_mesh_wy_at_old_x: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub application_at_x: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub hashes_1_at_x: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub hashes_2_at_x: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub partial_collapse_at_x: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub full_collapse_at_x: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub compute_v_at_x: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub application_at_xz: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub hashes_1_at_xz: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub hashes_2_at_xz: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub partial_collapse_at_xz: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub full_collapse_at_xz: Element<'dr, D>,
-    #[ragu(gadget)]
-    pub compute_v_at_xz: Element<'dr, D>,
 }
 
 impl<'dr, D: Driver<'dr>> ChildEvaluations<'dr, D> {
@@ -245,16 +335,17 @@ impl<'dr, D: Driver<'dr>> ChildEvaluations<'dr, D> {
         witness: DriverValue<D, &ChildEvaluationsWitness<D::F>>,
     ) -> Result<Self> {
         Ok(ChildEvaluations {
-            preamble_at_x: Element::alloc(dr, witness.view().map(|w| w.preamble_at_x))?,
-            preamble_at_xz: Element::alloc(dr, witness.view().map(|w| w.preamble_at_xz))?,
-            error_m_at_x: Element::alloc(dr, witness.view().map(|w| w.error_m_at_x))?,
-            error_m_at_xz: Element::alloc(dr, witness.view().map(|w| w.error_m_at_xz))?,
-            error_n_at_x: Element::alloc(dr, witness.view().map(|w| w.error_n_at_x))?,
-            error_n_at_xz: Element::alloc(dr, witness.view().map(|w| w.error_n_at_xz))?,
-            query_at_x: Element::alloc(dr, witness.view().map(|w| w.query_at_x))?,
-            query_at_xz: Element::alloc(dr, witness.view().map(|w| w.query_at_xz))?,
-            eval_at_x: Element::alloc(dr, witness.view().map(|w| w.eval_at_x))?,
-            eval_at_xz: Element::alloc(dr, witness.view().map(|w| w.eval_at_xz))?,
+            preamble: XzQuery::alloc(dr, witness.view().map(|w| &w.preamble))?,
+            error_m: XzQuery::alloc(dr, witness.view().map(|w| &w.error_m))?,
+            error_n: XzQuery::alloc(dr, witness.view().map(|w| &w.error_n))?,
+            query: XzQuery::alloc(dr, witness.view().map(|w| &w.query))?,
+            eval: XzQuery::alloc(dr, witness.view().map(|w| &w.eval))?,
+            application: XzQuery::alloc(dr, witness.view().map(|w| &w.application))?,
+            hashes_1: XzQuery::alloc(dr, witness.view().map(|w| &w.hashes_1))?,
+            hashes_2: XzQuery::alloc(dr, witness.view().map(|w| &w.hashes_2))?,
+            partial_collapse: XzQuery::alloc(dr, witness.view().map(|w| &w.partial_collapse))?,
+            full_collapse: XzQuery::alloc(dr, witness.view().map(|w| &w.full_collapse))?,
+            compute_v: XzQuery::alloc(dr, witness.view().map(|w| &w.compute_v))?,
             a_poly_at_x: Element::alloc(dr, witness.view().map(|w| w.a_poly_at_x))?,
             b_poly_at_x: Element::alloc(dr, witness.view().map(|w| w.b_poly_at_x))?,
             old_mesh_xy_at_new_w: Element::alloc(
@@ -269,24 +360,6 @@ impl<'dr, D: Driver<'dr>> ChildEvaluations<'dr, D> {
                 dr,
                 witness.view().map(|w| w.new_mesh_wy_at_old_x),
             )?,
-            application_at_x: Element::alloc(dr, witness.view().map(|w| w.application_at_x))?,
-            hashes_1_at_x: Element::alloc(dr, witness.view().map(|w| w.hashes_1_at_x))?,
-            hashes_2_at_x: Element::alloc(dr, witness.view().map(|w| w.hashes_2_at_x))?,
-            partial_collapse_at_x: Element::alloc(
-                dr,
-                witness.view().map(|w| w.partial_collapse_at_x),
-            )?,
-            full_collapse_at_x: Element::alloc(dr, witness.view().map(|w| w.full_collapse_at_x))?,
-            compute_v_at_x: Element::alloc(dr, witness.view().map(|w| w.compute_v_at_x))?,
-            application_at_xz: Element::alloc(dr, witness.view().map(|w| w.application_at_xz))?,
-            hashes_1_at_xz: Element::alloc(dr, witness.view().map(|w| w.hashes_1_at_xz))?,
-            hashes_2_at_xz: Element::alloc(dr, witness.view().map(|w| w.hashes_2_at_xz))?,
-            partial_collapse_at_xz: Element::alloc(
-                dr,
-                witness.view().map(|w| w.partial_collapse_at_xz),
-            )?,
-            full_collapse_at_xz: Element::alloc(dr, witness.view().map(|w| w.full_collapse_at_xz))?,
-            compute_v_at_xz: Element::alloc(dr, witness.view().map(|w| w.compute_v_at_xz))?,
         })
     }
 }
