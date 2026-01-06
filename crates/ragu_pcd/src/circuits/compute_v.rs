@@ -293,49 +293,42 @@ impl<'a, 'dr, D: Driver<'dr>> ClaimSource for EvaluationSource<'a, 'dr, D> {
 
     fn rx(&self, component: RxComponent) -> impl Iterator<Item = Self::Rx> {
         use RxComponent::*;
-        match component {
+        let (left, right) = match component {
             // Raw claims: only x evaluation is available
-            AbA => [
+            AbA => (
                 RxEval::X(&self.left.a_poly_at_x),
                 RxEval::X(&self.right.a_poly_at_x),
-            ]
-            .into_iter(),
-            AbB => [
+            ),
+            AbB => (
                 RxEval::X(&self.left.b_poly_at_x),
                 RxEval::X(&self.right.b_poly_at_x),
-            ]
-            .into_iter(),
+            ),
             // Circuit claims: both x and xz evaluations available
-            Application => [
+            Application => (
                 self.left.application.to_eval(),
                 self.right.application.to_eval(),
-            ]
-            .into_iter(),
-            Hashes1 => [self.left.hashes_1.to_eval(), self.right.hashes_1.to_eval()].into_iter(),
-            Hashes2 => [self.left.hashes_2.to_eval(), self.right.hashes_2.to_eval()].into_iter(),
-            PartialCollapse => [
+            ),
+            Hashes1 => (self.left.hashes_1.to_eval(), self.right.hashes_1.to_eval()),
+            Hashes2 => (self.left.hashes_2.to_eval(), self.right.hashes_2.to_eval()),
+            PartialCollapse => (
                 self.left.partial_collapse.to_eval(),
                 self.right.partial_collapse.to_eval(),
-            ]
-            .into_iter(),
-            FullCollapse => [
+            ),
+            FullCollapse => (
                 self.left.full_collapse.to_eval(),
                 self.right.full_collapse.to_eval(),
-            ]
-            .into_iter(),
-            ComputeV => [
+            ),
+            ComputeV => (
                 self.left.compute_v.to_eval(),
                 self.right.compute_v.to_eval(),
-            ]
-            .into_iter(),
-            PreambleStage => {
-                [self.left.preamble.to_eval(), self.right.preamble.to_eval()].into_iter()
-            }
-            ErrorMStage => [self.left.error_m.to_eval(), self.right.error_m.to_eval()].into_iter(),
-            ErrorNStage => [self.left.error_n.to_eval(), self.right.error_n.to_eval()].into_iter(),
-            QueryStage => [self.left.query.to_eval(), self.right.query.to_eval()].into_iter(),
-            EvalStage => [self.left.eval.to_eval(), self.right.eval.to_eval()].into_iter(),
-        }
+            ),
+            PreambleStage => (self.left.preamble.to_eval(), self.right.preamble.to_eval()),
+            ErrorMStage => (self.left.error_m.to_eval(), self.right.error_m.to_eval()),
+            ErrorNStage => (self.left.error_n.to_eval(), self.right.error_n.to_eval()),
+            QueryStage => (self.left.query.to_eval(), self.right.query.to_eval()),
+            EvalStage => (self.left.eval.to_eval(), self.right.eval.to_eval()),
+        };
+        [left, right].into_iter()
     }
 
     fn app_circuits(&self) -> impl Iterator<Item = Self::AppCircuitId> {
