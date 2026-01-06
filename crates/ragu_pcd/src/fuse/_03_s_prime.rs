@@ -1,3 +1,8 @@
+//! Commit to $m(w, x_i, Y)$ polynomials for the child proofs.
+//!
+//! This creates the [`proof::SPrime`] component of the proof, which commits to
+//! the $m(w, x_i, Y)$ polynomials for the $i$th child proof's $x$ challenge.
+
 use arithmetic::Cycle;
 use ff::Field;
 use ragu_circuits::{polynomials::Rank, staging::StageExt};

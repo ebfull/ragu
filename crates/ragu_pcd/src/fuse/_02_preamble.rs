@@ -1,3 +1,8 @@
+//! Commit to the preamble.
+//!
+//! This creates the [`proof::Preamble`] component of the proof, which commits
+//! to the public inputs and witness polynomials used in the fuse step.
+
 use arithmetic::Cycle;
 use ff::Field;
 use ragu_circuits::{polynomials::Rank, staging::StageExt};
