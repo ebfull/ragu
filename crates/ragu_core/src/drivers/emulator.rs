@@ -74,7 +74,7 @@ use crate::{
     Result,
     drivers::{Coeff, DirectSum, Driver, DriverTypes, FromDriver, LinearExpression},
     gadgets::{Gadget, GadgetKind},
-    maybe::{Always, Maybe, MaybeKind},
+    maybe::{Always, Empty, Maybe, MaybeKind},
     routines::{Prediction, Routine},
 };
 
@@ -202,7 +202,8 @@ pub struct Emulator<M: Mode>(PhantomData<M>);
 impl<M: MaybeKind, F: Field> Emulator<Wired<M, F>> {
     /// Creates a new [`Emulator`] driver in [`Wired`] mode, parameterized on
     /// the existence of a witness.
-    pub fn wired() -> Self {
+    #[allow(dead_code)]
+    fn wired() -> Self {
         Emulator(PhantomData)
     }
 
@@ -241,6 +242,14 @@ impl<M: MaybeKind, F: Field> Emulator<Wireless<M, F>> {
     /// the existence of a witness.
     pub fn wireless() -> Self {
         Emulator(PhantomData)
+    }
+}
+
+impl<F: Field> Emulator<Wireless<Empty, F>> {
+    /// Creates a new [`Emulator`] driver in [`Wireless`] mode, usually for
+    /// counting wires or other static analysis on the circuit structure.
+    pub fn counter() -> Self {
+        Self::wireless()
     }
 }
 
