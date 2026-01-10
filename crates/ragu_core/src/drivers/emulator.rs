@@ -64,7 +64,7 @@
 //!   and static analysis without witness data.
 //!
 //! In [`Wired`] mode, wire assignments can be extracted from a gadget using
-//! [`Emulator::always_wires`], which returns a `Vec<F>` of field elements.
+//! [`Emulator::wires`], which returns a `Vec<F>` of field elements.
 
 use ff::Field;
 
@@ -105,9 +105,7 @@ pub struct Wired<F: Field>(PhantomData<F>);
 
 /// Container for a [`Field`] element representing a wire assignment.
 ///
-/// This type is an internal implementation detail of wired mode. External code
-/// should not use this type directly; wire values are exposed through
-/// [`Emulator::always_wires`] which returns `Vec<F>`.
+/// Wire values are exposed through [`Emulator::wires`].
 pub enum WiredValue<F: Field> {
     /// The special wire representing the constant $1$.
     One,
@@ -118,9 +116,6 @@ pub enum WiredValue<F: Field> {
 
 impl<F: Field> WiredValue<F> {
     /// Retrieves the underlying wire assignment value.
-    ///
-    /// This method is part of the internal implementation. External code should
-    /// use [`Emulator::always_wires`] instead.
     pub fn value(self) -> F {
         match self {
             WiredValue::One => F::ONE,
@@ -147,9 +142,6 @@ impl<F: Field> Clone for WiredValue<F> {
 }
 
 /// Implementation of [`LinearExpression`] for wired mode's [`DirectSum`].
-///
-/// This type is an internal implementation detail of wired mode and should not
-/// be used directly by external code.
 pub struct WiredDirectSum<F: Field>(DirectSum<F>);
 
 impl<F: Field> LinearExpression<WiredValue<F>, F> for WiredDirectSum<F> {
@@ -210,10 +202,8 @@ pub struct Emulator<M: Mode>(PhantomData<M>);
 
 impl<F: Field> Emulator<Wired<F>> {
     /// Extract the wires from a gadget produced using a wired [`Emulator`].
-    ///
-    /// This is an internal method. External callers should use
-    /// [`Emulator::always_wires`] instead.
-    fn wires<'dr, G: Gadget<'dr, Self>>(&self, gadget: &G) -> Result<Vec<WiredValue<F>>> {
+    /// This method returns the actual wire assignments if successful.
+    pub fn wires<'dr, G: Gadget<'dr, Self>>(&self, gadget: &G) -> Result<Vec<F>> {
         /// A conversion utility for extracting wire values.
         struct WireExtractor<F: Field> {
             wires: Vec<WiredValue<F>>,
@@ -233,20 +223,14 @@ impl<F: Field> Emulator<Wired<F>> {
 
         let mut collector = WireExtractor { wires: Vec::new() };
         <G::Kind as GadgetKind<F>>::map_gadget(gadget, &mut collector)?;
-        Ok(collector.wires)
-    }
-
-    /// Extract the wires from a gadget produced using a wired [`Emulator`].
-    /// This method returns the actual wire assignments if successful.
-    pub fn always_wires<'dr, G: Gadget<'dr, Self>>(&self, gadget: &G) -> Result<Vec<F>> {
-        Ok(self.wires(gadget)?.into_iter().map(|w| w.value()).collect())
+        Ok(collector.wires.into_iter().map(|w| w.value()).collect())
     }
 
     /// Creates a new [`Emulator`] driver in [`Wired`] mode for executing with
     /// a known witness.
     ///
     /// This is useful for extracting wire assignments from a [`Gadget`] using
-    /// [`Emulator::always_wires`].
+    /// [`Emulator::wires`].
     pub fn extractor() -> Self {
         Emulator(PhantomData)
     }

@@ -44,7 +44,7 @@ generic circuit code.
 ## Wire Extraction
 
 [`Gadget`][gadget-trait]s can have their wires extracted from an `Emulator` in
-`Wired` mode using [`Emulator::always_wires`][emulator-always-wires], which
+`Wired` mode using [`Emulator::wires`][emulator-wires], which
 returns a `Vec<F>` of field element assignments.
 
 <!-- Reference-style links -->
@@ -61,4 +61,4 @@ returns a `Vec<F>` of field element assignments.
 [emulator-execute]: ragu_core::drivers::emulator::Emulator::execute
 [emulator-wireless]: ragu_core::drivers::emulator::Emulator::wireless
 [emulator-extractor]: ragu_core::drivers::emulator::Emulator::extractor
-[emulator-always-wires]: ragu_core::drivers::emulator::Emulator::always_wires
+[emulator-wires]: ragu_core::drivers::emulator::Emulator::wires
