@@ -6,7 +6,7 @@ use rand::Rng;
 
 use crate::{
     Application,
-    circuits::{self, stages, total_circuit_counts, unified},
+    circuits::{self, native, total_circuit_counts},
     components::fold_revdot::NativeParameters,
     proof,
 };
@@ -24,14 +24,14 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         f: &proof::F<C, R>,
         eval: &proof::Eval<C, R>,
         p: &proof::P<C, R>,
-        preamble_witness: &stages::native::preamble::Witness<'_, C, R, HEADER_SIZE>,
-        error_n_witness: &stages::native::error_n::Witness<C, NativeParameters>,
-        error_m_witness: &stages::native::error_m::Witness<C, NativeParameters>,
-        query_witness: &circuits::stages::native::query::Witness<C>,
-        eval_witness: &circuits::stages::native::eval::Witness<C::CircuitField>,
+        preamble_witness: &native::stages::preamble::Witness<'_, C, R, HEADER_SIZE>,
+        error_n_witness: &native::stages::error_n::Witness<C, NativeParameters>,
+        error_m_witness: &native::stages::error_m::Witness<C, NativeParameters>,
+        query_witness: &circuits::native::stages::query::Witness<C>,
+        eval_witness: &circuits::native::stages::eval::Witness<C::CircuitField>,
         challenges: &proof::Challenges<C>,
     ) -> Result<proof::InternalCircuits<C, R>> {
-        let unified_instance = &unified::Instance {
+        let unified_instance = &native::unified::Instance {
             nested_preamble_commitment: preamble.nested_commitment,
             w: challenges.w,
             nested_s_prime_commitment: s_prime.nested_s_prime_commitment,
@@ -56,12 +56,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         };
 
         let (hashes_1_rx, _) =
-            circuits::hashes_1::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(
+            native::hashes_1::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(
                 self.params,
                 total_circuit_counts(self.num_application_steps).1,
             )
             .rx::<R>(
-                circuits::hashes_1::Witness {
+                native::hashes_1::Witness {
                     unified_instance,
                     preamble_witness,
                     error_n_witness,
@@ -73,22 +73,22 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             hashes_1_rx.commit(C::host_generators(self.params), hashes_1_rx_blind);
 
         let (hashes_2_rx, _) =
-            circuits::hashes_2::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(self.params)
+            native::hashes_2::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(self.params)
                 .rx::<R>(
-                circuits::hashes_2::Witness {
-                    unified_instance,
-                    error_n_witness,
-                },
-                self.circuit_mesh.get_key(),
-            )?;
+                    native::hashes_2::Witness {
+                        unified_instance,
+                        error_n_witness,
+                    },
+                    self.circuit_mesh.get_key(),
+                )?;
         let hashes_2_rx_blind = C::CircuitField::random(&mut *rng);
         let hashes_2_rx_commitment =
             hashes_2_rx.commit(C::host_generators(self.params), hashes_2_rx_blind);
 
         let (partial_collapse_rx, _) =
-            circuits::partial_collapse::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new()
+            native::partial_collapse::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new()
                 .rx::<R>(
-                    circuits::partial_collapse::Witness {
+                    native::partial_collapse::Witness {
                         preamble_witness,
                         unified_instance,
                         error_m_witness,
@@ -101,23 +101,22 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             partial_collapse_rx.commit(C::host_generators(self.params), partial_collapse_rx_blind);
 
         let (full_collapse_rx, _) =
-            circuits::full_collapse::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new()
-                .rx::<R>(
-                    circuits::full_collapse::Witness {
-                        unified_instance,
-                        preamble_witness,
-                        error_n_witness,
-                    },
-                    self.circuit_mesh.get_key(),
-                )?;
+            native::full_collapse::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new().rx::<R>(
+                native::full_collapse::Witness {
+                    unified_instance,
+                    preamble_witness,
+                    error_n_witness,
+                },
+                self.circuit_mesh.get_key(),
+            )?;
         let full_collapse_rx_blind = C::CircuitField::random(&mut *rng);
         let full_collapse_rx_commitment =
             full_collapse_rx.commit(C::host_generators(self.params), full_collapse_rx_blind);
 
         let (compute_v_rx, _) =
-            circuits::compute_v::Circuit::<C, R, HEADER_SIZE>::new(self.num_application_steps)
+            native::compute_v::Circuit::<C, R, HEADER_SIZE>::new(self.num_application_steps)
                 .rx::<R>(
-                    circuits::compute_v::Witness {
+                    native::compute_v::Witness {
                         unified_instance,
                         preamble_witness,
                         query_witness,

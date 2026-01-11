@@ -1,8 +1,8 @@
 use super::*;
 use crate::*;
+use native::stages::{error_m, error_n, eval, preamble, query};
 use ragu_circuits::staging::{Stage, StageExt};
 use ragu_pasta::Pasta;
-use stages::native::{error_m, error_n, eval, preamble, query};
 
 pub(crate) type R = ragu_circuits::polynomials::R<13>;
 

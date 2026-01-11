@@ -100,95 +100,50 @@ macro_rules! define_nested_stage {
     (@replace $_:tt $sub:expr) => { $sub };
 }
 
-pub mod nested {
-    define_nested_stage!(preamble, parent = (), fields = {
-        native_preamble: C,
-        left_application: C,
-        right_application: C,
-        left_hashes_1: C,
-        right_hashes_1: C,
-        left_hashes_2: C,
-        right_hashes_2: C,
-        left_partial_collapse: C,
-        right_partial_collapse: C,
-        left_full_collapse: C,
-        right_full_collapse: C,
-        left_compute_v: C,
-        right_compute_v: C,
-    });
+define_nested_stage!(preamble, parent = (), fields = {
+    native_preamble: C,
+    left_application: C,
+    right_application: C,
+    left_hashes_1: C,
+    right_hashes_1: C,
+    left_hashes_2: C,
+    right_hashes_2: C,
+    left_partial_collapse: C,
+    right_partial_collapse: C,
+    left_full_collapse: C,
+    right_full_collapse: C,
+    left_compute_v: C,
+    right_compute_v: C,
+});
 
-    define_nested_stage!(s_prime, parent = (), fields = {
-        mesh_wx0: C,
-        mesh_wx1: C,
-    });
+define_nested_stage!(s_prime, parent = (), fields = {
+    mesh_wx0: C,
+    mesh_wx1: C,
+});
 
-    define_nested_stage!(error_m, parent = (), fields = {
-        native_error_m: C,
-        mesh_wy: C,
-    });
+define_nested_stage!(error_m, parent = (), fields = {
+    native_error_m: C,
+    mesh_wy: C,
+});
 
-    define_nested_stage!(error_n, parent = (), fields = {
-        native_error_n: C,
-    });
+define_nested_stage!(error_n, parent = (), fields = {
+    native_error_n: C,
+});
 
-    define_nested_stage!(ab, parent = (), fields = {
-        a: C,
-        b: C,
-    });
+define_nested_stage!(ab, parent = (), fields = {
+    a: C,
+    b: C,
+});
 
-    define_nested_stage!(query, parent = (), fields = {
-        native_query: C,
-        mesh_xy: C,
-    });
+define_nested_stage!(query, parent = (), fields = {
+    native_query: C,
+    mesh_xy: C,
+});
 
-    define_nested_stage!(f, parent = (), fields = {
-        native_f: C,
-    });
+define_nested_stage!(f, parent = (), fields = {
+    native_f: C,
+});
 
-    define_nested_stage!(eval, parent = (), fields = {
-        native_eval: C,
-    });
-}
-
-pub mod native {
-    pub mod error_m;
-    pub mod error_n;
-    pub mod eval;
-    pub mod preamble;
-    pub mod query;
-
-    #[cfg(test)]
-    pub(crate) mod tests {
-        use ff::PrimeField;
-        use ragu_circuits::{polynomials::Rank, staging::Stage};
-        use ragu_core::{
-            drivers::emulator::{Emulator, Wireless},
-            gadgets::{Gadget, GadgetKind},
-            maybe::Empty,
-        };
-
-        pub(crate) type R = ragu_circuits::polynomials::R<13>;
-        pub(crate) use crate::circuits::tests::HEADER_SIZE;
-        pub(crate) use crate::components::fold_revdot::NativeParameters;
-
-        pub(crate) fn assert_stage_values<F, R, S>(stage: &S)
-        where
-            F: PrimeField,
-            R: Rank,
-            S: Stage<F, R>,
-            for<'dr> <S::OutputKind as GadgetKind<F>>::Rebind<'dr, Emulator<Wireless<Empty, F>>>:
-                Gadget<'dr, Emulator<Wireless<Empty, F>>>,
-        {
-            let mut emulator = Emulator::counter();
-            let output = stage
-                .witness(&mut emulator, Empty)
-                .expect("allocation should succeed");
-
-            assert_eq!(
-                output.num_wires(),
-                S::values(),
-                "Stage::values() does not match actual wire count"
-            );
-        }
-    }
-}
+define_nested_stage!(eval, parent = (), fields = {
+    native_eval: C,
+});

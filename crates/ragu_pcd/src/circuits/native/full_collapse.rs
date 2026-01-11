@@ -41,10 +41,10 @@
 //! [$\mu$]: unified::Output::mu
 //! [$\nu$]: unified::Output::nu
 //! [$c$]: unified::Output::c
-//! [`error_n`]: super::stages::native::error_n
-//! [`preamble`]: super::stages::native::preamble
+//! [`error_n`]: super::stages::error_n
+//! [`preamble`]: super::stages::preamble
 //! [`FoldProducts::fold_products_n`]: fold_revdot::FoldProducts::fold_products_n
-//! [`is_base_case`]: super::stages::native::preamble::Output::is_base_case
+//! [`is_base_case`]: super::stages::preamble::Output::is_base_case
 
 use arithmetic::Cycle;
 use ragu_circuits::{
@@ -61,7 +61,7 @@ use ragu_core::{
 use core::marker::PhantomData;
 
 use super::{
-    stages::native::{error_n, preamble},
+    stages::{error_n, preamble},
     unified::{self, OutputBuilder},
 };
 use crate::components::fold_revdot;
@@ -98,14 +98,14 @@ pub struct Witness<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_rev
     /// witnessed [$c$](unified::Output::c) claim.
     pub unified_instance: &'a unified::Instance<C>,
 
-    /// Witness for the [`preamble`](super::stages::native::preamble) stage
+    /// Witness for the [`preamble`](super::stages::preamble) stage
     /// (unenforced).
     ///
-    /// Provides access to [`is_base_case`](super::stages::native::preamble::Output::is_base_case)
+    /// Provides access to [`is_base_case`](super::stages::preamble::Output::is_base_case)
     /// for conditional constraint enforcement.
     pub preamble_witness: &'a preamble::Witness<'a, C, R, HEADER_SIZE>,
 
-    /// Witness for the [`error_n`](super::stages::native::error_n) stage
+    /// Witness for the [`error_n`](super::stages::error_n) stage
     /// (unenforced).
     ///
     /// Provides layer 2 error terms and collapsed values from layer 1.

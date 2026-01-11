@@ -140,12 +140,15 @@ where
         .zip(source.rx(PreambleStage))
         .zip(source.rx(ErrorNStage))
     {
-        processor.internal_circuit(circuits::hashes_1::CIRCUIT_ID, [h1, pre, en].into_iter());
+        processor.internal_circuit(
+            circuits::native::hashes_1::CIRCUIT_ID,
+            [h1, pre, en].into_iter(),
+        );
     }
 
     // hashes_2: needs Hashes2 + ErrorNStage for each proof
     for (h2, en) in source.rx(Hashes2).zip(source.rx(ErrorNStage)) {
-        processor.internal_circuit(circuits::hashes_2::CIRCUIT_ID, [h2, en].into_iter());
+        processor.internal_circuit(circuits::native::hashes_2::CIRCUIT_ID, [h2, en].into_iter());
     }
 
     // partial_collapse: needs PartialCollapse + PreambleStage + ErrorMStage + ErrorNStage
@@ -156,7 +159,7 @@ where
         .zip(source.rx(ErrorNStage))
     {
         processor.internal_circuit(
-            circuits::partial_collapse::CIRCUIT_ID,
+            circuits::native::partial_collapse::CIRCUIT_ID,
             [pc, pre, em, en].into_iter(),
         );
     }
@@ -168,7 +171,7 @@ where
         .zip(source.rx(ErrorNStage))
     {
         processor.internal_circuit(
-            circuits::full_collapse::CIRCUIT_ID,
+            circuits::native::full_collapse::CIRCUIT_ID,
             [fc, pre, en].into_iter(),
         );
     }
@@ -180,7 +183,10 @@ where
         .zip(source.rx(QueryStage))
         .zip(source.rx(EvalStage))
     {
-        processor.internal_circuit(circuits::compute_v::CIRCUIT_ID, [cv, pre, q, e].into_iter());
+        processor.internal_circuit(
+            circuits::native::compute_v::CIRCUIT_ID,
+            [cv, pre, q, e].into_iter(),
+        );
     }
 
     // Stages (aggregated: collect all proofs' rxs together)
@@ -205,27 +211,27 @@ where
 
     // Native stages (aggregated across all proofs)
     processor.stage(
-        circuits::stages::native::preamble::STAGING_ID,
+        circuits::native::stages::preamble::STAGING_ID,
         source.rx(PreambleStage),
     )?;
 
     processor.stage(
-        circuits::stages::native::error_m::STAGING_ID,
+        circuits::native::stages::error_m::STAGING_ID,
         source.rx(ErrorMStage),
     )?;
 
     processor.stage(
-        circuits::stages::native::error_n::STAGING_ID,
+        circuits::native::stages::error_n::STAGING_ID,
         source.rx(ErrorNStage),
     )?;
 
     processor.stage(
-        circuits::stages::native::query::STAGING_ID,
+        circuits::native::stages::query::STAGING_ID,
         source.rx(QueryStage),
     )?;
 
     processor.stage(
-        circuits::stages::native::eval::STAGING_ID,
+        circuits::native::stages::eval::STAGING_ID,
         source.rx(EvalStage),
     )?;
 

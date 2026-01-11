@@ -28,10 +28,10 @@
 //! ## Staging
 //!
 //! This circuit is a staged circuit based on the
-//! [`error_n`][super::stages::native::error_n] stage, which inherits in the
+//! [`error_n`][super::stages::error_n] stage, which inherits in the
 //! following chain:
-//! - [`preamble`][super::stages::native::preamble] (skipped)
-//! - [`error_n`][super::stages::native::error_n] (unenforced)
+//! - [`preamble`][super::stages::preamble] (skipped)
+//! - [`error_n`][super::stages::error_n] (unenforced)
 //!
 //! ## Public Inputs
 //!
@@ -54,7 +54,7 @@
 //! [$u$]: unified::Output::u
 //! [`nested_eval_commitment`]: unified::Output::nested_eval_commitment
 //! [$\beta$]: unified::Output::beta
-//! [`error_n`]: super::stages::native::error_n
+//! [`error_n`]: super::stages::error_n
 //! [`WithSuffix`]: crate::components::suffix::WithSuffix
 //! [`Sponge::resume_and_squeeze`]: ragu_primitives::poseidon::Sponge::resume_and_squeeze
 
@@ -74,7 +74,7 @@ use ragu_primitives::{GadgetExt, poseidon::Sponge};
 use core::marker::PhantomData;
 
 use super::{
-    stages::native::{error_n as native_error_n, preamble as native_preamble},
+    stages::{error_n as native_error_n, preamble as native_preamble},
     unified::{self, OutputBuilder},
 };
 use crate::components::fold_revdot;
@@ -111,13 +111,13 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Para
 /// Witness data for the second hash circuit.
 ///
 /// Combines the unified instance with the
-/// [`error_n`](super::stages::native::error_n) stage witness needed to resume
+/// [`error_n`](super::stages::error_n) stage witness needed to resume
 /// the Fiat-Shamir transcript from the saved sponge state.
 pub struct Witness<'a, C: Cycle, FP: fold_revdot::Parameters> {
     /// The unified instance containing expected challenge values.
     pub unified_instance: &'a unified::Instance<C>,
 
-    /// Witness for the [`error_n`](super::stages::native::error_n) stage
+    /// Witness for the [`error_n`](super::stages::error_n) stage
     /// (unenforced).
     ///
     /// Provides the saved sponge state for transcript resumption.

@@ -29,9 +29,9 @@
 //!
 //! Uses [`unified::Output`] as public inputs via [`unified::InternalOutputKind`].
 //!
-//! [`preamble`]: super::stages::native::preamble
-//! [`query`]: super::stages::native::query
-//! [`eval`]: super::stages::native::eval
+//! [`preamble`]: super::stages::preamble
+//! [`query`]: super::stages::query
+//! [`eval`]: super::stages::eval
 //! [$v$]: unified::Output::v
 //! [$\alpha$]: unified::Output::alpha
 //! [$\beta$]: unified::Output::beta
@@ -60,13 +60,13 @@ use crate::components::claim_builder::{self, ClaimProcessor, ClaimSource, RxComp
 use crate::components::fold_revdot::{NativeParameters, Parameters, fold_two_layer};
 
 use super::{
-    InternalCircuitIndex,
-    stages::native::{
+    stages::{
         eval as native_eval, preamble as native_preamble,
         query::{self as native_query, ChildEvaluations, FixedMeshEvaluations, RxEval},
     },
     unified::{self, OutputBuilder},
 };
+use crate::circuits::InternalCircuitIndex;
 use crate::components::horner::Horner;
 
 pub(crate) use crate::circuits::InternalCircuitIndex::ComputeVCircuit as CIRCUIT_ID;
@@ -314,7 +314,7 @@ impl<'dr, D: Driver<'dr>> Denominators<'dr, D> {
     where
         D::F: ff::PrimeField,
     {
-        use super::InternalCircuitIndex::{self, *};
+        use crate::circuits::InternalCircuitIndex::{self, *};
 
         let internal_denom = |dr: &mut D, idx: InternalCircuitIndex| -> Result<Element<'dr, D>> {
             let omega_j = Element::constant(dr, idx.circuit_index(num_application_steps).omega_j());

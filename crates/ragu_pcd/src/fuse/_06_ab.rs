@@ -19,7 +19,7 @@ use rand::Rng;
 
 use crate::{
     Application,
-    circuits::stages,
+    circuits::nested,
     components::fold_revdot::{self, NativeParameters},
     proof,
 };
@@ -53,11 +53,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         let c = a_poly.revdot(&b_poly);
 
-        let nested_ab_witness = stages::nested::ab::Witness {
+        let nested_ab_witness = nested::stages::ab::Witness {
             a: a_commitment,
             b: b_commitment,
         };
-        let nested_rx = stages::nested::ab::Stage::<C::HostCurve, R>::rx(&nested_ab_witness)?;
+        let nested_rx = nested::stages::ab::Stage::<C::HostCurve, R>::rx(&nested_ab_witness)?;
         let nested_blind = C::ScalarField::random(&mut *rng);
         let nested_commitment = nested_rx.commit(C::nested_generators(self.params), nested_blind);
 

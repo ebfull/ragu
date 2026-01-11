@@ -6,13 +6,8 @@ use ragu_circuits::{
 };
 use ragu_core::Result;
 
-pub(crate) mod compute_v;
-pub(crate) mod full_collapse;
-pub(crate) mod hashes_1;
-pub(crate) mod hashes_2;
-pub(crate) mod partial_collapse;
-pub(crate) mod stages;
-pub(crate) mod unified;
+pub(crate) mod native;
+pub(crate) mod nested;
 
 pub(crate) use crate::components::fold_revdot::NativeParameters;
 
@@ -69,11 +64,11 @@ pub(crate) fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
     {
         // preamble stage
         mesh = mesh.register_circuit_object(
-            stages::native::preamble::Stage::<C, R, HEADER_SIZE>::into_object()?,
+            native::stages::preamble::Stage::<C, R, HEADER_SIZE>::into_object()?,
         )?;
 
         // error_m stage
-        mesh = mesh.register_circuit_object(stages::native::error_m::Stage::<
+        mesh = mesh.register_circuit_object(native::stages::error_m::Stage::<
             C,
             R,
             HEADER_SIZE,
@@ -81,7 +76,7 @@ pub(crate) fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         >::into_object()?)?;
 
         // error_n stage
-        mesh = mesh.register_circuit_object(stages::native::error_n::Stage::<
+        mesh = mesh.register_circuit_object(native::stages::error_n::Stage::<
             C,
             R,
             HEADER_SIZE,
@@ -90,12 +85,12 @@ pub(crate) fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
 
         // query stage
         mesh = mesh.register_circuit_object(
-            stages::native::query::Stage::<C, R, HEADER_SIZE>::into_object()?,
+            native::stages::query::Stage::<C, R, HEADER_SIZE>::into_object()?,
         )?;
 
         // eval stage
         mesh = mesh.register_circuit_object(
-            stages::native::eval::Stage::<C, R, HEADER_SIZE>::into_object()?,
+            native::stages::eval::Stage::<C, R, HEADER_SIZE>::into_object()?,
         )?;
     }
 
@@ -105,7 +100,7 @@ pub(crate) fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
     // stage is only registered once here.
     {
         // preamble -> error_n -> error_m -> [CIRCUIT] (partial_collapse)
-        mesh = mesh.register_circuit_object(stages::native::error_m::Stage::<
+        mesh = mesh.register_circuit_object(native::stages::error_m::Stage::<
             C,
             R,
             HEADER_SIZE,
@@ -113,7 +108,7 @@ pub(crate) fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         >::final_into_object()?)?;
 
         // preamble -> error_n -> [CIRCUIT] (hashes_1, hashes_2, full_collapse)
-        mesh = mesh.register_circuit_object(stages::native::error_n::Stage::<
+        mesh = mesh.register_circuit_object(native::stages::error_n::Stage::<
             C,
             R,
             HEADER_SIZE,
@@ -122,24 +117,30 @@ pub(crate) fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
 
         // preamble -> query -> eval -> [CIRCUIT] (compute_v)
         mesh = mesh.register_circuit_object(
-            stages::native::eval::Stage::<C, R, HEADER_SIZE>::final_into_object()?,
+            native::stages::eval::Stage::<C, R, HEADER_SIZE>::final_into_object()?,
         )?;
     }
 
     // Insert the internal circuits.
     {
         // hashes_1
-        mesh = mesh.register_circuit(
-            hashes_1::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params, log2_circuits),
-        )?;
+        mesh = mesh.register_circuit(native::hashes_1::Circuit::<
+            C,
+            R,
+            HEADER_SIZE,
+            NativeParameters,
+        >::new(params, log2_circuits))?;
 
         // hashes_2
-        mesh = mesh.register_circuit(
-            hashes_2::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(params),
-        )?;
+        mesh = mesh.register_circuit(native::hashes_2::Circuit::<
+            C,
+            R,
+            HEADER_SIZE,
+            NativeParameters,
+        >::new(params))?;
 
         // partial_collapse
-        mesh = mesh.register_circuit(partial_collapse::Circuit::<
+        mesh = mesh.register_circuit(native::partial_collapse::Circuit::<
             C,
             R,
             HEADER_SIZE,
@@ -147,13 +148,15 @@ pub(crate) fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         >::new())?;
 
         // full_collapse
-        mesh =
-            mesh.register_circuit(
-                full_collapse::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(),
-            )?;
+        mesh = mesh.register_circuit(native::full_collapse::Circuit::<
+            C,
+            R,
+            HEADER_SIZE,
+            NativeParameters,
+        >::new())?;
 
         // compute_v
-        mesh = mesh.register_circuit(compute_v::Circuit::<C, R, HEADER_SIZE>::new(
+        mesh = mesh.register_circuit(native::compute_v::Circuit::<C, R, HEADER_SIZE>::new(
             num_application_steps,
         ))?;
     }

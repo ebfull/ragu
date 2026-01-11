@@ -14,7 +14,7 @@ use core::iter::once;
 
 use crate::{
     Application, Pcd, Proof,
-    circuits::stages::native::preamble::ProofInputs,
+    circuits::native::stages::preamble::ProofInputs,
     components::claim_builder::{
         self, ClaimBuilder, ClaimSource, KySource, RxComponent, ky_values,
     },

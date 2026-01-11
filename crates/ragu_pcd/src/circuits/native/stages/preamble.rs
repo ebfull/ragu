@@ -14,7 +14,9 @@ use ragu_primitives::{
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-use crate::{Proof, circuits::unified, components::ky::Ky, header::Header, step::internal::padded};
+use crate::{
+    Proof, circuits::native::unified, components::ky::Ky, header::Header, step::internal::padded,
+};
 
 pub(crate) use crate::circuits::InternalCircuitIndex::PreambleStage as STAGING_ID;
 
@@ -274,7 +276,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> staging::Stage<C::CircuitField
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::circuits::stages::native::tests::{HEADER_SIZE, R, assert_stage_values};
+    use crate::circuits::native::stages::tests::{HEADER_SIZE, R, assert_stage_values};
     use ragu_pasta::Pasta;
 
     #[test]

@@ -80,7 +80,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::circuits::stages::native::tests::{
+    use crate::circuits::native::stages::tests::{
         HEADER_SIZE, NativeParameters, R, assert_stage_values,
     };
     use ragu_pasta::Pasta;

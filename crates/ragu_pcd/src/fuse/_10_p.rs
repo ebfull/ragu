@@ -72,7 +72,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let mut msm_bases: Vec<C::HostCurve> = Vec::new();
 
         // The orderings in this code must match the corresponding struct
-        // definition ordering of `stages::native::eval::Output`.
+        // definition ordering of `native::stages::eval::Output`.
         //
         // We accumulate polynomial and blind in lock-step, while collecting
         // MSM terms for the commitment computation.

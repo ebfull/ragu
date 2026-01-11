@@ -21,10 +21,7 @@ use rand::Rng;
 
 use crate::{
     Application, Proof,
-    circuits::{
-        self, InternalCircuitIndex,
-        stages::{self, native::query},
-    },
+    circuits::{self, InternalCircuitIndex, native::stages::query, nested},
     proof,
 };
 
@@ -41,7 +38,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         right: &Proof<C, R>,
     ) -> Result<(
         proof::Query<C, R>,
-        circuits::stages::native::query::Witness<C>,
+        circuits::native::stages::query::Witness<C>,
     )>
     where
         D: Driver<'dr, F = C::CircuitField, MaybeKind = Always<()>>,
@@ -104,11 +101,11 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let stage_blind = C::CircuitField::random(&mut *rng);
         let stage_commitment = stage_rx.commit(C::host_generators(self.params), stage_blind);
 
-        let nested_query_witness = stages::nested::query::Witness {
+        let nested_query_witness = nested::stages::query::Witness {
             native_query: stage_commitment,
             mesh_xy: mesh_xy_commitment,
         };
-        let nested_rx = stages::nested::query::Stage::<C::HostCurve, R>::rx(&nested_query_witness)?;
+        let nested_rx = nested::stages::query::Stage::<C::HostCurve, R>::rx(&nested_query_witness)?;
         let nested_blind = C::ScalarField::random(&mut *rng);
         let nested_commitment = nested_rx.commit(C::nested_generators(self.params), nested_blind);
 

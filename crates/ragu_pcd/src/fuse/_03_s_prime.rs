@@ -14,7 +14,7 @@ use ragu_core::{
 use ragu_primitives::Element;
 use rand::Rng;
 
-use crate::{Application, Proof, circuits::stages, proof};
+use crate::{Application, Proof, circuits::nested, proof};
 
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_SIZE> {
     pub(super) fn compute_s_prime<'dr, D, RNG: Rng>(
@@ -40,12 +40,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let mesh_wx1_commitment =
             mesh_wx1_poly.commit(C::host_generators(self.params), mesh_wx1_blind);
 
-        let nested_s_prime_witness = stages::nested::s_prime::Witness {
+        let nested_s_prime_witness = nested::stages::s_prime::Witness {
             mesh_wx0: mesh_wx0_commitment,
             mesh_wx1: mesh_wx1_commitment,
         };
         let nested_s_prime_rx =
-            stages::nested::s_prime::Stage::<C::HostCurve, R>::rx(&nested_s_prime_witness)?;
+            nested::stages::s_prime::Stage::<C::HostCurve, R>::rx(&nested_s_prime_witness)?;
         let nested_s_prime_blind = C::ScalarField::random(&mut *rng);
         let nested_s_prime_commitment =
             nested_s_prime_rx.commit(C::nested_generators(self.params), nested_s_prime_blind);

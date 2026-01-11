@@ -11,7 +11,7 @@ use rand::Rng;
 
 use crate::{
     Application, Proof,
-    circuits::stages::{self, native::preamble as native_preamble},
+    circuits::{native::stages::preamble as native_preamble, nested},
     proof,
 };
 
@@ -37,7 +37,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         let stage_blind = C::CircuitField::random(&mut *rng);
         let stage_commitment = stage_rx.commit(C::host_generators(self.params), stage_blind);
 
-        let nested_preamble_witness = stages::nested::preamble::Witness {
+        let nested_preamble_witness = nested::stages::preamble::Witness {
             native_preamble: stage_commitment,
             left_application: left.application.commitment,
             right_application: right.application.commitment,
@@ -54,7 +54,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         };
 
         let nested_rx =
-            stages::nested::preamble::Stage::<C::HostCurve, R>::rx(&nested_preamble_witness)?;
+            nested::stages::preamble::Stage::<C::HostCurve, R>::rx(&nested_preamble_witness)?;
         let nested_blind = C::ScalarField::random(&mut *rng);
         let nested_commitment = nested_rx.commit(C::nested_generators(self.params), nested_blind);
 

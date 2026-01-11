@@ -20,7 +20,7 @@ use rand::Rng;
 
 use crate::{
     Application, Proof,
-    circuits::stages,
+    circuits::{native, nested},
     components::{
         claim_builder::{self, ClaimBuilder},
         fold_revdot::{self, NativeParameters},
@@ -41,7 +41,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         right: &'rx Proof<C, R>,
     ) -> Result<(
         proof::ErrorM<C, R>,
-        stages::native::error_m::Witness<C, NativeParameters>,
+        native::stages::error_m::Witness<C, NativeParameters>,
         ClaimBuilder<'_, 'rx, C::CircuitField, R>,
     )>
     where
@@ -64,19 +64,19 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             fold_revdot::compute_errors_m::<_, R, NativeParameters>(&builder.a, &builder.b);
 
         let error_m_witness =
-            stages::native::error_m::Witness::<C, NativeParameters> { error_terms };
-        let stage_rx = stages::native::error_m::Stage::<C, R, HEADER_SIZE, NativeParameters>::rx(
+            native::stages::error_m::Witness::<C, NativeParameters> { error_terms };
+        let stage_rx = native::stages::error_m::Stage::<C, R, HEADER_SIZE, NativeParameters>::rx(
             &error_m_witness,
         )?;
         let stage_blind = C::CircuitField::random(&mut *rng);
         let stage_commitment = stage_rx.commit(C::host_generators(self.params), stage_blind);
 
-        let nested_error_m_witness = stages::nested::error_m::Witness {
+        let nested_error_m_witness = nested::stages::error_m::Witness {
             native_error_m: stage_commitment,
             mesh_wy: mesh_wy_commitment,
         };
         let nested_rx =
-            stages::nested::error_m::Stage::<C::HostCurve, R>::rx(&nested_error_m_witness)?;
+            nested::stages::error_m::Stage::<C::HostCurve, R>::rx(&nested_error_m_witness)?;
         let nested_blind = C::ScalarField::random(&mut *rng);
         let nested_commitment = nested_rx.commit(C::nested_generators(self.params), nested_blind);
 

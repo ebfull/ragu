@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 
 use crate::{
     Application, Proof,
-    circuits::{InternalCircuitIndex, stages::nested::f},
+    circuits::{InternalCircuitIndex, nested::stages::f},
     proof,
 };
 
