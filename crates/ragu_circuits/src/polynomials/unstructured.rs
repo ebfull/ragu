@@ -6,7 +6,7 @@ use ff::Field;
 use rand::Rng;
 
 use alloc::{vec, vec::Vec};
-use core::ops::{Deref, DerefMut};
+use core::ops::{AddAssign, Deref, DerefMut};
 
 use super::Rank;
 
@@ -89,7 +89,7 @@ impl<F: Field, R: Rank> Polynomial<F, R> {
     }
 
     /// Add another unstructured polynomial to this one.
-    pub fn add_assign(&mut self, other: &Self) {
+    pub fn add_unstructured(&mut self, other: &Self) {
         assert_eq!(self.coeffs.len(), R::num_coeffs());
         assert_eq!(other.coeffs.len(), R::num_coeffs());
 
@@ -144,6 +144,18 @@ impl<F: Field, R: Rank> Polynomial<F, R> {
                 .chain(Some(generators.h())),
         )
         .into() // TODO(ebfull)
+    }
+}
+
+impl<F: Field, R: Rank> AddAssign<&Self> for Polynomial<F, R> {
+    fn add_assign(&mut self, rhs: &Self) {
+        self.add_unstructured(rhs);
+    }
+}
+
+impl<F: Field, R: Rank> AddAssign<&super::structured::Polynomial<F, R>> for Polynomial<F, R> {
+    fn add_assign(&mut self, rhs: &super::structured::Polynomial<F, R>) {
+        self.add_structured(rhs);
     }
 }
 

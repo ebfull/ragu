@@ -249,7 +249,7 @@ impl<F: PrimeField, R: Rank> Mesh<'_, F, R> {
             |circuit, circuit_coeff, poly| {
                 let mut tmp = circuit.sx(x, self.key);
                 tmp.scale(circuit_coeff);
-                poly.add_assign(&tmp);
+                poly.add_unstructured(&tmp);
             },
         )
     }

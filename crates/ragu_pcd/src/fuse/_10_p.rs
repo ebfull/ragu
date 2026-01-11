@@ -11,8 +11,9 @@
 
 use alloc::vec::Vec;
 use arithmetic::Cycle;
+use core::ops::AddAssign;
 use ff::Field;
-use ragu_circuits::polynomials::Rank;
+use ragu_circuits::polynomials::{Rank, unstructured};
 use ragu_core::{
     Result,
     drivers::Driver,
@@ -21,6 +22,30 @@ use ragu_core::{
 use ragu_primitives::Element;
 
 use crate::{Application, Proof, proof};
+
+/// Accumulates polynomials with their blinds and commitments for MSM computation.
+struct Accumulator<'a, C: Cycle, R: Rank> {
+    poly: &'a mut unstructured::Polynomial<C::CircuitField, R>,
+    blind: &'a mut C::CircuitField,
+    msm_scalars: &'a mut Vec<C::CircuitField>,
+    msm_bases: &'a mut Vec<C::HostCurve>,
+    beta: C::CircuitField,
+    beta_power: C::CircuitField,
+}
+
+impl<C: Cycle, R: Rank> Accumulator<'_, C, R> {
+    fn acc<P>(&mut self, poly: &P, blind: C::CircuitField, commitment: C::HostCurve)
+    where
+        for<'p> unstructured::Polynomial<C::CircuitField, R>: AddAssign<&'p P>,
+    {
+        self.poly.scale(self.beta);
+        *self.poly += poly;
+        *self.blind = self.beta * *self.blind + blind;
+        self.msm_scalars.push(self.beta_power);
+        self.msm_bases.push(commitment);
+        self.beta_power *= self.beta;
+    }
+}
 
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_SIZE> {
     pub(super) fn compute_p<'dr, D>(
@@ -51,269 +76,111 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         //
         // We accumulate polynomial and blind in lock-step, while collecting
         // MSM terms for the commitment computation.
-        {
-            let beta = *beta.value().take();
-
-            // Current power of beta, starting at β^0 for the last term added.
-            // We'll compute the final scalars by multiplying accumulated powers.
-            let mut beta_power = C::CircuitField::ONE;
-
-            // Accumulate structured polynomial with corresponding blind,
-            // and collect MSM term for commitment.
-            let acc_s = |p: &mut ragu_circuits::polynomials::unstructured::Polynomial<_, _>,
-                         b: &mut C::CircuitField,
-                         scalars: &mut Vec<C::CircuitField>,
-                         bases: &mut Vec<C::HostCurve>,
-                         beta_pow: &mut C::CircuitField,
-                         term_poly,
-                         term_blind,
-                         term_commitment: C::HostCurve| {
-                p.scale(beta);
-                p.add_structured(term_poly);
-                *b = beta * *b + term_blind;
-                // Push the term; we'll fix up scalars at the end.
-                scalars.push(*beta_pow);
-                bases.push(term_commitment);
-                *beta_pow *= beta;
-            };
-
-            // Accumulate unstructured polynomial with corresponding blind,
-            // and collect MSM term for commitment.
-            let acc_u = |p: &mut ragu_circuits::polynomials::unstructured::Polynomial<_, _>,
-                         b: &mut C::CircuitField,
-                         scalars: &mut Vec<C::CircuitField>,
-                         bases: &mut Vec<C::HostCurve>,
-                         beta_pow: &mut C::CircuitField,
-                         term_poly,
-                         term_blind,
-                         term_commitment: C::HostCurve| {
-                p.scale(beta);
-                p.add_assign(term_poly);
-                *b = beta * *b + term_blind;
-                // Push the term; we'll fix up scalars at the end.
-                scalars.push(*beta_pow);
-                bases.push(term_commitment);
-                *beta_pow *= beta;
+        let beta_power = {
+            let mut acc: Accumulator<'_, C, R> = Accumulator {
+                poly: &mut poly,
+                blind: &mut blind,
+                msm_scalars: &mut msm_scalars,
+                msm_bases: &mut msm_bases,
+                beta: *beta.value().take(),
+                beta_power: C::CircuitField::ONE,
             };
 
             for proof in [left, right] {
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.application.rx,
                     proof.application.blind,
                     proof.application.commitment,
                 );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.preamble.stage_rx,
                     proof.preamble.stage_blind,
                     proof.preamble.stage_commitment,
                 );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.error_n.stage_rx,
                     proof.error_n.stage_blind,
                     proof.error_n.stage_commitment,
                 );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.error_m.stage_rx,
                     proof.error_m.stage_blind,
                     proof.error_m.stage_commitment,
                 );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
-                    &proof.ab.a_poly,
-                    proof.ab.a_blind,
-                    proof.ab.a_commitment,
-                );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
-                    &proof.ab.b_poly,
-                    proof.ab.b_blind,
-                    proof.ab.b_commitment,
-                );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(&proof.ab.a_poly, proof.ab.a_blind, proof.ab.a_commitment);
+                acc.acc(&proof.ab.b_poly, proof.ab.b_blind, proof.ab.b_commitment);
+                acc.acc(
                     &proof.query.stage_rx,
                     proof.query.stage_blind,
                     proof.query.stage_commitment,
                 );
-                acc_u(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.query.mesh_xy_poly,
                     proof.query.mesh_xy_blind,
                     proof.query.mesh_xy_commitment,
                 );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.eval.stage_rx,
                     proof.eval.stage_blind,
                     proof.eval.stage_commitment,
                 );
-                acc_u(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
-                    &proof.p.poly,
-                    proof.p.blind,
-                    proof.p.commitment,
-                );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(&proof.p.poly, proof.p.blind, proof.p.commitment);
+                acc.acc(
                     &proof.circuits.hashes_1_rx,
                     proof.circuits.hashes_1_blind,
                     proof.circuits.hashes_1_commitment,
                 );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.circuits.hashes_2_rx,
                     proof.circuits.hashes_2_blind,
                     proof.circuits.hashes_2_commitment,
                 );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.circuits.partial_collapse_rx,
                     proof.circuits.partial_collapse_blind,
                     proof.circuits.partial_collapse_commitment,
                 );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.circuits.full_collapse_rx,
                     proof.circuits.full_collapse_blind,
                     proof.circuits.full_collapse_commitment,
                 );
-                acc_s(
-                    &mut poly,
-                    &mut blind,
-                    &mut msm_scalars,
-                    &mut msm_bases,
-                    &mut beta_power,
+                acc.acc(
                     &proof.circuits.compute_v_rx,
                     proof.circuits.compute_v_blind,
                     proof.circuits.compute_v_commitment,
                 );
             }
 
-            acc_u(
-                &mut poly,
-                &mut blind,
-                &mut msm_scalars,
-                &mut msm_bases,
-                &mut beta_power,
+            acc.acc(
                 &s_prime.mesh_wx0_poly,
                 s_prime.mesh_wx0_blind,
                 s_prime.mesh_wx0_commitment,
             );
-            acc_u(
-                &mut poly,
-                &mut blind,
-                &mut msm_scalars,
-                &mut msm_bases,
-                &mut beta_power,
+            acc.acc(
                 &s_prime.mesh_wx1_poly,
                 s_prime.mesh_wx1_blind,
                 s_prime.mesh_wx1_commitment,
             );
-            acc_s(
-                &mut poly,
-                &mut blind,
-                &mut msm_scalars,
-                &mut msm_bases,
-                &mut beta_power,
+            acc.acc(
                 &error_m.mesh_wy_poly,
                 error_m.mesh_wy_blind,
                 error_m.mesh_wy_commitment,
             );
-            acc_s(
-                &mut poly,
-                &mut blind,
-                &mut msm_scalars,
-                &mut msm_bases,
-                &mut beta_power,
-                &ab.a_poly,
-                ab.a_blind,
-                ab.a_commitment,
-            );
-            acc_s(
-                &mut poly,
-                &mut blind,
-                &mut msm_scalars,
-                &mut msm_bases,
-                &mut beta_power,
-                &ab.b_poly,
-                ab.b_blind,
-                ab.b_commitment,
-            );
-            acc_u(
-                &mut poly,
-                &mut blind,
-                &mut msm_scalars,
-                &mut msm_bases,
-                &mut beta_power,
+            acc.acc(&ab.a_poly, ab.a_blind, ab.a_commitment);
+            acc.acc(&ab.b_poly, ab.b_blind, ab.b_commitment);
+            acc.acc(
                 &query.mesh_xy_poly,
                 query.mesh_xy_blind,
                 query.mesh_xy_commitment,
             );
 
-            // Add f's commitment with the final beta power.
-            msm_scalars.push(beta_power);
-            msm_bases.push(f.commitment);
-        }
+            acc.beta_power
+        };
+
+        // Add f's commitment with the final beta power.
+        msm_scalars.push(beta_power);
+        msm_bases.push(f.commitment);
 
         let n = msm_scalars.len() - 1;
         msm_scalars[..n].reverse();
