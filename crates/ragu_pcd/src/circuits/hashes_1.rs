@@ -12,8 +12,10 @@
 //! - Absorb [`nested_s_prime_commitment`].
 //! - Squeeze [$y$] and [$z$] challenges.
 //! - Absorb [`nested_error_m_commitment`].
-//! - Move to squeeze mode using a permutation.
-//! - Save the sponge state and verify it matches the witnessed value.
+//! - Call [`Sponge::save_state`] to capture the transcript state for resumption
+//!   in `hashes_2`. This applies a permutation (the third) since we're at the
+//!   absorb-to-squeeze boundary.
+//! - Verify the saved state matches the witnessed value from `error_n`.
 //!
 //! The squeezed $w, y, z$ challenges are set in the unified instance by this
 //! circuit. **The rest of the transcript computations are performed in the
@@ -68,6 +70,7 @@
 //! [$y$]: unified::Output::y
 //! [$z$]: unified::Output::z
 //! [`WithSuffix`]: crate::components::suffix::WithSuffix
+//! [`Sponge::save_state`]: ragu_primitives::poseidon::Sponge::save_state
 
 use arithmetic::Cycle;
 use ragu_circuits::{
@@ -273,9 +276,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
                 .get(dr, unified_instance)?;
             nested_error_m_commitment.write(dr, &mut sponge)?;
 
-            // Save state and verify it matches the witnessed state from error_n
-            // This performs a permutation and converts the sponge into squeeze
-            // mode.
+            // save_state() applies a permutation (since there's pending absorbed data)
+            // and returns the raw state, ready for squeeze-mode resumption in hashes_2.
             sponge
                 .save_state(dr)
                 .expect("save_state should succeed after absorbing")
