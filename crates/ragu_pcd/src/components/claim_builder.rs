@@ -64,6 +64,7 @@ pub enum NativeRxComponent {
 
 /// Enum identifying which nested field rx polynomial to retrieve from a proof.
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 pub enum NestedRxComponent {
     /// The preamble nested rx polynomial.
     Preamble,

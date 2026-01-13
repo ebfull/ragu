@@ -98,14 +98,14 @@ pub struct Witness<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_rev
     /// witnessed [$c$](unified::Output::c) claim.
     pub unified_instance: &'a unified::Instance<C>,
 
-    /// Witness for the [`preamble`](super::stages::preamble) stage
+    /// Witness for the [`preamble`] stage
     /// (unenforced).
     ///
     /// Provides access to [`is_base_case`](super::stages::preamble::Output::is_base_case)
     /// for conditional constraint enforcement.
     pub preamble_witness: &'a preamble::Witness<'a, C, R, HEADER_SIZE>,
 
-    /// Witness for the [`error_n`](super::stages::error_n) stage
+    /// Witness for the [`error_n`] stage
     /// (unenforced).
     ///
     /// Provides layer 2 error terms and collapsed values from layer 1.
