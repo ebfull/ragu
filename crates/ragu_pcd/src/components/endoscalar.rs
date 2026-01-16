@@ -14,7 +14,7 @@ use ragu_primitives::{
 
 use alloc::vec::Vec;
 
-use crate::{
+use ragu_circuits::{
     polynomials::Rank,
     staging::{Stage, StageBuilder, StagedCircuit},
 };
@@ -200,15 +200,15 @@ mod tests {
     use super::{
         EndoscalarStage, Endoscaling, EndoscalingInstance, EndoscalingWitness, Read, SlotStage,
     };
-    use crate::{
+    use arithmetic::Uendo;
+    use ff::Field;
+    use pasta_curves::group::Curve;
+    use pasta_curves::group::prime::PrimeCurveAffine;
+    use ragu_circuits::{
         CircuitExt,
         polynomials::{self},
         staging::{StageExt, Staged},
     };
-    use arithmetic::Uendo;
-    use ff::Field;
-    use group::Curve;
-    use group::prime::PrimeCurveAffine;
     use ragu_core::Result;
     use ragu_pasta::{EpAffine, EqAffine, Fp, Fq};
     use ragu_primitives::vec::FixedVec;
