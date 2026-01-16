@@ -13,9 +13,9 @@
 //! - Squeeze [$y$] and [$z$] challenges.
 //! - Absorb [`nested_error_m_commitment`].
 //! - Call [`Sponge::save_state`] to capture the transcript state for resumption
-//!   in `hashes_2`. This applies a permutation (the third) since we're at the
+//!   in [`hashes_2`][super::hashes_2]. This applies a permutation (the third) since we're at the
 //!   absorb-to-squeeze boundary.
-//! - Verify the saved state matches the witnessed value from `error_n`.
+//! - Verify the saved state matches the witnessed value from [`error_n`][super::stages::error_n].
 //!
 //! The squeezed $w, y, z$ challenges are set in the unified instance by this
 //! circuit. **The rest of the transcript computations are performed in the

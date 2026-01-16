@@ -25,8 +25,8 @@
 //!
 //! ## Staging
 //!
-//! This circuit is a staged circuit based on the [`error_n`] stage, which
-//! inherits in the following chain:
+//! This circuit uses [`error_n`] as its final stage, which inherits in the
+//! following chain:
 //! - [`preamble`] (unenforced)
 //! - [`error_n`] (unenforced)
 //!

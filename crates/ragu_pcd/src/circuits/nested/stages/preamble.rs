@@ -1,3 +1,7 @@
+//! Preamble stage for nested fuse operations.
+//!
+//! Collects child proof commitments for cross-curve accumulation.
+
 use arithmetic::{CurveAffine, Cycle};
 use ragu_circuits::polynomials::Rank;
 
@@ -34,7 +38,7 @@ pub struct ChildWitness<C: CurveAffine> {
 }
 
 impl<C: CurveAffine> ChildWitness<C> {
-    /// Construct from a proof's commitments.
+    /// Construct from a child proof's commitments.
     pub fn from_proof<CC: Cycle<HostCurve = C>, R: Rank>(proof: &Proof<CC, R>) -> Self {
         Self {
             application: proof.application.commitment,

@@ -51,9 +51,9 @@ pub const NUM_WIRES: usize = 29;
 ///
 /// # Field Organization
 ///
-/// Fields are ordered to match the proof transcript:
+/// Fields are ordered to match the current proof's transcript:
 ///
-/// - **Commitments**: Points on the nested curve from proof components
+/// - **Commitments**: Points on the nested curve from current proof components
 /// - **Challenges**: Fiat-Shamir challenges computed by [`hashes_1`] and [`hashes_2`]
 /// - **Final values**: The revdot claim $c$ and expected evaluation $v$
 ///
@@ -61,7 +61,7 @@ pub const NUM_WIRES: usize = 29;
 /// [`hashes_2`]: super::hashes_2
 #[derive(Gadget, Write)]
 pub struct Output<'dr, D: Driver<'dr>, C: Cycle> {
-    // Commitments from proof components (on the nested curve)
+    // Commitments from current proof components (on the nested curve)
     /// Commitment from the preamble proof component.
     #[ragu(gadget)]
     pub nested_preamble_commitment: Point<'dr, D, C::NestedCurve>,
@@ -279,11 +279,11 @@ pub struct OutputBuilder<'a, 'dr, D: Driver<'dr>, C: Cycle> {
 }
 
 impl<'dr, D: Driver<'dr>, C: Cycle> Output<'dr, D, C> {
-    /// Allocates an [`Output`] directly from a proof reference.
+    /// Allocates an [`Output`] directly from a current proof reference.
     ///
-    /// This is a convenience method that extracts all fields from the proof
-    /// components and challenges. Useful for testing or when the full proof
-    /// structure is available.
+    /// This is a convenience method that extracts all fields from the current
+    /// proof's components and challenges. Useful for testing or when the full
+    /// proof structure is available.
     pub fn alloc_from_proof<R: Rank>(
         dr: &mut D,
         proof: DriverValue<D, &Proof<C, R>>,

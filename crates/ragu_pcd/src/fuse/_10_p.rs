@@ -183,6 +183,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         msm_bases.push(f.commitment);
 
         let n = msm_scalars.len() - 1;
+
+        // Horner accumulation inserts scalars in reverse order (lowest beta power first),
+        // so we reverse to align with the corresponding commitment bases.
         msm_scalars[..n].reverse();
 
         // Compute commitment via MSM: Σ scalar_i * base_i

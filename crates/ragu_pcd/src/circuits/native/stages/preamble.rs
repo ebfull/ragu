@@ -1,3 +1,7 @@
+//! Preamble stage for native fuse operations.
+//!
+//! Verifies child proof headers and computes the Ky term.
+
 use arithmetic::Cycle;
 use ragu_circuits::{polynomials::Rank, staging};
 use ragu_core::{
@@ -42,7 +46,7 @@ pub struct Witness<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize> {
 }
 
 impl<'a, C: Cycle, R: Rank, const HEADER_SIZE: usize> Witness<'a, C, R, HEADER_SIZE> {
-    /// Create a witness from proof references and pre-computed output headers.
+    /// Create a witness from child proof references and pre-computed output headers.
     pub fn new(
         left: &'a Proof<C, R>,
         right: &'a Proof<C, R>,

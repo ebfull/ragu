@@ -32,8 +32,8 @@ pub(crate) enum InternalCircuitIndex {
     ComputeVCircuit = 12,
 }
 
-/// The number of internal circuits registered by [`register_all`],
-/// and the number of variants in [`InternalCircuitIndex`].
+/// The number of internal circuits registered by [`register_all_native`] and
+/// [`register_all_nested`], and the number of variants in [`InternalCircuitIndex`].
 pub(crate) const NUM_INTERNAL_CIRCUITS: usize = 13;
 
 /// Compute the total circuit count and log2 domain size from the number of
@@ -51,8 +51,8 @@ impl InternalCircuitIndex {
     }
 }
 
-/// Register internal polynomials into the provided mesh.
-pub(crate) fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
+/// Register internal native circuits into the provided mesh.
+pub(crate) fn register_all_native<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>(
     mut mesh: MeshBuilder<'params, C::CircuitField, R>,
     params: &'params C::Params,
     log2_circuits: u32,
@@ -168,6 +168,15 @@ pub(crate) fn register_all<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         "internal circuit count mismatch"
     );
 
+    Ok(mesh)
+}
+
+/// Register internal nested circuits into the provided mesh.
+pub(crate) fn register_all_nested<'params, C: Cycle, R: Rank>(
+    mut mesh: MeshBuilder<'params, C::ScalarField, R>,
+) -> Result<MeshBuilder<'params, C::ScalarField, R>> {
+    // Register a dummy circuit as placeholder for future internal scalar-field circuits.
+    mesh = mesh.register_circuit(())?;
     Ok(mesh)
 }
 

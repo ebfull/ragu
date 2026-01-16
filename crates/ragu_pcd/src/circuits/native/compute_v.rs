@@ -12,7 +12,8 @@
 //! ### $f(u)$ computation
 //! - Compute inverse denominators $(u - x_i)^{-1}$ for all evaluation points
 //! - Iterate polynomial queries $(p(u), v, (u - x_i)^{-1})$ in prover order
-//! - Accumulate $f(u) = \sum_i \alpha^i \cdot (p_i(u) - v_i) / (u - x_i)$ via Horner
+//! - Accumulate $f(u) = \sum_i \alpha^{n-1-i} \cdot (p_i(u) - v_i) / (u - x_i)$ via Horner
+//!   (first query receives highest $\alpha$ power)
 //!
 //! ### $v$ computation
 //! - Compute $v = f(u) + \beta \cdot \text{eval}$ using [$\beta$] challenge
@@ -20,7 +21,8 @@
 //!
 //! ## Staging
 //!
-//! This circuit is a staged circuit based on the [`eval`] stage:
+//! This circuit uses [`eval`] as its final stage, which inherits in the
+//! following chain:
 //! - [`preamble`] (enforced) - provides child proof data
 //! - [`query`] (unenforced) - provides mesh and polynomial evaluations
 //! - [`eval`] (unenforced) - provides evaluation component polynomials
@@ -202,7 +204,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> StagedCircuit<C::CircuitField,
             };
 
             // Step 2: Compute f(u) by accumulating quotient terms.
-            // f(u) = sum_i alpha^i * (p_i(u) - v_i) / (u - x_i)
+            // f(u) = sum_i alpha^{n-1-i} * (p_i(u) - v_i) / (u - x_i)
+            // (Horner accumulation: first query receives highest alpha power)
             let fu = {
                 let alpha = unified_output.alpha.get(dr, unified_instance)?;
                 let u = unified_output.u.get(dr, unified_instance)?;

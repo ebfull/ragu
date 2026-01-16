@@ -122,7 +122,7 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
             let (total_circuits, log2_circuits) =
                 circuits::total_circuit_counts(self.num_application_steps);
 
-            self.native_mesh = circuits::register_all::<C, R, HEADER_SIZE>(
+            self.native_mesh = circuits::register_all_native::<C, R, HEADER_SIZE>(
                 self.native_mesh,
                 params,
                 log2_circuits,
@@ -142,7 +142,7 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         }
 
         // Register nested internal circuits (no application steps, no headers).
-        self.nested_mesh = circuits::nested::register_all::<C, R>(self.nested_mesh)?;
+        self.nested_mesh = circuits::register_all_nested::<C, R>(self.nested_mesh)?;
 
         Ok(Application {
             native_mesh: self.native_mesh.finalize(C::circuit_poseidon(params))?,
