@@ -142,7 +142,7 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         }
 
         // Register nested internal circuits (no application steps, no headers).
-        self.nested_mesh = circuits::register_all_nested::<C, R>(self.nested_mesh)?;
+        self.nested_mesh = circuits::nested::register_all::<C, R>(self.nested_mesh)?;
 
         Ok(Application {
             native_mesh: self.native_mesh.finalize(C::circuit_poseidon(params))?,
