@@ -10,7 +10,7 @@ use ragu_circuits::{
 pub mod native;
 
 use crate::circuits::InternalCircuitIndex;
-use native::ClaimProcessor;
+use native::Processor;
 
 /// Processor that builds polynomial vectors for revdot claims.
 ///
@@ -58,8 +58,8 @@ impl<'m, 'rx, F: PrimeField, R: Rank> Builder<'m, 'rx, F, R> {
     }
 }
 
-impl<'m, 'rx, F: PrimeField, R: Rank>
-    ClaimProcessor<&'rx structured::Polynomial<F, R>, CircuitIndex> for Builder<'m, 'rx, F, R>
+impl<'m, 'rx, F: PrimeField, R: Rank> Processor<&'rx structured::Polynomial<F, R>, CircuitIndex>
+    for Builder<'m, 'rx, F, R>
 {
     fn raw_claim(
         &mut self,

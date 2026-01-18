@@ -59,7 +59,7 @@ use ragu_primitives::{Element, Endoscalar, GadgetExt};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-use crate::components::claims::native::{self as claims, ClaimProcessor, ClaimSource, RxComponent};
+use crate::components::claims::native::{self as claims, Processor, RxComponent, Source};
 use crate::components::fold_revdot::{NativeParameters, Parameters, fold_two_layer};
 
 use super::{
@@ -370,7 +370,7 @@ impl<'dr, D: Driver<'dr>> Denominators<'dr, D> {
 
 /// Source providing polynomial evaluations from child proofs for revdot folding.
 ///
-/// Implements [`ClaimSource`] to provide evaluations in the canonical order
+/// Implements [`Source`] to provide evaluations in the canonical order
 /// required by [`build`]. The ordering must match exactly
 /// to ensure correct folding correspondence with the prover's computation.
 ///
@@ -380,7 +380,7 @@ struct EvaluationSource<'a, 'dr, D: Driver<'dr>> {
     right: &'a ChildEvaluations<'dr, D>,
 }
 
-impl<'a, 'dr, D: Driver<'dr>> ClaimSource for EvaluationSource<'a, 'dr, D> {
+impl<'a, 'dr, D: Driver<'dr>> Source for EvaluationSource<'a, 'dr, D> {
     type Rx = RxEval<'a, 'dr, D>;
 
     /// For app circuits: the mesh evaluation at the circuit's omega^j.
@@ -471,7 +471,7 @@ impl<'a, 'dr, D: Driver<'dr>> EvaluationProcessor<'a, 'dr, D> {
     }
 }
 
-impl<'a, 'dr, D: Driver<'dr>> ClaimProcessor<RxEval<'a, 'dr, D>, &'a Element<'dr, D>>
+impl<'a, 'dr, D: Driver<'dr>> Processor<RxEval<'a, 'dr, D>, &'a Element<'dr, D>>
     for EvaluationProcessor<'a, 'dr, D>
 {
     fn raw_claim(&mut self, a: RxEval<'a, 'dr, D>, b: RxEval<'a, 'dr, D>) {

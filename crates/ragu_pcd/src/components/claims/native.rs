@@ -6,8 +6,8 @@
 //! logic in the recursive circuit.
 //!
 //! The abstraction separates:
-//! - [`ClaimSource`]: Provides rx values from proof sources
-//! - [`ClaimProcessor`]: Processes rx values into accumulated outputs
+//! - [`Source`]: Provides rx values from proof sources
+//! - [`Processor`]: Processes rx values into accumulated outputs
 //! - [`build`]: Orchestrates claim building in unified order
 
 use core::iter::{once, repeat_n};
@@ -65,7 +65,7 @@ pub enum RxComponent {
 /// Implementors provide access to rx values for all proofs they manage.
 /// For verification (single proof), iterators yield 1 item.
 /// For fuse (two proofs), iterators yield 2 items (left, right).
-pub trait ClaimSource {
+pub trait Source {
     /// Opaque type for rx values. Could be:
     /// - `&Polynomial<F, R>` for polynomial context
     /// - `(&Element, &Element)` for evaluation context (at_x, at_xz)
@@ -85,9 +85,9 @@ pub trait ClaimSource {
 
 /// Trait for processing claim values into accumulated outputs.
 ///
-/// This trait defines how to process rx values from a [`ClaimSource`].
+/// This trait defines how to process rx values from a [`Source`].
 /// Different implementations handle polynomial vs evaluation contexts.
-pub trait ClaimProcessor<Rx, AppCircuitId> {
+pub trait Processor<Rx, AppCircuitId> {
     /// Process a raw claim (a/b directly, k(y) = c).
     fn raw_claim(&mut self, a: Rx, b: Rx);
 
@@ -113,8 +113,8 @@ pub trait ClaimProcessor<Rx, AppCircuitId> {
 /// and `fuse.rs` `compute_errors_n`.
 pub fn build<S, P>(source: &S, processor: &mut P) -> Result<()>
 where
-    S: ClaimSource,
-    P: ClaimProcessor<S::Rx, S::AppCircuitId>,
+    S: Source,
+    P: Processor<S::Rx, S::AppCircuitId>,
 {
     use RxComponent::*;
 

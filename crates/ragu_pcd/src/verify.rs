@@ -17,7 +17,7 @@ use crate::{
     circuits::native::stages::preamble::ProofInputs,
     components::claims::{
         self,
-        native::{ClaimSource, KySource, RxComponent, ky_values},
+        native::{KySource, RxComponent, Source, ky_values},
     },
     header::Header,
 };
@@ -121,7 +121,7 @@ struct SingleProofSource<'rx, C: Cycle, R: Rank> {
     proof: &'rx Proof<C, R>,
 }
 
-impl<'rx, C: Cycle, R: Rank> ClaimSource for SingleProofSource<'rx, C, R> {
+impl<'rx, C: Cycle, R: Rank> Source for SingleProofSource<'rx, C, R> {
     type Rx = &'rx structured::Polynomial<C::CircuitField, R>;
     type AppCircuitId = CircuitIndex;
 
