@@ -59,9 +59,13 @@ use ragu_primitives::{Element, Endoscalar, GadgetExt};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-use crate::components::claim_builder::{self, ClaimProcessor, ClaimSource, NativeRxComponent};
+use crate::components::claims::{
+    Source,
+    native::{self as claims, Processor, RxComponent},
+};
 use crate::components::fold_revdot::{NativeParameters, Parameters, fold_two_layer};
 
+use super::InternalCircuitIndex;
 use super::{
     stages::{
         eval as native_eval, preamble as native_preamble,
@@ -69,10 +73,9 @@ use super::{
     },
     unified::{self, OutputBuilder},
 };
-use crate::circuits::InternalCircuitIndex;
 use crate::components::horner::Horner;
 
-pub(crate) use crate::circuits::InternalCircuitIndex::ComputeVCircuit as CIRCUIT_ID;
+pub(crate) use super::InternalCircuitIndex::ComputeVCircuit as CIRCUIT_ID;
 
 /// Circuit that computes and verifies the claimed evaluation value [$v$].
 ///
@@ -321,7 +324,7 @@ impl<'dr, D: Driver<'dr>> Denominators<'dr, D> {
     where
         D::F: ff::PrimeField,
     {
-        use crate::circuits::InternalCircuitIndex::{self, *};
+        use super::InternalCircuitIndex::{self, *};
 
         let internal_denom = |dr: &mut D, idx: InternalCircuitIndex| -> Result<Element<'dr, D>> {
             let omega_j = Element::constant(dr, idx.circuit_index(num_application_steps).omega_j());
@@ -370,24 +373,25 @@ impl<'dr, D: Driver<'dr>> Denominators<'dr, D> {
 
 /// Source providing polynomial evaluations from child proofs for revdot folding.
 ///
-/// Implements [`ClaimSource`] to provide evaluations in the canonical order
-/// required by [`build_claims`]. The ordering must match exactly
+/// Implements [`Source`] to provide evaluations in the canonical order
+/// required by [`build`]. The ordering must match exactly
 /// to ensure correct folding correspondence with the prover's computation.
 ///
-/// [`build_claims`]: claim_builder::build_claims
+/// [`build`]: claims::build
 struct EvaluationSource<'a, 'dr, D: Driver<'dr>> {
     left: &'a ChildEvaluations<'dr, D>,
     right: &'a ChildEvaluations<'dr, D>,
 }
 
-impl<'a, 'dr, D: Driver<'dr>> ClaimSource for EvaluationSource<'a, 'dr, D> {
+impl<'a, 'dr, D: Driver<'dr>> Source for EvaluationSource<'a, 'dr, D> {
+    type RxComponent = RxComponent;
     type Rx = RxEval<'a, 'dr, D>;
 
     /// For app circuits: the mesh evaluation at the circuit's omega^j.
     type AppCircuitId = &'a Element<'dr, D>;
 
-    fn rx(&self, component: NativeRxComponent) -> impl Iterator<Item = Self::Rx> {
-        use NativeRxComponent::*;
+    fn rx(&self, component: RxComponent) -> impl Iterator<Item = Self::Rx> {
+        use RxComponent::*;
         let (left, right) = match component {
             // Raw claims: only x evaluation is available
             AbA => (
@@ -471,7 +475,7 @@ impl<'a, 'dr, D: Driver<'dr>> EvaluationProcessor<'a, 'dr, D> {
     }
 }
 
-impl<'a, 'dr, D: Driver<'dr>> ClaimProcessor<RxEval<'a, 'dr, D>, &'a Element<'dr, D>>
+impl<'a, 'dr, D: Driver<'dr>> Processor<RxEval<'a, 'dr, D>, &'a Element<'dr, D>>
     for EvaluationProcessor<'a, 'dr, D>
 {
     fn raw_claim(&mut self, a: RxEval<'a, 'dr, D>, b: RxEval<'a, 'dr, D>) {
@@ -546,13 +550,13 @@ fn compute_axbx<'dr, D: Driver<'dr>, P: Parameters>(
     mu_prime_nu_prime: &Element<'dr, D>,
 ) -> Result<(Element<'dr, D>, Element<'dr, D>)> {
     // Build ax/bx evaluation vectors using the unified claim building abstraction.
-    // This ensures the ordering matches claim_builder::build_claims() exactly.
+    // This ensures the ordering matches claims::build() exactly.
     let source = EvaluationSource {
         left: &query.left,
         right: &query.right,
     };
     let mut processor = EvaluationProcessor::new(dr, z, txz, &query.fixed_mesh);
-    claim_builder::build_claims(&source, &mut processor)?;
+    claims::build(&source, &mut processor)?;
 
     let (ax_sources, bx_sources) = processor.build();
     let ax = fold_two_layer::<_, P>(dr, &ax_sources, mu_inv, mu_prime_inv)?;

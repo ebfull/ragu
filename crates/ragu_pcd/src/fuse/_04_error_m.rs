@@ -22,7 +22,7 @@ use crate::{
     Application, Proof,
     circuits::{native, nested},
     components::{
-        claim_builder::{self, ClaimBuilder},
+        claims,
         fold_revdot::{self, NativeParameters},
     },
     proof,
@@ -42,7 +42,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
     ) -> Result<(
         proof::ErrorM<C, R>,
         native::stages::error_m::Witness<C, NativeParameters>,
-        ClaimBuilder<'_, 'rx, C::CircuitField, R>,
+        claims::Builder<'_, 'rx, C::CircuitField, R>,
     )>
     where
         D: Driver<'dr, F = C::CircuitField, MaybeKind = Always<()>>,
@@ -57,8 +57,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             mesh_wy_poly.commit(C::host_generators(self.params), mesh_wy_blind);
 
         let source = FuseProofSource { left, right };
-        let mut builder = ClaimBuilder::new(&self.native_mesh, self.num_application_steps, y, z);
-        claim_builder::build_claims(&source, &mut builder)?;
+        let mut builder = claims::Builder::new(&self.native_mesh, self.num_application_steps, y, z);
+        claims::native::build(&source, &mut builder)?;
 
         let error_terms =
             fold_revdot::compute_errors_m::<_, R, NativeParameters>(&builder.a, &builder.b);

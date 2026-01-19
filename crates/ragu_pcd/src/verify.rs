@@ -13,11 +13,7 @@ use rand::Rng;
 use core::iter::once;
 
 use crate::{
-    Application, Pcd, Proof,
-    circuits::native::stages::preamble::ProofInputs,
-    components::claim_builder::{
-        self, ClaimBuilder, ClaimSource, KySource, NativeRxComponent, ky_values,
-    },
+    Application, Pcd, Proof, circuits::native::stages::preamble::ProofInputs, components::claims,
     header::Header,
 };
 
@@ -68,21 +64,35 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             })?;
 
         // Build a and b polynomials for each revdot claim.
-        let source = SingleProofSource { proof: &pcd.proof };
-        let mut builder = ClaimBuilder::new(&self.native_mesh, self.num_application_steps, y, z);
-        claim_builder::build_claims(&source, &mut builder)?;
+        let source = native::SingleProofSource { proof: &pcd.proof };
+        let mut builder = claims::Builder::new(&self.native_mesh, self.num_application_steps, y, z);
+        claims::native::build(&source, &mut builder)?;
 
-        // Check all revdot claims.
-        let revdot_claims = {
-            let ky_source = SingleProofKySource {
+        // Check all native revdot claims.
+        let native_revdot_claims = {
+            let ky_source = native::SingleProofKySource {
                 raw_c: pcd.proof.ab.c,
                 application_ky,
                 unified_bridge_ky,
                 unified_ky,
             };
 
-            ky_values(&ky_source)
+            native::ky_values(&ky_source)
                 .zip(builder.a.iter().zip(builder.b.iter()))
+                .all(|(ky, (a, b))| a.revdot(b) == ky)
+        };
+
+        // Check all nested revdot claims.
+        let nested_revdot_claims = {
+            let nested_source = nested::SingleProofSource { proof: &pcd.proof };
+            let y_nested = C::ScalarField::random(&mut rng);
+            let z_nested = C::ScalarField::random(&mut rng);
+            let mut nested_builder = claims::Builder::new(&self.nested_mesh, 0, y_nested, z_nested);
+            claims::nested::build(&nested_source, &mut nested_builder)?;
+
+            let ky_source = nested::SingleProofKySource::<C::ScalarField>::new();
+            nested::ky_values(&ky_source)
+                .zip(nested_builder.a.iter().zip(nested_builder.b.iter()))
                 .all(|(ky, (a, b))| a.revdot(b) == ky)
         };
 
@@ -111,71 +121,142 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         // - mesh_wx0/wx1: need child proof x challenges (x₀, x₁) which "disappear" in preamble
         // - mesh_wy: interstitial value that will be elided later
 
-        Ok(revdot_claims && p_eval_claim && p_commitment_claim && mesh_xy_claim)
+        Ok(native_revdot_claims
+            && nested_revdot_claims
+            && p_eval_claim
+            && p_commitment_claim
+            && mesh_xy_claim)
     }
 }
 
-/// Wraps a single proof for use with `ClaimSource`.
-struct SingleProofSource<'rx, C: Cycle, R: Rank> {
-    proof: &'rx Proof<C, R>,
+mod native {
+    use super::*;
+    use crate::components::claims::{
+        Source,
+        native::{KySource, RxComponent},
+    };
+
+    pub use crate::components::claims::native::ky_values;
+
+    pub struct SingleProofSource<'rx, C: Cycle, R: Rank> {
+        pub proof: &'rx Proof<C, R>,
+    }
+
+    impl<'rx, C: Cycle, R: Rank> Source for SingleProofSource<'rx, C, R> {
+        type RxComponent = RxComponent;
+        type Rx = &'rx structured::Polynomial<C::CircuitField, R>;
+        type AppCircuitId = CircuitIndex;
+
+        fn rx(&self, component: RxComponent) -> impl Iterator<Item = Self::Rx> {
+            use RxComponent::*;
+            let poly = match component {
+                AbA => &self.proof.ab.a_poly,
+                AbB => &self.proof.ab.b_poly,
+                Application => &self.proof.application.rx,
+                Hashes1 => &self.proof.circuits.hashes_1_rx,
+                Hashes2 => &self.proof.circuits.hashes_2_rx,
+                PartialCollapse => &self.proof.circuits.partial_collapse_rx,
+                FullCollapse => &self.proof.circuits.full_collapse_rx,
+                ComputeV => &self.proof.circuits.compute_v_rx,
+                Preamble => &self.proof.preamble.native_rx,
+                ErrorM => &self.proof.error_m.native_rx,
+                ErrorN => &self.proof.error_n.native_rx,
+                Query => &self.proof.query.native_rx,
+                Eval => &self.proof.eval.native_rx,
+            };
+            core::iter::once(poly)
+        }
+
+        fn app_circuits(&self) -> impl Iterator<Item = Self::AppCircuitId> {
+            core::iter::once(self.proof.application.circuit_id)
+        }
+    }
+
+    /// Source for k(y) values for single-proof verification.
+    pub struct SingleProofKySource<F> {
+        pub raw_c: F,
+        pub application_ky: F,
+        pub unified_bridge_ky: F,
+        pub unified_ky: F,
+    }
+
+    impl<F: Field> KySource for SingleProofKySource<F> {
+        type Ky = F;
+
+        fn raw_c(&self) -> impl Iterator<Item = F> {
+            once(self.raw_c)
+        }
+
+        fn application_ky(&self) -> impl Iterator<Item = F> {
+            once(self.application_ky)
+        }
+
+        fn unified_bridge_ky(&self) -> impl Iterator<Item = F> {
+            once(self.unified_bridge_ky)
+        }
+
+        fn unified_ky(&self) -> impl Iterator<Item = F> + Clone {
+            once(self.unified_ky)
+        }
+
+        fn zero(&self) -> F {
+            F::ZERO
+        }
+    }
 }
 
-impl<'rx, C: Cycle, R: Rank> ClaimSource for SingleProofSource<'rx, C, R> {
-    type Rx = &'rx structured::Polynomial<C::CircuitField, R>;
-    type AppCircuitId = CircuitIndex;
+mod nested {
+    use super::*;
+    use crate::components::claims::{
+        Source,
+        nested::{KySource, RxComponent},
+    };
 
-    fn rx(&self, component: NativeRxComponent) -> impl Iterator<Item = Self::Rx> {
-        let poly = match component {
-            NativeRxComponent::AbA => &self.proof.ab.a_poly,
-            NativeRxComponent::AbB => &self.proof.ab.b_poly,
-            NativeRxComponent::Application => &self.proof.application.rx,
-            NativeRxComponent::Hashes1 => &self.proof.circuits.hashes_1_rx,
-            NativeRxComponent::Hashes2 => &self.proof.circuits.hashes_2_rx,
-            NativeRxComponent::PartialCollapse => &self.proof.circuits.partial_collapse_rx,
-            NativeRxComponent::FullCollapse => &self.proof.circuits.full_collapse_rx,
-            NativeRxComponent::ComputeV => &self.proof.circuits.compute_v_rx,
-            NativeRxComponent::Preamble => &self.proof.preamble.native_rx,
-            NativeRxComponent::ErrorM => &self.proof.error_m.native_rx,
-            NativeRxComponent::ErrorN => &self.proof.error_n.native_rx,
-            NativeRxComponent::Query => &self.proof.query.native_rx,
-            NativeRxComponent::Eval => &self.proof.eval.native_rx,
-        };
-        core::iter::once(poly)
+    pub use crate::components::claims::nested::ky_values;
+
+    /// Source for nested field rx polynomials for single-proof verification.
+    pub struct SingleProofSource<'rx, C: Cycle, R: Rank> {
+        pub proof: &'rx Proof<C, R>,
     }
 
-    fn app_circuits(&self) -> impl Iterator<Item = Self::AppCircuitId> {
-        core::iter::once(self.proof.application.circuit_id)
-    }
-}
+    impl<'rx, C: Cycle, R: Rank> Source for SingleProofSource<'rx, C, R> {
+        type RxComponent = RxComponent;
+        type Rx = &'rx structured::Polynomial<C::ScalarField, R>;
+        type AppCircuitId = ();
 
-/// Source for k(y) values for single-proof verification.
-struct SingleProofKySource<F> {
-    raw_c: F,
-    application_ky: F,
-    unified_bridge_ky: F,
-    unified_ky: F,
-}
+        fn rx(&self, component: RxComponent) -> impl Iterator<Item = Self::Rx> {
+            use RxComponent::*;
+            let poly = match component {
+                EndoscalarStage => &self.proof.p.endoscalar_rx,
+                PointsStage => &self.proof.p.points_rx,
+                EndoscalingStep(step) => &self.proof.p.step_rxs[step], // TODO: bounds
+            };
+            core::iter::once(poly)
+        }
 
-impl<F: Field> KySource for SingleProofKySource<F> {
-    type Ky = F;
-
-    fn raw_c(&self) -> impl Iterator<Item = F> {
-        once(self.raw_c)
-    }
-
-    fn application_ky(&self) -> impl Iterator<Item = F> {
-        once(self.application_ky)
+        fn app_circuits(&self) -> impl Iterator<Item = Self::AppCircuitId> {
+            core::iter::empty()
+        }
     }
 
-    fn unified_bridge_ky(&self) -> impl Iterator<Item = F> {
-        once(self.unified_bridge_ky)
+    /// Source for k(y) values for nested single-proof verification.
+    pub struct SingleProofKySource<F>(core::marker::PhantomData<F>);
+
+    impl<F> SingleProofKySource<F> {
+        pub fn new() -> Self {
+            Self(core::marker::PhantomData)
+        }
     }
 
-    fn unified_ky(&self) -> impl Iterator<Item = F> + Clone {
-        once(self.unified_ky)
-    }
+    impl<F: Field> KySource for SingleProofKySource<F> {
+        type Ky = F;
 
-    fn zero(&self) -> F {
-        F::ZERO
+        fn one(&self) -> F {
+            F::ONE
+        }
+
+        fn zero(&self) -> F {
+            F::ZERO
+        }
     }
 }

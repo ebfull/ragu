@@ -12,22 +12,24 @@
 use alloc::vec::Vec;
 use arithmetic::Cycle;
 use core::ops::AddAssign;
-use ragu_circuits::polynomials::{Rank, unstructured};
+use ragu_circuits::{
+    CircuitExt,
+    polynomials::{Rank, unstructured},
+    staging::{StageExt, Staged},
+};
 use ragu_core::{
     Result,
     drivers::Driver,
     maybe::{Always, Maybe},
 };
-use ragu_primitives::{Element, compute_endoscalar, extract_endoscalar};
+use ragu_primitives::{Element, compute_endoscalar, extract_endoscalar, vec::Len};
 
-use crate::components::endoscalar::PointsWitness;
+use crate::circuits::nested::NUM_ENDOSCALING_POINTS;
+use crate::components::endoscalar::{
+    EndoscalarStage, EndoscalingStep, EndoscalingStepWitness, NumStepsLen, PointsStage,
+    PointsWitness,
+};
 use crate::{Application, Proof, proof};
-
-/// Number of commitments accumulated in compute_p:
-/// - 2 proofs × 15 components = 30
-/// - 6 stage proof components
-/// - 1 f.commitment
-const NUM_P_COMMITMENTS: usize = 37;
 
 /// Accumulates polynomials with their blinds and commitments.
 struct Accumulator<'a, C: Cycle, R: Rank> {
@@ -182,13 +184,47 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
 
         // Construct commitment via PointsWitness Horner evaluation.
         // Points order: [f.commitment, commitments...] computes β^n·f + β^{n-1}·C₀ + ...
-        let commitment = {
-            let mut points = Vec::with_capacity(NUM_P_COMMITMENTS);
+        let (commitment, endoscalar_rx, points_rx, step_rxs) = {
+            let mut points = Vec::with_capacity(NUM_ENDOSCALING_POINTS);
             points.push(f.commitment);
             points.extend_from_slice(&commitments);
 
-            let witness = PointsWitness::<C::HostCurve, NUM_P_COMMITMENTS>::new(beta_endo, &points);
-            *witness.interstitials.last().unwrap()
+            let witness =
+                PointsWitness::<C::HostCurve, NUM_ENDOSCALING_POINTS>::new(beta_endo, &points);
+
+            let endoscalar_rx = <EndoscalarStage as StageExt<C::ScalarField, R>>::rx(beta_endo)?;
+            let points_rx = <PointsStage<C::HostCurve, NUM_ENDOSCALING_POINTS> as StageExt<
+                C::ScalarField,
+                R,
+            >>::rx(&witness)?;
+
+            // Create rx polynomials for each endoscaling step circuit
+            let num_steps = NumStepsLen::<NUM_ENDOSCALING_POINTS>::len();
+            let key = self.nested_mesh.get_key();
+            let mut step_rxs = Vec::with_capacity(num_steps);
+            for step in 0..num_steps {
+                let step_circuit =
+                    EndoscalingStep::<C::HostCurve, R, NUM_ENDOSCALING_POINTS>::new(step);
+                let staged = Staged::new(step_circuit);
+                let (step_rx, _) = staged.rx::<R>(
+                    EndoscalingStepWitness {
+                        endoscalar: beta_endo,
+                        points: &witness,
+                    },
+                    key,
+                )?;
+                step_rxs.push(step_rx);
+            }
+
+            (
+                *witness
+                    .interstitials
+                    .last()
+                    .expect("NumStepsLen guarantees at least one interstitial"),
+                endoscalar_rx,
+                points_rx,
+                step_rxs,
+            )
         };
 
         let v = poly.eval(*u.value().take());
@@ -198,6 +234,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             blind,
             commitment,
             v,
+            endoscalar_rx,
+            points_rx,
+            step_rxs,
         })
     }
 }

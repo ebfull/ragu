@@ -9,9 +9,12 @@ use ragu_circuits::{
     mesh::CircuitIndex,
     polynomials::{Rank, structured, unstructured},
 };
+use ragu_primitives::vec::Len;
 
 use alloc::vec;
 
+use crate::circuits::nested::NUM_ENDOSCALING_POINTS;
+use crate::components::endoscalar::NumStepsLen;
 use crate::header::Header;
 
 /// Represents proof-carrying data, a recursive proof for the correctness of
@@ -166,6 +169,12 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> crate::Application<'_, C, R, H
                 blind: host_blind,
                 commitment: host_commitment,
                 v: C::CircuitField::ZERO,
+                endoscalar_rx: zero_structured_nested.clone(),
+                points_rx: zero_structured_nested.clone(),
+                step_rxs: vec![
+                    zero_structured_nested.clone();
+                    NumStepsLen::<NUM_ENDOSCALING_POINTS>::len()
+                ],
             },
             challenges: Challenges::trivial(),
             circuits: InternalCircuits {

@@ -51,7 +51,7 @@
 //! [`preamble`]: super::stages::preamble
 //! [`hashes_1`]: super::hashes_1
 //! [`FoldProducts::fold_products_m`]: fold_revdot::FoldProducts::fold_products_m
-//! [`TwoProofKySource`]: crate::components::claim_builder::TwoProofKySource
+//! [`TwoProofKySource`]: crate::components::claims::native::TwoProofKySource
 
 use arithmetic::Cycle;
 use ragu_circuits::{
@@ -73,11 +73,11 @@ use super::{
     unified::{self, OutputBuilder},
 };
 use crate::components::{
-    claim_builder::{TwoProofKySource, ky_values},
+    claims::native::{TwoProofKySource, ky_values},
     fold_revdot,
 };
 
-pub(crate) use crate::circuits::InternalCircuitIndex::PartialCollapseCircuit as CIRCUIT_ID;
+pub(crate) use super::InternalCircuitIndex::PartialCollapseCircuit as CIRCUIT_ID;
 
 /// Circuit that verifies layer 1 of the two-layer revdot reduction.
 ///
@@ -168,7 +168,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
         let fold_products = fold_revdot::FoldProducts::new(dr, &mu, &nu)?;
 
         // Assemble k(y) values from multiple sources. The ordering must match
-        // claim_builder's iteration order for correct folding correspondence.
+        // claims's iteration order for correct folding correspondence.
         // Sources include:
         // - Child c values from preamble (the children's final revdot claims)
         // - Application and unified k(y) evaluations from error_n
