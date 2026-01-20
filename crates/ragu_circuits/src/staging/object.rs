@@ -422,7 +422,7 @@ mod tests {
     fn test_placeholder_constraint_with_zero_k() {
         // We should verify the polynomial evaluations are consistent even when k = 0
         // (which would make the circuit unsatisfiable), but we gauard against this
-        // during mesh finalization.
+        // during registry finalization.
         let circuit = SquareCircuit { times: 2 };
         let y = Fp::random(thread_rng());
         let k = Fp::ZERO;

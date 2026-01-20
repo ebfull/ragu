@@ -61,7 +61,7 @@
 use arithmetic::Cycle;
 use ragu_circuits::{
     polynomials::Rank,
-    staging::{StageBuilder, Staged, StagedCircuit},
+    staging::{MultiStage, MultiStageCircuit, StageBuilder},
 };
 use ragu_core::{
     Result,
@@ -100,8 +100,8 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Para
     /// # Parameters
     ///
     /// - `params`: Curve cycle parameters providing Poseidon configuration.
-    pub fn new(params: &'params C::Params) -> Staged<C::CircuitField, R, Self> {
-        Staged::new(Circuit {
+    pub fn new(params: &'params C::Params) -> MultiStage<C::CircuitField, R, Self> {
+        MultiStage::new(Circuit {
             params,
             _marker: PhantomData,
         })
@@ -125,7 +125,7 @@ pub struct Witness<'a, C: Cycle, FP: fold_revdot::Parameters> {
 }
 
 impl<C: Cycle, R: Rank, const HEADER_SIZE: usize, FP: fold_revdot::Parameters>
-    StagedCircuit<C::CircuitField, R> for Circuit<'_, C, R, HEADER_SIZE, FP>
+    MultiStageCircuit<C::CircuitField, R> for Circuit<'_, C, R, HEADER_SIZE, FP>
 {
     type Final = native_error_n::Stage<C, R, HEADER_SIZE, FP>;
 

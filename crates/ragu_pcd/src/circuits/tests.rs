@@ -36,7 +36,7 @@ fn test_internal_circuit_constraint_counts() {
         .finalize(pasta)
         .unwrap();
 
-    let circuits = app.native_mesh.circuits();
+    let circuits = app.native_registry.circuits();
 
     macro_rules! check_constraints {
         ($variant:ident, mul = $mul:expr, lin = $lin:expr) => {{
@@ -99,7 +99,7 @@ fn print_internal_circuit_constraint_counts() {
         .finalize(pasta)
         .unwrap();
 
-    let circuits = app.native_mesh.circuits();
+    let circuits = app.native_registry.circuits();
 
     let variants = [
         ("Hashes1Circuit", InternalCircuitIndex::Hashes1Circuit),

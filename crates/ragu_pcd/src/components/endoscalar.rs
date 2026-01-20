@@ -1,4 +1,4 @@
-//! Staged circuit implementation for endoscaling operations.
+//! MultiStage circuit implementation for endoscaling operations.
 //!
 //! This module provides the [`EndoscalingStep`] staged circuit, which computes
 //! iterated endoscalar multiplications using Horner's rule. Each step performs
@@ -21,7 +21,7 @@ use ff::{Field, WithSmallOrderMulGroup};
 use pasta_curves::group::{Curve, prime::PrimeCurveAffine};
 use ragu_circuits::{
     polynomials::Rank,
-    staging::{Stage, StageBuilder, StagedCircuit},
+    staging::{MultiStageCircuit, Stage, StageBuilder},
 };
 use ragu_core::{
     Result,
@@ -249,7 +249,7 @@ pub struct EndoscalingStepWitness<'source, C: CurveAffine, const NUM_POINTS: usi
     pub points: &'source PointsWitness<C, NUM_POINTS>,
 }
 
-impl<C: CurveAffine, R: Rank, const NUM_POINTS: usize> StagedCircuit<C::Base, R>
+impl<C: CurveAffine, R: Rank, const NUM_POINTS: usize> MultiStageCircuit<C::Base, R>
     for EndoscalingStep<C, R, NUM_POINTS>
 {
     type Final = PointsStage<C, NUM_POINTS>;
@@ -330,7 +330,7 @@ mod tests {
     use ragu_circuits::{
         CircuitExt,
         polynomials::{self},
-        staging::{StageExt, Staged},
+        staging::{MultiStage, StageExt},
     };
     use ragu_core::{
         Result,
@@ -433,7 +433,7 @@ mod tests {
         for step in 0..num_steps {
             let step_circuit = EndoscalingStep::<EpAffine, R, NUM_POINTS>::new(step);
 
-            let staged = Staged::new(step_circuit.clone());
+            let staged = MultiStage::new(step_circuit.clone());
 
             let endoscalar_s = EndoscalarStage::into_object()?;
             let points_s = PointsStage::<EpAffine, NUM_POINTS>::into_object()?;
@@ -503,7 +503,7 @@ mod tests {
         for step in 0..num_steps {
             let step_circuit = EndoscalingStep::<EpAffine, R, NUM_POINTS>::new(step);
 
-            let staged = Staged::new(step_circuit.clone());
+            let staged = MultiStage::new(step_circuit.clone());
 
             let key = Fp::ONE;
             let (final_rx, _) = staged.rx::<R>(
