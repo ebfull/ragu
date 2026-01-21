@@ -2,6 +2,13 @@
 
 ## Registry, Stage, and Circuit Terminology Mapping
 
-The following table maps conceptual descriptions to their standard terms and code references:
-
-![Registry, Stage, and Circuit Terminology Mapping](../assets/terminology-mapping.png)
+| Concept | Term | Code Reference |
+|---------|------|----------------|
+| Defines stage structure; specifies wire range and corresponds with a stage polynomial that represents a partial witness | **Stage** | `preamble::Stage` |
+| Input data for a stage | **Stage witness** | `Stage::witness()` |
+| Well-formedness check for a stage; $s$ polynomial enforcing linear independence | **Stage mask** | `Stage::mask()` or `Stage::final_mask()` |
+| Circuit using staged witnesses | **Multi-stage circuit** | `MultiStageCircuit` |
+| Combined witness across all stages | **Multi-stage witness** | implicit, concatenation of stage witness |
+| Combined $r(X) = a(X) + b(X) + \cdots + f(X)$ | **Multi-stage witness polynomial $r(X)$** | implicit, sum of all `Stage::rx()` |
+| Well-formedness check for combined witness | **Multi-stage wiring polynomial $s(X)$** | implicit, vec of stage mask whose revdot checks are batched |
+| Collection of circuits indexed by $\omega^i$; $m(W, X, Y)$ interpolating wiring polynomials | **Registry** | `Registry`, `RegistryBuilder` |

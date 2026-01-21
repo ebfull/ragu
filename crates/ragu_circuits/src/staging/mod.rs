@@ -68,8 +68,8 @@
 //!
 //! let mask = MyStage::mask()?;
 //! let y = Fp::random(thread_rng());
-//! let mesh_key = Fp::random(thread_rng());
-//! assert_eq!(a.revdot(&mask.sy(y, mesh_key)), Fp::ZERO);
+//! let registry_key = Fp::random(thread_rng());
+//! assert_eq!(a.revdot(&mask.sy(y, registry_key)), Fp::ZERO);
 //! ```
 //!
 //! If two or more stage polynomials must satisfy the same well-formedness
@@ -88,8 +88,8 @@
 //!
 //! let mask = MyStage::mask()?;
 //! let y = Fp::random(thread_rng());
-//! let mesh_key = Fp::random(thread_rng());
-//! assert_eq!(combined.revdot(&mask.sy(y, mesh_key)), Fp::ZERO);
+//! let registry_key = Fp::random(thread_rng());
+//! assert_eq!(combined.revdot(&mask.sy(y, registry_key)), Fp::ZERO);
 //! ```
 //!
 //! ### Final Stage
