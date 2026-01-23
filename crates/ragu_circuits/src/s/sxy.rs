@@ -61,7 +61,7 @@ use ragu_primitives::GadgetExt;
 
 use alloc::vec;
 
-use crate::{Circuit, polynomials::Rank};
+use crate::{Circuit, polynomials::Rank, registry};
 
 use super::{
     DriverExt,
@@ -264,7 +264,12 @@ impl<'dr, F: Field, R: Rank> Driver<'dr> for Evaluator<F, R> {
 ///   contexts.
 ///
 /// [`Registry`]: crate::registry::Registry
-pub fn eval<F: Field, C: Circuit<F>, R: Rank>(circuit: &C, x: F, y: F, key: F) -> Result<F> {
+pub fn eval<F: Field, C: Circuit<F>, R: Rank>(
+    circuit: &C,
+    x: F,
+    y: F,
+    key: &registry::Key<F>,
+) -> Result<F> {
     if x == F::ZERO {
         // The polynomial is zero if x is zero.
         return Ok(F::ZERO);
