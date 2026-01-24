@@ -666,8 +666,8 @@ pub fn eval<F: Field, C: Circuit<F>, R: Rank>(
             // Allocate the key_wire and ONE wires
             let (key_wire, _, _one) = evaluator.mul(|| unreachable!())?;
 
-            // Mesh key constraint
-            evaluator.enforce_mesh_key(&key_wire, key)?;
+            // Registry key constraint
+            evaluator.enforce_registry_key(&key_wire, key)?;
 
             let mut outputs = vec![];
             let (io, _) = circuit.witness(&mut evaluator, Empty)?;

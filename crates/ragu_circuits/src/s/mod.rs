@@ -118,12 +118,12 @@ trait DriverExt<'dr>: Driver<'dr> {
         self.enforce_zero(|lc| lc.add(&Self::ONE))
     }
 
-    /// Enforces the mesh key constraint that binds a key wire to the mesh's
+    /// Enforces the registry key constraint that binds a key wire to the registry's
     /// random key value.
     ///
     /// This method enforces the linear constraint `key_wire - key = 0`, which
     /// randomizes non-trivial evaluations of the wiring polynomial.
-    fn enforce_mesh_key(&mut self, key_wire: &Self::Wire, key: Self::F) -> Result<()> {
+    fn enforce_registry_key(&mut self, key_wire: &Self::Wire, key: Self::F) -> Result<()> {
         self.enforce_zero(|lc| {
             lc.add(key_wire)
                 .add_term(&Self::ONE, Coeff::NegativeArbitrary(key))
