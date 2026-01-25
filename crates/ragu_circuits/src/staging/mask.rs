@@ -420,25 +420,6 @@ mod tests {
     }
 
     #[test]
-    fn test_placeholder_constraint_with_zero_k() {
-        // We should verify the polynomial evaluations are consistent even when k = 0
-        // (which would make the circuit unsatisfiable), but we gauard against this
-        // during registry finalization.
-        let circuit = SquareCircuit { times: 2 };
-        let y = Fp::random(thread_rng());
-        let k = registry::Key::new(Fp::ONE);
-
-        let circuit_mask = circuit.into_object::<R>().unwrap();
-        let x = Fp::random(thread_rng());
-        let sxy_result = circuit_mask.sy(y, &k).eval(x);
-        let sxy_direct = circuit_mask.sxy(x, y, &k);
-        assert_eq!(
-            sxy_result, sxy_direct,
-            "sy.eval(x) should match sxy(x, y, k) even with k = 0"
-        );
-    }
-
-    #[test]
     fn test_minimum_linear_constraints() {
         let circuit = SquareCircuit { times: 2 };
         let y = Fp::random(thread_rng());

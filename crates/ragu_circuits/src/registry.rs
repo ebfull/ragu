@@ -603,4 +603,11 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    #[should_panic = "registry digest should never be zero"]
+    fn zero_registry_key_panics() {
+        use ff::Field;
+        let _ = super::Key::new(<Fp as Field>::ZERO);
+    }
 }
