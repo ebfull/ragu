@@ -81,6 +81,7 @@ use crate::{
         Rank,
         unstructured::{self, Polynomial},
     },
+    registry,
 };
 
 use super::{
@@ -294,7 +295,7 @@ impl<'dr, F: Field, R: Rank> Driver<'dr> for Evaluator<F, R> {
 pub fn eval<F: Field, C: Circuit<F>, R: Rank>(
     circuit: &C,
     x: F,
-    key: F,
+    key: &registry::Key<F>,
 ) -> Result<unstructured::Polynomial<F, R>> {
     if x == F::ZERO {
         return Ok(Polynomial::new());

@@ -16,7 +16,7 @@
 //! be efficiently evaluated at different restrictions.
 
 use arithmetic::{Domain, PoseidonPermutation, bitreverse};
-use ff::PrimeField;
+use ff::{Field, PrimeField};
 use ragu_core::{Error, Result, drivers::emulator::Emulator, maybe::Maybe};
 use ragu_primitives::{Element, poseidon::Sponge};
 
@@ -137,13 +137,94 @@ impl<'params, F: PrimeField, R: Rank> RegistryBuilder<'params, F, R> {
             domain,
             circuits: self.circuits,
             omega_lookup,
-            key: F::ONE,
+            key: Key::default(),
         };
-
-        // Set registry key to H(M(w, x, y))
-        registry.key = registry.compute_registry_digest(poseidon);
+        registry.key = Key::new(registry.compute_registry_digest(poseidon));
 
         Ok(registry)
+    }
+}
+
+/// Key that binds the registry polynomial $m(W, X, Y)$ to prevent Fiat-Shamir
+/// soundness attacks.
+///
+/// In Fiat-Shamir transformed protocols, common inputs such as the proving
+/// statement (i.e., circuit descriptions) must be included in the transcript
+/// before any prover messages or verifier challenges. Otherwise, malicious
+/// provers may adapatively choose another statement during, or even after,
+/// generating a proof. In the literature, this is known as
+/// [weak Fiat-Shamir attacks](https://eprint.iacr.org/2023/1400).
+///
+/// To prevent such attacks, one can salt the registry digest $H(m(W, X, Y))$ to
+/// the transcript before any prover messages, forcing a fixed instance.
+/// However, the registry polynomial $m$ contains the description of a recursive
+/// verifier whose logic depends on a transcript salted with the very digest
+/// itself, creating a circular dependency.
+///
+/// Many preprocessing recursive SNARKs avoid this self-reference problem
+/// implicitly because the circuit descriptions are encoded in a verification
+/// key that is generated ahead of time and carried through public inputs to the
+/// recursive verifier. Ragu avoids preprocessing by design, and does not use
+/// verification keys, which suggests an alternative solution.
+///
+/// # Binding a polynomial through its evaluation
+///
+/// Polynomials of bounded degree are overdetermined by their evaluation at a
+/// sufficient number of distinct points. Starting from public constants, we
+/// iteratively evaluate $e_i = m(w_i, x_i, y_i)$ where each evaluation point
+/// $(w_{i+1}, x_{i+1}, y_{i+1})$ is seeded by hashing the prior evaluation $e_i$.
+/// The final evaluation serves as the binding key.
+///
+/// The number of iterations must exceed the degrees of freedom an adversary
+/// could exploit to adaptively modify circuits.
+/// See [#78] for the security argument.
+///
+/// # Break self-reference without preprocessing
+///
+/// Now with a binding evaluation `e_d`, which is the registry [`Key`], we can
+/// break the self-reference more elegantly without preprocessing or reliance on
+/// public inputs.
+///
+/// Concretely, we retroactively inject the registry key into each member circuit
+/// of `m` as a special wire `key_wire`, enforced by a simple linear constraint
+/// `key_wire = k`. This binds each circuit's wiring polynomial to the registry
+/// polynomial, and thus the entire registry polynomial to the Fiat-Shamir
+/// transcript without self-reference. The key randomizes the wiring polynomial
+/// directly.
+///
+/// The key is computed during [`RegistryBuilder::finalize`] and used during
+/// polynomial evaluations of [`CircuitObject`].
+///
+/// [#78]: https://github.com/tachyon-zcash/ragu/issues/78
+/// [`CircuitObject`]: crate::CircuitObject
+pub struct Key<F: Field> {
+    /// Registry digest value
+    val: F,
+    /// Cached inverse of digest
+    inv: F,
+}
+
+impl<F: Field> Default for Key<F> {
+    fn default() -> Self {
+        Self::new(F::ONE)
+    }
+}
+
+impl<F: Field> Key<F> {
+    /// Creates a new registry key from a field element, panic if zero.
+    pub(crate) fn new(val: F) -> Self {
+        let inv = val.invert().expect("registry digest should never be zero");
+        Self { val, inv }
+    }
+
+    /// Returns the registry key value.
+    pub fn value(&self) -> F {
+        self.val
+    }
+
+    /// Returns the cached inverse of the registry key.
+    pub fn inverse(&self) -> F {
+        self.inv
     }
 }
 
@@ -159,9 +240,8 @@ pub struct Registry<'params, F: PrimeField, R: Rank> {
     /// of the circuits vector.
     omega_lookup: BTreeMap<OmegaKey, usize>,
 
-    /// Key used to unpredictably change the registry polynomial's evaluation at
-    /// non-trivial points.
-    key: F,
+    /// Registry key used to bind circuits to this registry.
+    key: Key<F>,
 }
 
 /// Represents a key for identifying a unique $\omega^j$ value where $\omega$ is
@@ -190,9 +270,8 @@ impl<F: PrimeField> From<F> for OmegaKey {
 impl<F: PrimeField, R: Rank> Registry<'_, F, R> {
     /// Return the constraint system key for this registry, used by the proof
     /// generator.
-    // TODO(ebfull): We should ensure that this detail is not leaked outside of the Registry.
-    pub fn get_key(&self) -> F {
-        self.key
+    pub fn key(&self) -> &Key<F> {
+        &self.key
     }
 
     /// Returns a slice of the circuit objects in this registry.
@@ -205,7 +284,7 @@ impl<F: PrimeField, R: Rank> Registry<'_, F, R> {
         let mut coeffs = unstructured::Polynomial::default();
         for (i, circuit) in self.circuits.iter().enumerate() {
             let j = bitreverse(i as u32, self.domain.log2_n()) as usize;
-            coeffs[j] = circuit.sxy(x, y, self.key);
+            coeffs[j] = circuit.sxy(x, y, &self.key);
         }
         // Convert from the Lagrange basis.
         let domain = &self.domain;
@@ -237,7 +316,7 @@ impl<F: PrimeField, R: Rank> Registry<'_, F, R> {
             w,
             structured::Polynomial::default,
             |circuit, circuit_coeff, poly| {
-                let mut tmp = circuit.sy(y, self.key);
+                let mut tmp = circuit.sy(y, &self.key);
                 tmp.scale(circuit_coeff);
                 poly.add_assign(&tmp);
             },
@@ -250,7 +329,7 @@ impl<F: PrimeField, R: Rank> Registry<'_, F, R> {
             w,
             unstructured::Polynomial::default,
             |circuit, circuit_coeff, poly| {
-                let mut tmp = circuit.sx(x, self.key);
+                let mut tmp = circuit.sx(x, &self.key);
                 tmp.scale(circuit_coeff);
                 poly.add_unstructured(&tmp);
             },
@@ -263,7 +342,7 @@ impl<F: PrimeField, R: Rank> Registry<'_, F, R> {
             w,
             || F::ZERO,
             |circuit, circuit_coeff, poly| {
-                *poly += circuit.sxy(x, y, self.key) * circuit_coeff;
+                *poly += circuit.sxy(x, y, &self.key) * circuit_coeff;
             },
         )
     }
@@ -563,5 +642,12 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    #[should_panic = "registry digest should never be zero"]
+    fn zero_registry_key_panics() {
+        use ff::Field;
+        let _ = super::Key::new(<Fp as Field>::ZERO);
     }
 }
