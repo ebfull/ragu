@@ -20,28 +20,16 @@ use crate::{
 /// corresponding [`bool`] value.
 #[derive(Gadget)]
 pub struct Boolean<'dr, D: Driver<'dr>> {
-    /// The wire that has a value of either `0` or `1`.
+    /// The wire constrained to hold either `0` or `1` in the scalar field.
     #[ragu(wire)]
     wire: D::Wire,
 
-    /// The witness value for the value of this boolean.
+    /// The witness value of this boolean.
     #[ragu(value)]
     value: DriverValue<D, bool>,
 }
 
 impl<'dr, D: Driver<'dr>> Boolean<'dr, D> {
-    /// Enforces the bit constraint on multiplication gate outputs.
-    ///
-    /// Given a multiplication gate where a * b = c, this enforces a = b = c.
-    fn enforce_bit_constraint(dr: &mut D, a: &D::Wire, b: &D::Wire, c: &D::Wire) -> Result<()> {
-        // enforces a = b  =>  c = a^2
-        dr.enforce_equal(a, b)?;
-        // enforces a = c  =>  a = a^2
-        //                 =>  (a - 0) * (a - 1) = 0
-        //                 =>  (a = 0) OR (a = 1)
-        dr.enforce_equal(a, c)
-    }
-
     /// Allocates a boolean with the provided witness value.
     ///
     /// This costs one multiplication constraint and two linear constraints.
@@ -51,9 +39,14 @@ impl<'dr, D: Driver<'dr>> Boolean<'dr, D> {
             Ok((value, value, value))
         })?;
 
-        Self::enforce_bit_constraint(dr, &a, &b, &c)?;
+        // Enforce a = b => c = a²
+        dr.enforce_equal(&a, &b)?;
 
-        // NB: We can take any of the three wires we want.
+        // Enforce a = c => a = a²
+        //                => (a - 0)(a - 1) = 0
+        //                => (a = 0) OR (a = 1)
+        dr.enforce_equal(&a, &c)?;
+
         Ok(Boolean { value, wire: c })
     }
 
@@ -136,8 +129,9 @@ impl<'dr, D: Driver<'dr>> Boolean<'dr, D> {
     }
 }
 
-/// Returns a boolean indicating whether the element is zero, using the standard
-/// "inverse trick" for zero checking in arithmetic circuits.
+/// Returns a boolean indicating whether the element is zero.
+///
+/// Uses the standard inverse trick for zero checking in arithmetic circuits.
 pub(crate) fn is_zero<'dr, D: Driver<'dr>>(
     dr: &mut D,
     x: &Element<'dr, D>,
@@ -211,8 +205,9 @@ impl<F: Field> Promotion<F> for Kind![F; @Boolean<'_, _>] {
     }
 }
 
-/// Packs boolean slices into values depending on the capacity of the prime
-/// field to store data.
+/// Packs boolean slices into field elements using little-endian bit order.
+///
+/// The first bit in each chunk is the least significant bit.
 pub fn multipack<'dr, D: Driver<'dr, F: ff::PrimeField>>(
     dr: &mut D,
     bits: &[Boolean<'dr, D>],
@@ -247,12 +242,7 @@ pub fn multipack<'dr, D: Driver<'dr, F: ff::PrimeField>>(
 
 impl<'dr, D: Driver<'dr>> Consistent<'dr, D> for Boolean<'dr, D> {
     fn enforce_consistent(&self, dr: &mut D) -> Result<()> {
-        let (a, b, c) = dr.mul(|| {
-            let v = self.value.coeff().take();
-            Ok((v, v, v))
-        })?;
-        Self::enforce_bit_constraint(dr, &a, &b, &c)?;
-        dr.enforce_equal(&a, self.wire())
+        Self::alloc(dr, self.value())?.enforce_equal(dr, self)
     }
 }
 
