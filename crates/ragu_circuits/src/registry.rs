@@ -99,19 +99,19 @@ impl<'params, F: PrimeField, R: Rank> RegistryBuilder<'params, F, R> {
         }
     }
 
+    /// Returns the number of internal circuits (masks + circuits).
+    pub fn num_internal_circuits(&self) -> usize {
+        self.internal_masks.len() + self.internal_circuits.len()
+    }
+
     /// Returns the total number of circuits across all categories.
     pub fn num_circuits(&self) -> usize {
-        self.internal_masks.len() + self.internal_circuits.len() + self.application_steps.len()
+        self.num_internal_circuits() + self.application_steps.len()
     }
 
     /// Returns the log2 of the smallest power-of-2 domain size that fits all circuits.
     pub fn log2_circuits(&self) -> u32 {
         self.num_circuits().next_power_of_two().trailing_zeros()
-    }
-
-    /// Returns the number of internal circuits (masks + circuits).
-    pub fn num_internal_circuits(&self) -> usize {
-        self.internal_masks.len() + self.internal_circuits.len()
     }
 
     /// Registers an application step circuit.
