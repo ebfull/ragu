@@ -54,8 +54,8 @@ pub(crate) const fn total_circuit_counts(num_application_steps: usize) -> (usize
 
 impl InternalCircuitIndex {
     pub(crate) const fn circuit_index(self) -> CircuitIndex {
-        // Internal masks and circuits now come first (before internal steps),
-        // so no offset is needed.
+        // Internal masks and circuits precede internal steps, so no offset
+        // is needed.
         CircuitIndex::from_u32(self as u32)
     }
 }

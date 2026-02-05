@@ -63,7 +63,7 @@ impl<'a, F: Field, R: Rank, S: Stage<F, R> + 'a> Deferrable<'a, F, R> for Deferr
     }
 }
 
-/// Deferred final mask wrapper; creates [`StageMask`] with `new_final` on materialize.
+/// A deferred final mask that creates a [`StageMask`] via `new_final` on materialization.
 struct DeferredFinalMask<S, R>(PhantomData<fn() -> (S, R)>);
 
 impl<S, R> Default for DeferredFinalMask<S, R> {
@@ -118,19 +118,19 @@ impl CircuitIndex {
     }
 }
 
-/// Builder for constructing a [`Registry`].
+/// A builder that constructs a [`Registry`].
 ///
 /// Circuits are stored in deferred form until [`finalize`](Self::finalize),
 /// avoiding synthesis overhead during registration.
 ///
 /// Circuits are organized into three categories:
-/// - Internal masks: Stage masks and final masks for internal stages
-/// - Internal circuits: System circuits and internal steps
-/// - Application steps: User-defined application step circuits
+/// - Internal masks: stage masks and final masks for internal stages
+/// - Internal circuits: system circuits and internal steps
+/// - Application steps: user-defined application step circuits
 ///
 /// During finalization, circuits are concatenated in registration order,
-/// ensuring internal masks can be optimized separately from circuits while
-/// maintaining proper PCD indexing.
+/// ensuring internal masks can be optimized separately from circuits
+/// while maintaining proper PCD indexing.
 pub struct RegistryBuilder<'params, F: PrimeField, R: Rank> {
     internal_masks: Vec<Box<dyn Deferrable<'params, F, R> + 'params>>,
     internal_circuits: Vec<Box<dyn Deferrable<'params, F, R> + 'params>>,
@@ -144,7 +144,7 @@ impl<F: PrimeField, R: Rank> Default for RegistryBuilder<'_, F, R> {
 }
 
 impl<'params, F: PrimeField, R: Rank> RegistryBuilder<'params, F, R> {
-    /// Creates a new [`Registry`] builder with empty circuit vectors.
+    /// Creates a new empty [`Registry`] builder.
     pub fn new() -> Self {
         Self {
             internal_masks: Vec::new(),
@@ -168,7 +168,7 @@ impl<'params, F: PrimeField, R: Rank> RegistryBuilder<'params, F, R> {
         self.internal_masks.len() + self.internal_circuits.len()
     }
 
-    /// Registers a new application step circuit.
+    /// Registers an application step circuit.
     pub fn register_circuit<C>(mut self, circuit: C) -> Result<Self>
     where
         C: Circuit<F> + 'params,
@@ -179,7 +179,7 @@ impl<'params, F: PrimeField, R: Rank> RegistryBuilder<'params, F, R> {
         Ok(self)
     }
 
-    /// Registers an internal circuit (synthesis deferred).
+    /// Registers an internal circuit with deferred synthesis.
     pub fn register_internal_circuit<C>(mut self, circuit: C) -> Result<Self>
     where
         C: Circuit<F> + 'params,
@@ -189,7 +189,7 @@ impl<'params, F: PrimeField, R: Rank> RegistryBuilder<'params, F, R> {
         Ok(self)
     }
 
-    /// Registers an internal stage mask (mask creation deferred).
+    /// Registers an internal stage mask with deferred creation.
     pub fn register_internal_mask<S>(mut self) -> Result<Self>
     where
         S: Stage<F, R> + 'params,
@@ -199,7 +199,7 @@ impl<'params, F: PrimeField, R: Rank> RegistryBuilder<'params, F, R> {
         Ok(self)
     }
 
-    /// Registers an internal final stage mask (mask creation deferred).
+    /// Registers an internal final stage mask with deferred creation.
     pub fn register_internal_final_mask<S>(mut self) -> Result<Self>
     where
         S: Stage<F, R> + 'params,
@@ -217,8 +217,8 @@ impl<'params, F: PrimeField, R: Rank> RegistryBuilder<'params, F, R> {
     /// 3. Application steps: User-defined step circuits
     ///
     /// This ordering ensures internal masks can be optimized separately while
-    /// maintaining proper PCD indexing where internal items occupy indices 0..N
-    /// and application steps occupy indices N.
+    /// maintaining proper PCD indexing where internal items occupy indices
+    /// $0 \ldots N$ and application steps occupy indices $N$ onward.
     pub fn finalize<P: PoseidonPermutation<F>>(
         self,
         poseidon: &P,
