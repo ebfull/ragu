@@ -35,10 +35,10 @@ pub(crate) fn sum_polynomials<'rx, F: PrimeField, R: Rank>(
 ///
 /// This trait abstracts over what a "source" provides. For polynomial contexts
 /// (verify, fuse), it provides polynomial references. For evaluation contexts
-/// (compute_v), it provides element evaluation tuples.
+/// (`compute_v`), it provides single element evaluations (at $xz$).
 ///
-/// Implementors provide access to rx values for all proofs they manage.
-/// The `RxComponent` associated type defines which components can be requested.
+/// Implementors provide access to rx values for all proofs they manage. The
+/// `RxComponent` associated type defines which components can be requested.
 pub trait Source {
     /// The type identifying which rx component to retrieve.
     /// For native claims, this is [`native::RxComponent`].

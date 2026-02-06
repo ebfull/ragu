@@ -1,9 +1,13 @@
-//! Evaluate $f(X)$.
+//! Evaluates $f(X)$.
 //!
 //! This creates the [`proof::F`] component of the proof, which is a
 //! multi-quotient polynomial that witnesses the correct evaluations of every
 //! claimed query in the query stage for all of the committed polynomials so
 //! far.
+//!
+//! Each `factor_iter` call below produces the coefficients of
+//! $(p\_i(X) - v\_i) / (X - x\_i)$ for a single query. The total number of
+//! terms must match `poly_queries` in the `compute_v` circuit exactly.
 
 use arithmetic::Cycle;
 use ff::Field;
@@ -117,12 +121,16 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
                 query.registry_xy_poly.iter_coeffs(),
                 right.application.circuit_id.omega_j(),
             ),
+            // A/B polynomial queries:
+            // a_poly at xz, b_poly at x for left child, right child, current
             factor_iter(left.ab.a_poly.iter_coeffs(), xz),
             factor_iter(left.ab.b_poly.iter_coeffs(), x),
             factor_iter(right.ab.a_poly.iter_coeffs(), xz),
             factor_iter(right.ab.b_poly.iter_coeffs(), x),
             factor_iter(ab.a_poly.iter_coeffs(), xz),
             factor_iter(ab.b_poly.iter_coeffs(), x),
+            // Per-rx evaluations at xz only. The same r_i(xz) values feed
+            // into both A(xz) (undilated) and B(x) (Z-dilated).
             factor_iter(left.preamble.native_rx.iter_coeffs(), xz),
             factor_iter(left.error_n.native_rx.iter_coeffs(), xz),
             factor_iter(left.error_m.native_rx.iter_coeffs(), xz),

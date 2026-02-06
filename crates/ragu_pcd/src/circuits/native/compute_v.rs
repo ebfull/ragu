@@ -69,7 +69,7 @@ use super::InternalCircuitIndex;
 use super::{
     stages::{
         eval as native_eval, preamble as native_preamble,
-        query::{self as native_query, ChildEvaluations, FixedRegistryEvaluations, RxEval},
+        query::{self as native_query, ChildEvaluations, FixedRegistryEvaluations},
     },
     unified::{self, OutputBuilder},
 };
@@ -395,7 +395,7 @@ struct EvaluationSource<'a, 'dr, D: Driver<'dr>> {
 
 impl<'a, 'dr, D: Driver<'dr>> Source for EvaluationSource<'a, 'dr, D> {
     type RxComponent = RxComponent;
-    type Rx = RxEval<'a, 'dr, D>;
+    type Rx = &'a Element<'dr, D>;
 
     /// For app circuits: the registry evaluation at the circuit's omega^j.
     type AppCircuitId = &'a Element<'dr, D>;
@@ -403,39 +403,19 @@ impl<'a, 'dr, D: Driver<'dr>> Source for EvaluationSource<'a, 'dr, D> {
     fn rx(&self, component: RxComponent) -> impl Iterator<Item = Self::Rx> {
         use RxComponent::*;
         let (left, right) = match component {
-            // Raw claims: a uses xz evaluation, b uses x evaluation
-            AbA => (
-                RxEval::Xz(&self.left.a_poly_at_xz),
-                RxEval::Xz(&self.right.a_poly_at_xz),
-            ),
-            AbB => (
-                RxEval::X(&self.left.b_poly_at_x),
-                RxEval::X(&self.right.b_poly_at_x),
-            ),
-            // Circuit/stage claims: use xz evaluation
-            Application => (
-                self.left.application.to_eval(),
-                self.right.application.to_eval(),
-            ),
-            Hashes1 => (self.left.hashes_1.to_eval(), self.right.hashes_1.to_eval()),
-            Hashes2 => (self.left.hashes_2.to_eval(), self.right.hashes_2.to_eval()),
-            PartialCollapse => (
-                self.left.partial_collapse.to_eval(),
-                self.right.partial_collapse.to_eval(),
-            ),
-            FullCollapse => (
-                self.left.full_collapse.to_eval(),
-                self.right.full_collapse.to_eval(),
-            ),
-            ComputeV => (
-                self.left.compute_v.to_eval(),
-                self.right.compute_v.to_eval(),
-            ),
-            Preamble => (self.left.preamble.to_eval(), self.right.preamble.to_eval()),
-            ErrorM => (self.left.error_m.to_eval(), self.right.error_m.to_eval()),
-            ErrorN => (self.left.error_n.to_eval(), self.right.error_n.to_eval()),
-            Query => (self.left.query.to_eval(), self.right.query.to_eval()),
-            Eval => (self.left.eval.to_eval(), self.right.eval.to_eval()),
+            AbA => (&self.left.a_poly_at_xz, &self.right.a_poly_at_xz),
+            AbB => (&self.left.b_poly_at_x, &self.right.b_poly_at_x),
+            Application => (&self.left.application, &self.right.application),
+            Hashes1 => (&self.left.hashes_1, &self.right.hashes_1),
+            Hashes2 => (&self.left.hashes_2, &self.right.hashes_2),
+            PartialCollapse => (&self.left.partial_collapse, &self.right.partial_collapse),
+            FullCollapse => (&self.left.full_collapse, &self.right.full_collapse),
+            ComputeV => (&self.left.compute_v, &self.right.compute_v),
+            Preamble => (&self.left.preamble, &self.right.preamble),
+            ErrorM => (&self.left.error_m, &self.right.error_m),
+            ErrorN => (&self.left.error_n, &self.right.error_n),
+            Query => (&self.left.query, &self.right.query),
+            Eval => (&self.left.eval, &self.right.eval),
         };
         [left, right].into_iter()
     }
@@ -449,11 +429,18 @@ impl<'a, 'dr, D: Driver<'dr>> Source for EvaluationSource<'a, 'dr, D> {
     }
 }
 
-/// Processor that builds evaluation vectors for two-layer revdot folding.
+/// A processor that builds evaluation vectors for two-layer revdot folding.
 ///
 /// Collects evaluations into `ax` and `bx` vectors that will be folded to
 /// produce $a(xz)$ and $b(x)$. Each claim type (raw, circuit, internal circuit,
-/// stage) has different formulas for computing its contribution to the vectors.
+/// stage) has a different formula for computing its contribution to the
+/// vectors.
+///
+/// All constituent (circuit, internal circuit, stage) `rx` evaluations are at
+/// $xz$. The `ax` vector uses them directly (since $A$ has no dilation); the
+/// `bx` vector adds circuit-specific terms ($s\_y + t(xz)$). The composite
+/// $a$/$b$ polynomial evaluations use $a(xz)$ and $b(x)$ respectively. See
+/// [`compute_axbx`] for details.
 struct EvaluationProcessor<'a, 'dr, D: Driver<'dr>> {
     dr: &'a mut D,
     z: &'a Element<'dr, D>,
@@ -485,70 +472,89 @@ impl<'a, 'dr, D: Driver<'dr>> EvaluationProcessor<'a, 'dr, D> {
     }
 }
 
-impl<'a, 'dr, D: Driver<'dr>> Processor<RxEval<'a, 'dr, D>, &'a Element<'dr, D>>
+impl<'a, 'dr, D: Driver<'dr>> Processor<&'a Element<'dr, D>, &'a Element<'dr, D>>
     for EvaluationProcessor<'a, 'dr, D>
 {
-    fn raw_claim(&mut self, a: RxEval<'a, 'dr, D>, b: RxEval<'a, 'dr, D>) {
-        self.ax.push(a.xz().clone());
-        self.bx.push(b.x().clone());
+    fn raw_claim(&mut self, a: &'a Element<'dr, D>, b: &'a Element<'dr, D>) {
+        self.ax.push(a.clone());
+        self.bx.push(b.clone());
     }
 
-    fn circuit(&mut self, sy: &'a Element<'dr, D>, rx: RxEval<'a, 'dr, D>) {
-        // b(x) = rx(xz) + s_y + t(xz)
+    fn circuit(&mut self, sy: &'a Element<'dr, D>, rx: &'a Element<'dr, D>) {
         // a(xz) = rx(xz)
-        self.ax.push(rx.xz().clone());
-        self.bx
-            .push(rx.xz().add(self.dr, sy).add(self.dr, self.txz));
+        self.ax.push(rx.clone());
+
+        // b(x) = rx(xz) + s_y + t(xz)
+        self.bx.push(rx.add(self.dr, sy).add(self.dr, self.txz));
     }
 
     fn internal_circuit(
         &mut self,
         id: InternalCircuitIndex,
-        rxs: impl Iterator<Item = RxEval<'a, 'dr, D>>,
+        rxs: impl Iterator<Item = &'a Element<'dr, D>>,
     ) {
         let sy = self.fixed_registry.circuit_registry(id);
 
-        let mut a_sum = Element::zero(self.dr);
-        let mut b_sum = Element::zero(self.dr);
+        let mut sum = Element::zero(self.dr);
 
         for rx in rxs {
-            a_sum = a_sum.add(self.dr, rx.xz());
-            b_sum = b_sum.add(self.dr, rx.xz());
+            sum = sum.add(self.dr, rx);
         }
 
-        // a(xz) = sum of all rx(xz)
-        self.ax.push(a_sum);
-        // b(x) = sum of all rx(xz) + s_y + t(xz)
-        self.bx.push(b_sum.add(self.dr, sy).add(self.dr, self.txz));
+        // a(xz) = rx(xz)
+        self.ax.push(sum.clone());
+
+        // b(x) = rx(xz) + s_y + t(xz)
+        self.bx.push(sum.add(self.dr, sy).add(self.dr, self.txz));
     }
 
     fn stage(
         &mut self,
         id: InternalCircuitIndex,
-        rxs: impl Iterator<Item = RxEval<'a, 'dr, D>>,
+        rxs: impl Iterator<Item = &'a Element<'dr, D>>,
     ) -> Result<()> {
         let sy = self.fixed_registry.circuit_registry(id);
 
         // a(xz) = fold of all rx(xz) with z (Horner's rule)
-        self.ax
-            .push(Element::fold(self.dr, rxs.map(|rx| rx.xz()), self.z)?);
+        self.ax.push(Element::fold(self.dr, rxs, self.z)?);
+
         // b(x) = s_y evaluated at circuit's omega^j
         self.bx.push(sy.clone());
         Ok(())
     }
 }
 
-/// Computes the expected value of $a(xz), b(x)$ given the evaluations at $xz$ of
-/// every constituent polynomial at $x, xz$.
+/// Computes the expected values of $a(xz)$ and $b(x)$ by recomputing them from
+/// the individual `rx` polynomial evaluations witnessed in the query stage.
 ///
 /// This function is the authoritative source of the protocol's (recursive)
 /// description of the revdot folding structure. It fundamentally binds the
-/// prover's behavior in their choice of $a(X), b(X)$ and thus the correctness
+/// prover's behavior in their choice of $a(X),\, b(X)$ and thus the correctness
 /// of their folded revdot claim.
 ///
+/// # How evaluations flow into `ax` and `bx`
+///
+/// All constituent `rx` evaluations are at $xz$. For each claim type, the
+/// [`EvaluationProcessor`] builds the `ax` and `bx` vectors:
+///
+/// - **Circuit claims**: `ax` receives $r\_i(xz)$; `bx` receives
+///   $r\_i(xz) + s\_y + t(xz)$.
+/// - **Internal circuit claims**: `ax` receives $\sum r\_i(xz)$; `bx` receives
+///   $\sum r\_i(xz) + s\_y + t(xz)$.
+/// - **Stage claims**: `ax` receives $\text{fold}(r\_i(xz),\, z)$; `bx`
+///   receives $s\_y$.
+/// - **Raw $a$/$b$ claims**: `ax` receives $a(xz)$; `bx` receives $b(x)$.
+///
+/// # Shared evaluations
+///
+/// Because $A$'s constituents have no $Z$-dilation, $A$ can be checked at any
+/// point. By checking $A$ at $xz$ instead of $x$, both $A(xz)$ and $B(x)$ reuse
+/// the same $\{r\_i(xz)\}$ evaluations, eliminating the need for separate
+/// $r\_i(x)$ queries.
+///
 /// The two-layer folding uses:
-/// - Layer 1: $\mu^{-1}$, $\mu'^{-1}$ for $a(xz)$; $\mu\nu$, $\mu'\nu'$ for $b(x)$
-/// - Layer 2: Internal folding within each layer
+/// - Layer 1: $\mu^{-1}$, $\mu'^{-1}$ for `ax`; $\mu\nu$, $\mu'\nu'$ for `bx`
+/// - Layer 2: internal folding within each layer
 fn compute_axbx<'dr, D: Driver<'dr>, P: Parameters>(
     dr: &mut D,
     query: &native_query::Output<'dr, D>,
@@ -585,15 +591,22 @@ fn compute_axbx<'dr, D: Driver<'dr>, P: Parameters>(
 ///
 /// The queries are organized into groups:
 /// 1. **Child proof $p(u) = v$ checks** - Verify child proof evaluations
-/// 2. **Registry polynomial transitions** - $m(W,x,y) \to m(w,x,Y) \to m(w,X,y) \to s(W,x,y)$
-/// 3. **Internal circuit registry evaluations** - $m(\omega^j, x, y)$ for each internal index
-/// 4. **Application circuit registry evaluations** - $m(\text{circuit\_id}, x, y)$
-/// 5. **$a(xz), b(x)$ polynomial queries** - Including verifier-computed values
-/// 6. **Stage/circuit evaluations** - At $xz$ point only
+/// 2. **Registry polynomial transitions** -
+///    $m(W, x, y) \to m(w, x, Y) \to m(w, X, y) \to s(W, x, y)$
+/// 3. **Internal circuit registry evaluations** - $m(\omega^j, x, y)$ for each
+///    internal index
+/// 4. **Application circuit registry evaluations** -
+///    $m(\text{circuit\_id}, x, y)$
+/// 5. **$a(xz),\, b(x)$ polynomial queries** — $a$ at $xz$, $b$ at $x$,
+///    including verifier-computed values for each child and the current
+///    accumulator
+/// 6. **Stage/circuit `rx` evaluations** — each $r\_i$ queried at $xz$ for each
+///    child. The same $r\_i(xz)$ evaluations feed into both the $A(xz)$
+///    recomputation (undilated) and $B(x)$ ($Z$-dilated).
 ///
 /// The queries must be ordered exactly as in the prover's computation of $f(X)$
-/// in [`compute_f`], since the ordering affects the weight
-/// (with respect to [$\alpha$]) of each quotient polynomial.
+/// in [`compute_f`], since the ordering affects the weight (with respect to
+/// [$\alpha$]) of each quotient polynomial.
 ///
 /// [`compute_f`]: crate::Application::compute_f
 /// [$\alpha$]: unified::Output::alpha
@@ -655,8 +668,9 @@ fn poly_queries<'a, 'dr, D: Driver<'dr>, C: Cycle<CircuitField = D::F>, const HE
         (&eval.a_poly,             computed_ax,                                      &d.challenges.xz),
         (&eval.b_poly,             computed_bx,                                      &d.challenges.x),
     ])
-    // Stage and circuit evaluations for each child proof at xz only.
-    // The xz point suffices to bind rx polynomials via Schwartz-Zippel.
+    // Stage and circuit rx evaluations at xz for each child proof.
+    // The same r_i(xz) values feed into both A(xz) (undilated) and
+    // B(x) (Z-dilated) recomputations.
     .chain([(&eval.left, &query.left), (&eval.right, &query.right)]
         .into_iter()
         .flat_map(|(eval, query)| [
@@ -671,7 +685,7 @@ fn poly_queries<'a, 'dr, D: Driver<'dr>, C: Cycle<CircuitField = D::F>, const HE
             (&eval.partial_collapse, &query.partial_collapse),
             (&eval.full_collapse,    &query.full_collapse),
             (&eval.compute_v,        &query.compute_v),
-        ].into_iter().map(|(e, q)| (e, &q.at_xz, &d.challenges.xz))))
+        ].into_iter().map(|(e, q)| (e, q, &d.challenges.xz))))
 }
 
 /// Batch inverter for computing denominators.

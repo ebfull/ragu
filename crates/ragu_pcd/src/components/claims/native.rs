@@ -64,10 +64,18 @@ pub enum RxComponent {
     Eval,
 }
 
-/// Trait for processing claim values into accumulated outputs.
+/// Trait that processes claim values into accumulated outputs.
 ///
-/// This trait defines how to process rx values from a [`Source`].
-/// Different implementations handle polynomial vs evaluation contexts.
+/// Defines how to process `rx` values from a [`Source`]. Implementations handle
+/// polynomial and evaluation contexts differently:
+///
+/// - **Polynomial context** ([`Builder`]): `Rx` is a polynomial
+///   reference. The processor accumulates polynomials for error term
+///   construction.
+/// - **Evaluation context**: `Rx` carries a single evaluated field element at
+///   $xz$. Both the `ax` and `bx` vectors derive from this shared evaluation:
+///   `ax` uses $r\_i(xz)$ directly (since $A$ has no dilation), while `bx` adds
+///   $s\_y + t(xz)$.
 pub trait Processor<Rx, AppCircuitId> {
     /// Process a raw claim (a/b directly, k(y) = c).
     fn raw_claim(&mut self, a: Rx, b: Rx);

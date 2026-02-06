@@ -1,7 +1,31 @@
-//! Commit to the collapsed revdot claim polynomials $A$ and $B$.
+//! Commits to the collapsed revdot claim polynomials $A$ and $B$.
 //!
 //! This creates the [`proof::AB`] component of the proof, which contains the
 //! claimed (folded) revdot polynomials $A$ and $B$.
+//!
+//! ### Relationship to constituent polynomials
+//!
+//! $A(X)$ and $B(X)$ are folded linear combinations of the individual circuit
+//! and stage `rx` polynomials:
+//!
+//! - $A(X) = \text{fold}\_{\mu}(r\_i(X))$
+//! - $B(X) = \text{fold}\_{\mu\nu}(b\_i(X))$ where
+//!   $b\_i(X) = r\_i(XZ) + s\_{y,i}(X) + t\_z(X)$
+//!
+//! ### Evaluation point and dilation
+//!
+//! During verification, the verifier recomputes $A$ and $B$ at specific points
+//! from individual $r\_i$ evaluations witnessed in the query stage.
+//!
+//! $A$'s terms don't involve $Z$-dilation: $A(p) = \text{fold}\_{\mu}(r\_i(p))$
+//! for any point $p$, requiring only $\{r\_i(p)\}$ evaluations. $B$'s terms
+//! involve $Z$-dilation: $b\_i(p) = r\_i(pZ) + s\_y(p) + t\_z(p)$, so $B(p)$
+//! requires $\{r\_i(pZ)\}$ evaluations.
+//!
+//! $A$ is checked at $xz$ and $B$ at $x$. Since $A$ has no dilation,
+//! $A(xz) = \text{fold}(r\_i(xz))$ reuses the same $\{r\_i(xz)\}$
+//! evaluations that $B(x)$ already needs, eliminating separate
+//! $r\_i(x)$ queries.
 
 use arithmetic::Cycle;
 use ff::Field;
