@@ -44,8 +44,10 @@ Instead of committing to the full product, we decompose it into two smaller piec
 
 $$c(X) = c_{lo}(X) + X^{4n}\cdot c_{hi}(X)$$
 
-where $\v{c}_{lo}=\v{c}_{[:4n]}\in\F^{4n}$ and $\v{c}_{hi}=\v{c}_{[4n:]}\in\F^{4n-1}$.
-Both pieces now have degree less than $4n$, which is exactly what we want.
+where $\v{c}_{lo}=\v{c}_{[:4n]}\in\F^{4n}$ and
+$\v{c}_{hi}=\v{c}_{[4n:]}\in\F^{4n-1}$.
+Both pieces have degree less than $4n$ ($c_{lo}$ has degree at most $4n-1$,
+$c_{hi}$ at most $4n-2$), which is exactly what we want.
 
 But we still need to extract that $c_{4n-1}$ coefficient—it's buried as the
 last coefficient of $c_{lo}$. This is where the reversal trick comes in. Define:
@@ -68,7 +70,9 @@ queries that our PCS can handle efficiently.
 Now that we understand how to turn our coefficient check into polynomial
 evaluations, let's build out the complete Polynomial IOP protocol.
 
-We'll start by taking all those coefficient vectors from our arithmetization
+### Polynomials
+
+We start by taking all those coefficient vectors from our arithmetization
 and interpreting them as polynomials.
 
 - **witness polynomial**:
@@ -87,7 +91,9 @@ and interpreting them as polynomials.
   $t(X, Z)=\sum_{i=0}^{n-1} (Z^{2n-1-i}+Z^{2n+i})\cdot X^{4n-1-i}$
 - **public input polynomial**: $k(Y) = \sum_{j=0}^{4n-1} \v{k}_j\cdot Y^j$
 
-We'll use the notation $\mathcal{O}^p$ for a polynomial oracle provided by the
+### Protocol Flow
+
+We use the notation $\mathcal{O}^p$ for a polynomial oracle provided by the
 prover. Think of an oracle as a black box that the verifier can query—they can
 ask "what does $p$ evaluate to at point $z$?" and get back both the answer and
 a proof it's correct. When we compile this with a PCS later, these oracles
@@ -151,7 +157,7 @@ $$
   r(x) \cdot (r(xz) + s(x,y)- t(x,z))\iseq x^{4n-1}c_1(x^{-1}) + x^{4n} c_2(x)
       &\text{correct decomposition}\\
   c_1(0)\iseq k(y) &\text{consolidated CS check}\\
-  r(0)\iseq k(0)\iseq 1 &\text{public "one"}
+  r(0)\iseq 1 \land k(0)\iseq 1 &\text{public "one"}
 \end{cases}
 $$
 
@@ -182,11 +188,12 @@ linear time per query, so these costs add up.
 These inefficiencies are addressed in the next sections through various
 optimizations, but the core protocol structure remains the same.
 
-[^prod-cost]: FFT two multiplicands, each of polynomial of degree $4n-1$, over
-an evaluation domain of size $\geq 8n-1$, then IFFT back to get the coefficient
-of the product polynomial before decomposing.
+[^prod-cost]: FFT two multiplicands, each a polynomial of degree $4n-1$, over
+an evaluation domain of size $\geq 8n-1$ (in practice, the next power of two),
+then IFFT back to get the coefficients of the product polynomial before
+decomposing.
 
-## NARK
+## From PIOP to NARK {#nark}
 
 We now compile our Polynomial IOP into a concrete proof system. This requires
 two components: a Polynomial Commitment Scheme (PCS) to instantiate the
@@ -226,7 +233,7 @@ the correct commitment to partially evaluated univariate polynomial $s(X,y)$
 6. Verifier sends back challenge $x\sample\F$
 7. Prover sends evaluations $evals=(a(x), a(xz), s(x,y), b(x))\in\F^4$ over
 8. Verifier locally computes $t(x,z)$ and checks $b(x)\iseq a(xz) + s(x,y) -t(x,z)$
-9. Prover and Verifier engage in **batched evaluation protocol**, ensuring that
+9. Prover and Verifier engage in a **batched evaluation protocol**, ensuring that
   the following (commitment, point, eval) evaluation claims are correct:
   $(\bar{A}, 0, 1),(\bar{A}, x, a(x)), (\bar{A}, xz, a(xz)),
   (\bar{B}, x, b(x)),(S, x, s(x,y)), (K, 0, 1), (K, y, c)$
@@ -268,7 +275,7 @@ This protocol makes several choices that seem strange for a standalone NARK but
 exist for a reason: they prepare us for recursion.
 
 **Why separate $\bar{A}$ from $\bar{R}$?**<br>
-During [recursion](../recursion/index.md), the witness polynomial commitment
+During recursion, the witness polynomial commitment
 $\bar{R}$ binds the current step's witness, while $\bar{A}$ is an aggregated
 commitment for a batch of accumulated revdot product statements. By separating
 them now, our NARK is structurally similar to the eventual recursion logic.
@@ -297,6 +304,13 @@ product directly, accepting slightly larger proof size in exchange for better
 prover performance. At PCD tree locations where succinctness is critical, we
 can switch to the decomposition variant.
 
-These design choices will make sense once we elaborate the
-[recursion logic](../recursion/index.md). For now, convincing yourself that
-our NARK is complete and sound is sufficient.
+These design choices will make sense once we elaborate the recursion logic. For
+now, convincing yourself that our NARK is complete and sound is sufficient.
+
+---
+
+With the NARK defined, the remaining challenge is performance: the three
+subprotocols (wiring consistency, revdot product, and PCS evaluation) each
+require linear-time verification. The [next section](./accumulation/index.md)
+introduces split-accumulation schemes that defer this work, reducing the
+verifier to sublinear time and enabling efficient recursion.

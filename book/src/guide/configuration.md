@@ -1,6 +1,7 @@
-# Configuration and Setup
+# Configuration
 
-When building a PCD application with Ragu, you configure three key parameters that determine the system's capacity and behavior.
+When building a PCD application with Ragu, you configure three key parameters
+that determine the system's capacity and behavior.
 
 ## Application Parameters
 
@@ -16,7 +17,8 @@ Let's understand each one.
 
 ## 1. Cycle: Pasta
 
-The **Cycle** parameter specifies the elliptic curve cycle used for recursive proof composition.
+The **Cycle** parameter specifies the elliptic curve cycle used for recursive
+proof composition.
 
 ```rust
 ApplicationBuilder::<Pasta, ...>::new()
@@ -25,11 +27,13 @@ ApplicationBuilder::<Pasta, ...>::new()
 
 ### What is Pasta?
 
-Pasta is a 2-cycle of elliptic curves (Pallas and Vesta) specifically designed for efficient recursion:
+Pasta is a 2-cycle of elliptic curves (Pallas and Vesta) specifically
+designed for efficient recursion:
 - **Pallas**: Field elements for the circuit layer
 - **Vesta**: Field elements for the proof layer
 
-These curves have matching field/group orders, enabling efficient proof recursion without expensive non-native field arithmetic.
+These curves have matching field/group orders, enabling efficient proof
+recursion without expensive non-native field arithmetic.
 
 ### Setup
 
@@ -55,7 +59,8 @@ The `baked()` feature includes:
 
 ## 2. Rank: R\<N\>
 
-The **Rank** parameter controls circuit capacity - how many constraints each circuit can handle.
+The **Rank** parameter controls circuit capacity - how many constraints each
+circuit can handle.
 
 ```rust
 ApplicationBuilder::<Pasta, R<13>, ...>::new()
@@ -104,7 +109,8 @@ Error: exceeded the maximum number of multiplication constraints (8192)
 
 ## 3. HEADER_SIZE
 
-The **HEADER_SIZE** parameter specifies how many field elements flow through each proof's header.
+The **HEADER_SIZE** parameter specifies how many field elements flow through
+each proof's header.
 
 ```rust
 ApplicationBuilder::<Pasta, R<13>, 4>::new()
@@ -167,7 +173,8 @@ ApplicationBuilder::<Pasta, R<13>, 8>::new()
 - ✗ Slower proving
 - ✗ More memory
 
-**Rule of thumb**: Use the minimum size that fits your data. Don't over-allocate.
+**Rule of thumb**: Use the minimum size that fits your data. Don't
+over-allocate.
 
 ### Changing Header Size
 
@@ -204,7 +211,8 @@ let app = ApplicationBuilder::<Pasta, R<13>, 4>::new()
 **Why these parameters?**
 - `Pasta`: Standard curve cycle for PCD
 - `R<13>`: 8,192 constraints - enough for most steps
-- `4`: Four field elements per header - balance between flexibility and performance
+- `4`: Four field elements per header - balance between flexibility and
+  performance
 
 ## Parameter Selection Guide
 
@@ -262,7 +270,8 @@ let prod_app = ApplicationBuilder::<Pasta, R<14>, 8>::new()
     .finalize(pasta)?;
 ```
 
-Proofs from different configurations are **not compatible** - they're entirely separate proof systems.
+Proofs from different configurations are **not compatible** - they're
+entirely separate proof systems.
 
 ### ✗ Header Size Mismatch
 
@@ -307,8 +316,10 @@ let app = ApplicationBuilder::<Pasta, R<13>, 4>::new()
 
 ## Next Steps
 
-- See [Writing Circuits](writing_circuits.md) to build Steps with these parameters
-- Read [Getting Started](getting_started.md) for a complete example using these configurations
+- See [Writing Circuits](writing_circuits.md) to build Steps with these
+  parameters
+- Read [Getting Started](getting_started.md) for a complete example using
+  these configurations
 - Explore [Gadgets](gadgets/index.md) to understand constraint costs
 
 ## Summary
@@ -319,4 +330,5 @@ let app = ApplicationBuilder::<Pasta, R<13>, 4>::new()
 | **Rank** | Circuit capacity | `R<13>` | Circuit too large/small |
 | **HEADER_SIZE** | Header elements | `4` | Data needs change |
 
-Start with `ApplicationBuilder::<Pasta, R<13>, 4>` and adjust based on your measurements!
+Start with `ApplicationBuilder::<Pasta, R<13>, 4>` and adjust based on your
+measurements!

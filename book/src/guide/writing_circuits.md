@@ -1,12 +1,17 @@
 # Writing Circuits
 
-This guide explains how PCD applications are structured through Steps - the fundamental building blocks that combine proofs in Ragu's architecture.
+This guide explains how PCD applications are structured through Steps - the
+fundamental building blocks that combine proofs in Ragu's architecture.
 
-> **Note:** For a complete working example with full code, see [Getting Started](getting_started.md). This guide focuses on explaining the concepts and design patterns.
+> **Note:** For a complete working example with full code, see
+> [Getting Started](getting_started.md). This guide focuses on explaining
+> the concepts and design patterns.
 
 ## Understanding PCD Steps
 
-A PCD application is built from **Steps** - computations that take proof inputs and produce new proofs. Unlike traditional circuits that just verify computation, PCD Steps can:
+A PCD application is built from **Steps** - computations that take proof
+inputs and produce new proofs. Unlike traditional circuits that just verify
+computation, PCD Steps can:
 
 - Take proofs from previous steps as inputs
 - Combine multiple proofs together
@@ -52,7 +57,8 @@ Let's break down what each part means.
 const INDEX: Index = Index::new(0);
 ```
 
-A unique identifier for this step in your application. Each step must have a distinct index starting from 0.
+A unique identifier for this step in your application. Each step must have a
+distinct index starting from 0.
 
 ### 2. Type Parameters
 
@@ -115,7 +121,8 @@ type Output = InternalNode;  // Produces InternalNode
 ```
 
 The key operations in a fuse step:
-1. **Encode inputs** - Convert input proof headers to circuit gadgets via `.encode(dr)?`
+1. **Encode inputs** - Convert input proof headers to circuit gadgets via
+   `.encode(dr)?`
 2. **Extract data** - Get header values with `.as_gadget()`
 3. **Combine** - Hash or process the data together
 4. **Encode output** - Package combined result as a new proof
@@ -235,10 +242,13 @@ let app = ApplicationBuilder::<Pasta, R<13>, 4>::new()
     .finalize(pasta)?;
 ```
 
-For details on parameter selection (`Pasta`, `R<13>`, `4`), see [Configuration](configuration.md).
+For details on parameter selection (`Pasta`, `R<13>`, `4`), see
+[Configuration](configuration.md).
 
 ## Related Topics
 
-- [Getting Started](getting_started.md) provides a complete walkthrough with a working Merkle tree example
-- [Configuration](configuration.md) explains the ApplicationBuilder parameter choices
+- [Getting Started](getting_started.md) provides a complete walkthrough with
+  a working Merkle tree example
+- [Configuration](configuration.md) explains the ApplicationBuilder
+  parameter choices
 - [Gadgets](gadgets/index.md) documents the available building block operations

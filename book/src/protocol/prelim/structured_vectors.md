@@ -1,7 +1,8 @@
 # Structured Vectors
 
 Ragu uses a particular arrangement for vectors to encode witness data and
-various polynomials in its construction: a _structured vector_ $\v{r} \in \F^{4n}$
+various polynomials in its construction: a _structured vector_
+$\v{r} \in \F^{4n}$
 can be written as the concatenation
 
 $$
@@ -9,7 +10,8 @@ $$
 $$
 
 for some vectors $\v{a}, \v{b}, \v{c}, \v{d} \in \F^n$. These vectors have the
-property that $\v{\hat{r}}$ (its [reversed vector](./notation.md#reversed-vector-notation))
+property that $\v{\hat{r}}$
+(its [reversed vector](./notation.md#reversed-vector))
 can be written
 
 $$
@@ -29,7 +31,8 @@ two polynomials $a, b \in \F[X]$ defined by the coefficient vectors $\v{a},
 \v{b} \in \F^n$ (respectively), the $n - 1$ degree coefficient of the product
 polynomial $a \cdot b$ is $\revdot{\v{a}}{\v{b}}$.
 
-Further, observe that a structured vector $\v{r} = \v{c} || \v{\hat{b}} || \v{a} || \v{0}$
+Further, observe that a structured vector
+$\v{r} = \v{c} || \v{\hat{b}} || \v{a} || \v{0}$
 has the expansion
 
 $$
@@ -38,8 +41,9 @@ $$
 \end{array}
 $$
 
-and so we can encode [multiplication constraints](./cs.md#multiplication-constraints)
-into claims about such vectors, using verifier challenges to keep the claims linearly independent.
+and so we can encode pairwise product constraints (of the form $\v{a}_i \cdot \v{b}_i = \v{c}_i$)
+into claims about such vectors, using verifier challenges to keep the claims
+linearly independent.
 
 ### Folding
 
@@ -68,7 +72,8 @@ $$
 X^{n - 1} p(1 / X) + X^n q(X)
 $$
 
-for specially-constructed polynomials $p, q \in \F[X]$ of maximal degree $n - 1$. The prover can commit to $p, q$
+for specially-constructed polynomials $p, q \in \F[X]$ of maximal degree
+$n - 1$. The prover can commit to $p, q$
 and the verifier can test at a random point to ensure correctness. The claim is
 then reduced to the equality $p(0) = c$.
 
@@ -78,7 +83,11 @@ $$
 c(X) = \underbrace{c_{0} + c_{1}X + \dots + c_{n-1}X^{n-1}}_{\text{lower half}} + \underbrace{c_{n}X^{n} + \dots + c_{2n-2}X^{2n-2}}_{\text{upper half}}
 $$
 
-Recall from above that the $n - 1$ degree coefficient, $c_{n-1}$, equals the revdot product of the vectors, $\revdot{\v{a}}{\v{b}}$. To construct $p$, we take the lower half of $c$ and reverse its coefficients, so the $c_{n-1}$ coefficient becomes the constant term (and thus, $p(0) = c = \revdot{\v{a}}{\v{b}}$):
+Recall from above that the $n - 1$ degree coefficient, $c_{n-1}$, equals the
+revdot product of the vectors, $\revdot{\v{a}}{\v{b}}$. To construct $p$, we
+take the lower half of $c$ and reverse its coefficients, so the $c_{n-1}$
+coefficient becomes the constant term (and thus,
+$p(0) = c = \revdot{\v{a}}{\v{b}}$):
 
 $$
 p(X) = c_{n-1} + c_{n-2}X + \dots + c_{0}X^{n-1}

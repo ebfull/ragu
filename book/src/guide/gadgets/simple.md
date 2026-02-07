@@ -2,7 +2,9 @@
 
 ## [`Element`][element-gadget]
 
-Arguably the simplest gadget is [`Element`][element-gadget], which internally represents a wire along with its known assignment (an arbitrary field element). In fact, it is implemented as follows:
+Arguably the simplest gadget is [`Element`][element-gadget], which internally
+represents a wire along with its known assignment (an arbitrary field
+element). In fact, it is implemented as follows:
 
 ```rust
 #[derive(Gadget)]
@@ -15,15 +17,25 @@ pub struct Element<'dr, D: Driver<'dr>> {
 }
 ```
 
-`Element`s do not guarantee that any particular constraint has been imposed on the underlying wire. Because wires are the fundamental type of all arithmetic circuit code, `Element`s are the primitive unit type used for serialization using the [`Write`][write-trait] trait.
+`Element`s do not guarantee that any particular constraint has been imposed
+on the underlying wire. Because wires are the fundamental type of all
+arithmetic circuit code, `Element`s are the primitive unit type used for
+serialization using the [`Write`][write-trait] trait.
 
 ### Allocated Elements
 
-[`Element::alloc`](ragu_primitives::Element::alloc) can be used to create an `Element` which has an assignment based on witness data. This is a thin wrapper around the underlying [`Driver::alloc`](ragu_core::drivers::Driver::alloc) action.
+[`Element::alloc`](ragu_primitives::Element::alloc) can be used to create an
+`Element` which has an assignment based on witness data. This is a thin
+wrapper around the underlying
+[`Driver::alloc`](ragu_core::drivers::Driver::alloc) action.
 
 ### Constant Elements
 
-The [`Element::one`](ragu_primitives::Element::one) and [`Element::zero`](ragu_primitives::Element::zero) methods (and [`Element::constant`](ragu_primitives::Element::constant) more generally) can be used to construct `Element`s that represent _constant_ values that cannot vary in their value depending on witness data.
+The [`Element::one`](ragu_primitives::Element::one) and
+[`Element::zero`](ragu_primitives::Element::zero) methods (and
+[`Element::constant`](ragu_primitives::Element::constant) more generally) can
+be used to construct `Element`s that represent _constant_ values that cannot
+vary in their value depending on witness data.
 
 ## [`Boolean`][boolean-gadget]
 
@@ -35,12 +47,12 @@ booleans can be computed by multiplying two booleans, and given a boolean wire
 constrained) and allows it to be manipulated in these ways to produce new
 `Boolean` values.
 
-`Boolean`s, like `Element`s, can be allocated or constants. However, they do not
-carry instance state indicating whether they are constants (doing so would
+`Boolean`s, like `Element`s, can be allocated or constants. However, they do
+not carry instance state indicating whether they are constants (doing so would
 violate fungibility). This means that `Boolean` itself cannot be used to
 optimize away boolean logic between constants, and so a
-non-[`Gadget`][gadget-trait] abstraction must be built to enable these kinds of
-optimizations.
+non-[`Gadget`][gadget-trait] abstraction must be built to enable these kinds
+of optimizations.
 
 ## [`FixedVec`][fixedvec-gadget]
 

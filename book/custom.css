@@ -3,6 +3,11 @@
     color: var(--sidebar-fg);
 }
 
+/* Center mermaid diagrams */
+.mermaid {
+    text-align: center;
+}
+
 /* ==================== */
 /* mdbook-admonish base styling */
 /* ==================== */

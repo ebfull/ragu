@@ -1,13 +1,15 @@
 # Arithmetization
 
-**Additional Notation**:
-We further generalize the power vector notation to arbitrary range $[n,m)$ in the
-exponent: $\v{z^{n:m}}=(z^n,\ldots,z^{m-1})$.
+## Additional Notation
+
+We further generalize the power vector notation to arbitrary range
+$[n,m)$ in the exponent: $\v{z^{n:m}}=(z^n,\ldots,z^{m-1})$.
 Combining the power vector and vector reversal:
 $\rv{z}^{\mathbf{n:2n}}=(z^{2n-1},\ldots,z^n)$ and
 $\v{z^{2n:3n}}=(z^{2n},\ldots,z^{3n-1})$.
 
-**Useful Facts**:
+## Useful Facts
+
 A few arithmetic facts (assume all vectors have the same length):
 - $\dot{\v{a}\|\v{b}}{\v{c}\|\v{d}} = \dot{\v{a}}{\v{c}} + \dot{\v{b}}{\v{d}}$
 - $\alpha\cdot \dot{\v{a}}{\v{c}} + \beta\cdot \dot{\v{b}}{\v{c}} =
@@ -19,8 +21,9 @@ A few arithmetic facts (assume all vectors have the same length):
 
 ## Constraint System: Bootle16
 
-The Bootle16 constraint system was proposed in [[BCC+16]](https://eprint.iacr.org/2016/263)
-and later used in [Sonic](https://eprint.iacr.org/2019/099) and
+The Bootle16 constraint system was proposed in
+[[BCC+16]](https://eprint.iacr.org/2016/263) and later used in
+[Sonic](https://eprint.iacr.org/2019/099) and
 [Halo](https://eprint.iacr.org/2019/1021) papers.
 It describes any NP relation $\Rel=\set{(x,w): \Cir(x,w)=1}$
 with public instance $x$ and secret satisfying witness $w$ using a set of
@@ -62,8 +65,9 @@ $$
 \boxed{\dot{\v{a}}{\v{z^{n}} \circ \v{b}} - \dot{\v{c}}{\v{z^{n}}} = 0}.
 $$
 
-By the definition of $\v{r}$ (as a [structured vector](../prelim/structured_vectors.md))
-we can do something identical. Observe the expansion
+By the definition of $\v{r}$ (as a
+[structured vector](../prelim/structured_vectors.md)) we can do
+something identical. Observe the expansion
 
 $$
 \revdot{\v{r}}{\v{r} \circ \v{z^{4n}}} =
@@ -104,9 +108,14 @@ $$
 <details>
 <summary>Hints: what $\v{t}$ vector expands to</summary>
  
-Let $\v{t'} =(\rv{z}^{\bf n:2n} + \v{z}^{\bf 2n:3n}) = [z^{2n-1-i}+z^{2n+i}]_{i=0}^{n-1}$.
-    
-The first $3n$ entries are all zeros, the last $n$ entries is the reversal of $\v{t'}$
+Let
+
+$$
+\v{t'} =(\rv{z}^{\bf n:2n} + \v{z}^{\bf 2n:3n}) = [z^{2n-1-i}+z^{2n+i}]_{i=0}^{n-1}.
+$$
+
+The first $3n$ entries are all zeros, the last $n$ entries is the
+reversal of $\v{t'}$
  
 $$
 \v{t}=(\v{0}\|\v{0}\|\v{0}\|\rv{t'})

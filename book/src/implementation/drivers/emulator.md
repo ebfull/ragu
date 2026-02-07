@@ -24,9 +24,10 @@ The [`Emulator`][emulator-type] operates in two modes:
   wire assignments is preserved. This mode is parameterized by a
   [`MaybeKind`][maybekind-trait] to indicate witness availability.
 
-- **[`Wired`][wired-marker]**: The `Wire` type is [`WiredValue<F>`][wired-value],
-  which tracks the assignments that the circuit code's witness generation logic
-  produces. Wired mode always has witness availability.
+- **[`Wired`][wired-marker]**: The `Wire` type is
+  [`WiredValue<F>`][wired-value], which tracks the assignments that the
+  circuit code's witness generation logic produces. Wired mode always has
+  witness availability.
 
 ## Constructors
 

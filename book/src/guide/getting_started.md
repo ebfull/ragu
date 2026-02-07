@@ -1,6 +1,8 @@
-# Getting Started with Ragu
+# Getting Started
 
-This guide demonstrates a complete Proof-Carrying Data (PCD) application built with Ragu. The example constructs a simple Merkle tree where each node carries a proof of correctness.
+This guide demonstrates a complete proof-carrying data (PCD) application
+built with Ragu. The example constructs a simple Merkle tree where each node
+carries a proof of correctness.
 
 ## What This Example Demonstrates
 
@@ -9,7 +11,8 @@ This working PCD application shows how to:
 - Combine leaf proofs into internal nodes
 - Verify the entire proof tree
 
-The example illustrates the core functions of PCD: **data that carries its own proof of correctness**.
+The example illustrates the core functions of PCD: **data that carries its
+own proof of correctness**.
 
 ## Prerequisites
 
@@ -37,20 +40,24 @@ This guide uses `ApplicationBuilder::<Pasta, R<13>, 4>`:
 | **Rank** | `R<13>` | Circuit capacity: 2^13 = 8,192 constraints |
 | **Header Size** | `4` | Each proof carries 4 field elements of data |
 
-These defaults work for most applications. See [Configuration](configuration.md) for guidance on choosing different values.
+These defaults work for most applications. See
+[Configuration](configuration.md) for guidance on choosing different values.
 
 ## Overview: Building a Merkle Tree with Proofs
 
 This application implements two core operations:
 
 1. **CreateLeaf**: Takes a value, hashes it, and produces a leaf proof
-2. **CombineNodes**: Takes two leaf proofs and combines them into an internal node proof
+2. **CombineNodes**: Takes two leaf proofs and combines them into an internal
+   node proof
 
-The result is a proof tree where each node proves it was correctly computed from its children.
+The result is a proof tree where each node proves it was correctly computed
+from its children.
 
 ## Step 1: Define Header Types
 
-Headers define what data flows through the proof tree. This example uses two types:
+Headers define what data flows through the proof tree. This example uses two
+types:
 
 ```rust
 use ff::Field;
@@ -226,7 +233,10 @@ impl<'params, C: Cycle> Step<C> for CombineNodes<'params, C> {
 }
 ```
 
-**What `.encode(dr)?` does:** The `Header::encode` call converts the header data into a circuit gadget by allocating field elements. This makes the input proof's header data available for use in the circuit logic (e.g., hashing the two headers together).
+**What `.encode(dr)?` does:** The `Header::encode` call converts the header
+data into a circuit gadget by allocating field elements. This makes the input
+proof's header data available for use in the circuit logic (e.g., hashing the
+two headers together).
 
 ## Step 4: Build the Application
 
@@ -321,16 +331,21 @@ The proof creation and verification process follows these steps:
    - Input proofs are valid (recursively)
    - Header data matches claimed computation
 
-This is **Proof-Carrying Data**: each node carries a proof that it was correctly computed from its children, all the way down to the leaves.
+This is **proof-carrying data**: each node carries a proof that it was
+correctly computed from its children, all the way down to the leaves.
 
 ## Related Topics
 
 For deeper exploration of PCD applications in Ragu:
 
-- **[Writing Circuits](writing_circuits.md)**: Detailed explanation of Steps, Headers, and circuit logic implementation
-- **[Configuration](configuration.md)**: Understanding the Pasta/R<13>/4 parameters and selection criteria
-- **[Gadgets](gadgets/index.md)**: Documentation of Element, Sponge, and other building blocks
-- **[Drivers](drivers.md)**: Explanation of execution contexts (Emulator, SXY, RX)
+- **[Writing Circuits](writing_circuits.md)**: Detailed explanation of
+  Steps, Headers, and circuit logic implementation
+- **[Configuration](configuration.md)**: Understanding the Pasta/R<13>/4
+  parameters and selection criteria
+- **[Gadgets](gadgets/index.md)**: Documentation of Element, Sponge, and
+  other building blocks
+- **[Drivers](drivers.md)**: Explanation of execution contexts (Emulator,
+  SXY, RX)
 
 
 ## Summary

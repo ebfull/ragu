@@ -18,6 +18,10 @@ You can render locally and test using `mdbook serve`. Ensure you have installed 
       `mdbook serve` mode until you need to test your documentation links resolve properly.
     * Locally, this will produce links to `docs.rs` which might not reflect the current state of `main`.
 
+## Review
+
+[FIXME.md](FIXME.md) tracks deferred book review issues.
+
 ## Publication
 
 The `main` branch of this repository, when modified, triggers a [`website`](https://github.com/tachyon-zcash/website) rebuild that will rerender this book on the public URL.

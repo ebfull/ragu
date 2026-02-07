@@ -1,4 +1,4 @@
-# Inner Product Argument and Bulletproofs
+# Bulletproofs IPA
 
 ****Inner product argument**** (IPA) is an argument system for the relation:
 
@@ -13,8 +13,9 @@ $$
 [[BCC+16]](https://eprint.iacr.org/2016/263) and Bulletproof constructed a 
 transparent SNARK for this relation with $O(\log n)$ proof size
 but $O(n)$ verifier time.
-We skip presenting the full protocol and refer readers to existing 
-resources [^bp-learn] for details. We only provide a high-level description here.
+We skip presenting the full protocol and refer readers to existing
+resources [^bp-learn] for details. We only provide a high-level description
+here.
 
 Bulletproof IPA proceeds in $k=\log_2 n$ rounds, indexed by $j=k,\ldots,1$.
 In each round, the prover sends some cross terms $L_j, R_j\in\G$ to the verifier
@@ -70,11 +71,19 @@ given $\v{G}, P, Q, x, y$, there exists $\v{f}$ such that
 $P=F+y\cdot Q=\dot{\v{f}}{\v{G}} + \dot{\v{f}}{\v{b}}\cdot Q$.
 Therefore the _PCS evaluation proof is exactly an IPA proof_.
 
-[^bp-learn]: `dalek-crypto`'s 
-[writeup](https://doc-internal.dalek.rs/bulletproofs/inner_product_proof/index.html) 
-is great and engineer-friendly; Chapter 14.4 of Justin Thaler's 
-[PAZK textbook](https://people.cs.georgetown.edu/jthaler/ProofsArgsAndZK.html) 
-provides more details and context; Yupeng Zhang's 
+[^bp-learn]: `dalek-crypto`'s
+[writeup](https://doc-internal.dalek.rs/bulletproofs/inner_product_proof/index.html)
+is great and engineer-friendly; Chapter 14.4 of Justin Thaler's
+[PAZK textbook](https://people.cs.georgetown.edu/jthaler/ProofsArgsAndZK.html)
+provides more details and context; Yupeng Zhang's
 [lecture](https://www.youtube.com/watch?v=WyT5KkKBJUw) and Yingtong's
 [whiteboard session](https://www.youtube.com/watch?v=RaEs5mnXIhY)
 are also highly recommended.
+
+---
+
+The IPA and PCS constructed here provide polynomial commitment without a trusted
+setup, at the cost of linear-time verification. This cost motivates the
+[split-accumulation techniques](../core/accumulation/index.md) introduced in the
+Core Construction, which defer expensive verification to achieve efficient
+recursion.

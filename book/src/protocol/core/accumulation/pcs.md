@@ -1,11 +1,13 @@
-# Split-accumulation for Batched Evaluation
+# PCS Batched Evaluation
 
 ## PCS Aggregation
 
-In the [last step](../nark.md#nark) of our NARK, the verifier needs to verify
-many polynomial evaluations on different polynomials. Naively running an instance
-of [PCS evaluation](../../prelim/bulletproofs.md) protocol for each claim is
-expensive. Instead, we use batching techniques to aggregate all evaluation claims
+In the [last step](../nark.md#nark) of our NARK, the verifier needs
+to verify many polynomial evaluations on different polynomials.
+Naively running an instance of
+[PCS evaluation](../../prelim/bulletproofs.md) protocol for each
+claim is expensive. Instead, we use batching techniques to aggregate
+all evaluation claims
 into a single claim that can be verified once. This is sometimes called
 _multi-opening_ or _batched opening_ in the literature. Here is how Ragu
 aggregates evaluation claims of multiple points on multiple polynomials:
@@ -29,7 +31,8 @@ exists (with no remainder) if and only if the claim is valid. The protocol
 proceeds in three phases:
 - _alpha batching_: linearly combines these quotients as 
   $f(X) = \sum_i \alpha^i \cdot q_i(X)$
-- _evaluation at u_: the prover evaluates each $p_i$ at a fresh challenge point $u$
+- _evaluation at u_: the prover evaluates each $p_i$ at a fresh
+  challenge point $u$
 - _beta batching_: combines the quotient with the original polynomials as
   $p(X) = f(X) + \sum_i \beta^i \cdot p_i(X)$. The verifier derives the expected
   evaluation from the quotient relation and the $p_i(u)$ values.
@@ -40,8 +43,9 @@ The full protocol proceeds as follows:
 2. Prover computes quotient polynomials $q_i(X) = \frac{p_i(X) - y_i}{X - x_i}$
 for each claim. The prover linearly combines them as
 $f(X)=\sum_i \alpha^i \cdot q_i(X)$, samples a blinding factor
-$\gamma_f\sample\F$, computes the commitment $\bar{F}\leftarrow\com(f(X);\gamma_f)$,
-and sends $\bar{F}$ to the verifier
+$\gamma_f\sample\F$, computes the commitment
+$\bar{F}\leftarrow\com(f(X);\gamma_f)$, and sends $\bar{F}$ to the
+verifier
 3. Verifier sends challenge $u\sample\F$, which will be the evaluation point for
 the aggregated polynomial
 4. Prover computes $p_i(u)$ for each $i$ and sends these to the verifier. When
@@ -53,27 +57,31 @@ original evaluation point $x_i$.
 $p(X) = f(X) + \sum_i \beta^i \cdot p_i(X)$ and the aggregated blinding factor
 $\gamma = \gamma_f + \sum_i \beta^i \cdot \gamma_i$
 7. Verifier derives the aggregated commitment
-$\bar{P} = \bar{F} + \sum_i \beta^i \cdot \bar{C}_i$ and the aggregated evaluation
+$\bar{P} = \bar{F} + \sum_i \beta^i \cdot \bar{C}_i$ and the
+aggregated evaluation
 $v=\sum_i \alpha^i\cdot\frac{p_i(u)-y_i}{u-x_i} + \sum_i\beta^i\cdot p_i(u)$,
 then outputs $(\bar{P}, u, v)$
 
 The soundness of our aggregation relies on the simple fact that: the quotients
 polynomial $q_i(X)=\frac{p_i(X)-y_i}{X-x_i}$ exist (with no remainder) if and
-only if the claims $p_i(x_i) = y_i$ are valid. The random linear combination
-would preserve this with overwhelming probability, causing the final verification
-to fail if any one of the claims is false. The quotient relation is enforced
+only if the claims $p_i(x_i) = y_i$ are valid. The random linear
+combination would preserve this with overwhelming probability,
+causing the final verification to fail if any one of the claims is
+false. The quotient relation is enforced
 at step 7 when the verifier derives the $q_i(u)$ from the prover-provided
 $p_i(u)$ values through the quotient equation.
 
 ## Simplified Split-accumulation
 
-The split-accumulation scheme for batched polynomial evaluation wraps the PCS
-aggregation technique to conform with the [2-arity PCD
-syntax](./index.md#2-arity-pcd), with [adaptation](#ragu-adaptation) to eliminate
-non-native arithmetic from the verifier circuits.
+The split-accumulation scheme for batched polynomial evaluation
+wraps the PCS aggregation technique to conform with the [2-arity PCD
+syntax](./index.md#2-arity-pcd), with
+[adaptation](#ragu-adaptation) to eliminate non-native arithmetic
+from the verifier circuits.
 
-We first present a simplified single-curve version allowing non-native arithmetic
-to convey the core idea, then explain Ragu's adaptation when implementing over
+We first present a simplified single-curve version allowing
+non-native arithmetic to convey the core idea, then explain Ragu's
+adaptation when implementing over
 [a cycle of curves](./index.md#ivc-on-a-cycle-of-curves).
 
 Consider folding PCS evaluation claims from a NARK instance $\pi.\inst$ into an
@@ -108,9 +116,11 @@ The accumulation prover:
 
 ## Ragu Adaptation
 
-To avoid non-native arithmetic in the accumulation verifier's logic, as [noted
-previously](./index.md#admonition-split-up-of-the-folding-work-title), Ragu makes
-two adaptations that enables splitting of folding work across a curve cycle.
+To avoid non-native arithmetic in the accumulation verifier's
+logic, as [noted previously][split-up], Ragu makes two adaptations
+that enables splitting of folding work across a curve cycle.
+
+[split-up]: ./index.md#split-up-folding-work
 
 An accumulation verifier folds some new claims into an accumulator that
 incorporates all previous claims to get an updated accumulator. Usually, the
@@ -251,25 +261,37 @@ merge circuits in the last recursion step.
 Ragu depends on [endoscalars](../../extensions/endoscalar.md) for the problem of
 challenge consistency. After applying Poseidon hash function to the [verifier
 transcript](../../prelim/transcript.md) to get the next random oracle output
-$s\in\F_p$, we set the next verifier challenge as its extracted endoscalar
-$\endo{s}:=\mathsf{extract(s)}\in\{0,1\}^\lambda\subset \F_p$. This supports both
-native scalar arithmetic $\endo{s}\cdot c\in\F_p$ in the primary circuit and also
-native scalar multiplication (a.k.a. _endoscaling_) $\endo{s}\cdot P\in\G^{(1)}$
-in the secondary circuit.
+$s\in\F_p$, we set the next verifier challenge as its extracted
+endoscalar
+$\endo{s}:=\mathsf{extract(s)}\in\{0,1\}^\lambda\subset \F_p$.
+This supports both native scalar arithmetic
+$\endo{s}\cdot c\in\F_p$ in the primary circuit and also native
+scalar multiplication (a.k.a. _endoscaling_)
+$\endo{s}\cdot P\in\G^{(1)}$ in the secondary circuit.
 
-Naively, we would maintain two sets of endoscalars -- one for verifier challenges
-from the primary circuit, and the other from the secondary circuit.
+Naively, we would maintain two sets of endoscalars -- one for
+verifier challenges from the primary circuit, and the other from the
+secondary circuit.
 Notice that the two merge circuits accept exactly the same input[^same-input].
 Ragu **uses challenges squeezed from $\F_p$ transcript on the primary half for
 both merge circuits**.
 This optimization, named _transcript bridging_, is only sound in tandem with the
 [input consistency](#nested-staged-commitments) guarantee.
 
-[^same-input]: In the [IVC-over-2-cycle diagram](../index.md#ivc-on-a-cycle-of-curves),
+[^same-input]: In the [IVC-over-2-cycle diagram](./index.md#ivc-on-a-cycle-of-curves),
 it appears that the primary merge circuit accepts $(\inst_i, \acc_i)$ while the
 secondary merge circuit accepts $(\inst_i, \acc'_{i+1})$. But that notation is
-only for visual clarity. Since the perfect complementary splitting of the folding
-work, two merge circuits will update different values in the $\acc_i$. There is
+only for visual clarity. Since the perfect complementary splitting
+of the folding work, two merge circuits will update different values
+in the $\acc_i$. There is
 no internal dependency between merge circuits within the same step -- they both
 parse $(\inst_i, \acc_i)$ as the same, general input expression:
 $\inst\in\F_p^\ast\times \G_p^\ast\times \F_q^\ast\times \G_q^\ast$.
+
+---
+
+The PCS split-accumulation scheme reduces all polynomial evaluation claims to
+a single aggregated claim, deferring the expensive IPA verification. The
+[next section](./wiring.md) addresses the other linear-cost bottleneck:
+verifying that the prover's committed wiring polynomial is consistent with the
+known circuit structure.

@@ -20,8 +20,13 @@ One natural exception in notation:
 $\v{0^n}=(\underbrace{0,\ldots,0}_{n\text{ zeros}})$ is a zero vector, 
 not $(1,0,\ldots)$ even though $0^0=1$. 
 
-Given a vector $\v{a} \in \F^n$ we denote its **reverse (mirror)** as $\v{\hat{a}}$
+### Reversed Vector
+
+Given a vector $\v{a} \in \F^n$ we denote its **reverse (mirror)** as
+$\v{\hat{a}}$
 such that $\v{\hat{a}}_i = \v{a}_{n - 1 - i} \forall i$.
+
+### Revdot Product
 
 We use a special notation $\revdot{\v{a}}{\v{b}}$ for 
 $\dot{\v{a}}{\rv{b}} = \dot{\rv{a}}{\v{b}}$,
@@ -31,8 +36,9 @@ which we referred to as **revdot products**, a special case of dot products.
 ## Polynomials
 
 Given a univariate polynomial $p \in \F[X]$ of maximal degree $n - 1$ there
-exists a (canonical) coefficient vector $\v{p} \in \F^n$ ordered such that
-$\v{p}_{n - 1}$ is the leading coefficient.
+exists a unique coefficient vector $\v{p} = (p_0, p_1, \ldots, p_{n-1})
+\in \F^n$ where $p(X) = \sum_{i=0}^{n-1} p_i X^i$, ordered from lowest to
+highest degree.
 
 * **Evaluation:** Given $z \in \F$ the evaluation $p(z)$ is given by the inner
   (dot) product $\langle \v{p}, \v{z^n} \rangle$.

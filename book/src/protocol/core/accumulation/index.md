@@ -33,10 +33,11 @@ with finally produce a NARK proof of honest stepping and folding.
   <img src="../../../assets/ivc_syntax.svg" alt="ivc_syntax" />
 </p>
 
-Picture a step function being a blockchain VM. At each step $i$, given current
-state $z_i$ (public instance), new transactions $w_i$ (auxiliary witness/advice),
-and proof $\pi_i$ attesting that $z_i$ was honestly derived from genesis, the
-IVC prover computes $z_{i+1}$ and produces $\pi_{i+1}$.
+Picture a step function being a blockchain VM. At each step $i$,
+given current state $z_i$ (public instance), new transactions $w_i$
+(auxiliary witness/advice), and proof $\pi_i$ attesting that $z_i$
+was honestly derived from genesis, the IVC prover computes
+$z_{i+1}$ and produces $\pi_{i+1}$.
 This construction has two key properties:
 
 1. **Single proof for entire history**: $\pi_{i+1}$ attests to the entire
@@ -57,7 +58,7 @@ the previous proof.
 
 One bottleneck of full recursion is that SNARK verifier logic can be expensive.
 For example, our Bulletproof verifier is linear, leading to an IVC prover
-circuit that's prohibitively expensive to recurse. [Halo](https://eprint.iacr.org/2019/1021)
+circuit that's prohibitively expensive to recurse. [Halo]
 introduced a technique, later formalized by
 [[BCMS20]](https://eprint.iacr.org/2020/499) as _accumulation schemes_, that
 replaces full-blown SNARK verification with a sublinear accumulator verifier
@@ -71,9 +72,10 @@ and the per-step recursion overhead is massively reduced to sublinear.
 
 Ragu implements **split accumulation**, a variant formalized in
 [[BCLMS20]](https://eprint.iacr.org/2020/1618), in which the verifier
-$\mathsf{Acc.V}$ checks correct accumulation of _only public instances_, allowing
-a potentially non-succinct witness size (usually linear), thus requiring only
-a NARK rather than a SNARK. Intuitively, the accumulation prover
+$\mathsf{Acc.V}$ checks correct accumulation of _only public
+instances_, allowing a potentially non-succinct witness size (usually
+linear), thus requiring only a NARK rather than a SNARK. Intuitively,
+the accumulation prover
 partially verifies a new NARK proof $\pi_i$, then folds the remaining unverified
 statements with the previously accumulated statement $\acc_i$ into a new
 $\acc_{i+1}$ through random linear combination. To enable verification of
@@ -89,7 +91,7 @@ such that (1) $F(z_i) = z_{i+1}$; (2) $\mathsf{Acc.V}(\acc_i.\inst,
 function is computed correctly, the second ensures accumulators are updated
 correctly.
 
-```admonish tip title="Split-accumulation = Folding"
+```admonish note title="Split-accumulation = Folding"
 Later, in [Nova [KS21]](https://eprint.iacr.org/2021/370), a conceptually cleaner
 _folding scheme_ is introduced to describe the technique of maximally delaying
 NARK verification work and only "fold" the committed public instances of a
@@ -110,9 +112,11 @@ group operations are native to the other curve's scalar field.
 This creates a ping-pong pattern. We alternate between two circuits ($CS^{(1)}$
 over field $\F_p$ and $CS^{(2)}$ over field $\F_q$) where commitments in one
 circuit's group $\G^{(1)}$ are accumulated in the other circuit, and vice versa.
-The application state and accumulator become tuples: $z_i = (z_i^{(1)}, z_i^{(2)})$
-and $\acc_i = (\acc_i^{(1)}, \acc_i^{(2)})$. Furthermore, there is the NARK
-instance from the last step $\inst_i=(\inst_i^{(1)},\inst_i^{(2)})$.
+The application state and accumulator become tuples:
+$z_i = (z_i^{(1)}, z_i^{(2)})$ and
+$\acc_i = (\acc_i^{(1)}, \acc_i^{(2)})$. Furthermore, there is the
+NARK instance from the last step
+$\inst_i=(\inst_i^{(1)},\inst_i^{(2)})$.
 
 <p align="center">
   <img src="../../../assets/ivc_on_cycle.svg" alt="ivc_on_cycle_of_curves" />
@@ -130,12 +134,14 @@ Each future IVC step now consists of two halves working in tandem:
   producing new NARK public instance $\inst_{app,i+1}^{(1)}$
 - **Fuse Circuit**: Folds (relevant part of) the previous step's instance into
   the accumulator
-  - **base case**: if $i=0$, set $\acc'_{i+1}=\acc_0=\acc_\bot$ and skip the rest
+  - **base case**: if $i=0$, set
+    $\acc'_{i+1}=\acc_0=\acc_\bot$ and skip the rest
   - folds scalars in the last step instances $\inst_{app,i}^{(1)}$ and
     $\inst_{fuse,i}^{(1)}$ into accumulator $\acc_i^{(1)}$ 
   - folds groups in the last step instances $\inst_{app,i}^{(2)}$ and
     $\inst_{fuse,i}^{(2)}$ into accumulator $\acc_i^{(2)}$
-  - enforces [deferred operations](../../prelim/nested_commitment.md#deferreds)
+  - enforces
+    [deferred operations](../../prelim/nested_commitment.md#deferred-operations)
     captured in $\inst_i^{(2)}$ from $CS^{(2)}$ of the last step (whose group
     operations are native here)
   - produces a NARK instance $\inst_{i+1}^{(1)}$ to be folded in _the next step_
@@ -148,7 +154,8 @@ Each future IVC step now consists of two halves working in tandem:
   - **base case**: if $i=0$, set $\acc_{i+1}=\acc'_{i+1}$ without any folding
     and skip the rest
   - folds scalars in the last step instances $\inst_{app,i}^{(2)}$
-    and $\inst_{fuse,i}^{(2)}$ into accumulator $\acc_i^{(2)}$ (further update it)
+    and $\inst_{fuse,i}^{(2)}$ into accumulator $\acc_i^{(2)}$
+    (further update it)
   - folds groups in the last step instances $\inst_{app,i}^{(1)}$ and
     $\inst_{fuse,i}^{(1)}$ into accumulator $\acc_i^{(1)}$ (further update it)
   - enforces deferred operations captured in $\inst_{i}^{(1)}$ from $CS^{(1)}$
@@ -167,7 +174,9 @@ talk](https://youtu.be/l-F5ykQQ4qw). The diagram presents the IVC computation
 chain from the _verifier's perspective_ and omits auxiliary advice and witness
 parts of the NARK instance and accumulator managed by the prover.
 
-```admonish note title="Split-up of the folding work"
+<a id="split-up-folding-work"></a>
+
+```admonish info title="Split-up of the folding work"
 
 - NARK instances for both the application circuit and fuse circuits in step $i$
   is **only folded in the step $i+1$**.
@@ -203,8 +212,9 @@ and the accumulation verifiers fold both parent accumulators $\set{\acc_{i,L},
 
 Two implementation details carry over from IVC on cycles:
 
-1. **Cycling curves**: Each side's data and accumulator contains a pair (one per
-   field) due to the ping-pong pattern [explained earlier](#ivc-on-a-cycle-of-curves).
+1. **Cycling curves**: Each side's data and accumulator contains a
+   pair (one per field) due to the ping-pong pattern
+   [explained earlier](#ivc-on-a-cycle-of-curves).
 
 2. **Init state tracking**: Unlike IVC's single $z_0$, PCD must track all
    initial states from the tree's leaves. We maintain a Merkle root of init
@@ -220,14 +230,16 @@ symmetrically):
 </p>
 
 The primary circuit now:
-- Runs the binary step function: $F_i(z_{i,L}^{(1)}, z_{i,R}^{(1)}) = z_{i+1}^{(1)}$
+- Runs the binary step function:
+  $F_i(z_{i,L}^{(1)}, z_{i,R}^{(1)}) = z_{i+1}^{(1)}$
 - Folds both left and right parent accumulators $\acc_{i,L}, \acc_{i,R}$ and
   $\F_p$-native parts of both prior step NARK instances
   $\inst_{i,L},\inst_{i,R}$ into $\acc'_{i+1}$
 - Updates the init state root with left and right roots
 - Produces instance $\inst_{i+1}^{(1)}$ for the secondary circuit
 
-The secondary circuit performs the symmetric operations for the $(2)$ components.
+The secondary circuit performs the symmetric operations for the
+$(2)$ components.
 
 This establishes the general syntax for all split-accumulation schemes in Ragu:
 
@@ -236,5 +248,6 @@ This establishes the general syntax for all split-accumulation schemes in Ragu:
 - **Accumulation Verifier**:
   $\mathsf{Acc.V}(\set{\pi_i.\inst}, \set{\acc_i.\inst}, \acc_{i+1}.\inst, \pf_{i+1}) \to \{0,1\}$
 
-where $\set{\acc_i}$ denotes the set of parent accumulators being folded; and
-$\set{\pi_i}$ denotes the relevant set of NARK instances from the previous steps.
+where $\set{\acc_i}$ denotes the set of parent accumulators being
+folded; and $\set{\pi_i}$ denotes the relevant set of NARK instances
+from the previous steps.

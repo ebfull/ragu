@@ -1,4 +1,4 @@
-# Split-accumulation for Wiring Consistency
+# Wiring Consistency
 
 ## The Problem
 
@@ -31,7 +31,8 @@ wiring structure, without the verifier doing $O(n)$ work.
 The [Halo paper](https://eprint.iacr.org/2019/1021) introduced a clever
 solution for [single fixed circuits](#single-circuit-consistency). Ragu extends
 this to handle a [bundle of multiple circuits](#registry-consistency)—allowing
-us to verify that $s_i(X,Y)$ belongs to a fixed set of circuits $\set{s_j(X,Y)}$.
+us to verify that $s_i(X,Y)$ belongs to a fixed set of circuits
+$\set{s_j(X,Y)}$.
 This extension is crucial for proof-carrying data (PCD), where different steps
 might use different circuits from a pre-registered
 [_registry_](../../extensions/registry.md).
@@ -40,8 +41,10 @@ might use different circuits from a pre-registered
 
 We start with a simpler protocol for a single fixed $s(X,Y)$. Consider folding
 two accumulators into one:
-- $\acc_0.\inst=(S_0\in\G, y_0\in\F)$ with witness $\acc_0.\wit=s(X,y_0)\in\F[X]$
-- $\acc_1.\inst=(S_1\in\G, y_1\in\F)$ with witness $\acc_1.\wit=s(X,y_1)\in\F[X]$
+- $\acc_0.\inst=(S_0\in\G, y_0\in\F)$ with witness
+  $\acc_0.\wit=s(X,y_0)\in\F[X]$
+- $\acc_1.\inst=(S_1\in\G, y_1\in\F)$ with witness
+  $\acc_1.\wit=s(X,y_1)\in\F[X]$
 
 The protocol folds these into a single new accumulator as follows:
 
@@ -66,7 +69,8 @@ $$
 
 ## Registry Consistency
 
-Recall the definition of [registry polynomials](../../extensions/registry.md#construction):
+Recall the definition of
+[registry polynomials](../../extensions/registry.md#construction):
 
 $$
 m(W, X, Y) = \sum_{i=0}^{2^k-1} \ell_i(W) \cdot s_i(X, Y)
@@ -77,13 +81,16 @@ where $\ell_i(W)$ is the Lagrange basis polynomials and $2^k$ is the domain size
 The $i$-th circuit is $s_i(X,Y)=m(\omega^i, X, Y)$ where $\omega$ is a $2^k$-th
 primitive root of unity that generates the entire Lagrange domain[^simplify].
 
-[^simplify]: To disentangle orthogonal ideas and simplify presentation, we ignore
-the domain element remapping used to support
-[rolling domain extension](../../extensions/regitry.md#flexible-registry-sizes-via-domain-extension),
-and use the naive $i\mapsto\omega^i$ mapping here.
+[^simplify]: To disentangle orthogonal ideas and simplify
+presentation, we ignore the domain element remapping used to support
+[rolling domain extension], and use the naive $i\mapsto\omega^i$
+mapping here.
 
-Extending the consistency check for bivariate $s(X,Y)$ to multivariate $m(W,X,Y)$.
-Consider folding two accumulators (e.g., from two child proofs in a binary PCD tree):
+[rolling domain extension]: ../../extensions/registry.md#flexible-registry-sizes-via-domain-extension
+
+Extending the consistency check for bivariate $s(X,Y)$ to
+multivariate $m(W,X,Y)$. Consider folding two accumulators (e.g.,
+from two child proofs in a binary PCD tree):
 
 $$
 \begin{align*}
@@ -129,4 +136,11 @@ S'_1(y) = m(w, x_1, y) = S''(x_1)\\
 S''(x) = m(w, x, y) = S_{new}(w)
 \end{cases}
 $$
+
+---
+
+With split-accumulation schemes for [PCS evaluation](./pcs.md), wiring
+consistency, and [revdot products](./revdot.md), the NARK verifier's three
+linear-cost subprotocols can all be deferred. This completes the core
+accumulation machinery needed for efficient recursion.
 

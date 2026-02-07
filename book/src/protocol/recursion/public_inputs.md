@@ -1,3 +1,5 @@
-# Public Inputs vs Stage Outputs
+# Public Inputs
 
-The distinction between *public inputs* (verifier instance data), *Stage Outputs* (commiunication between stages), and *Staging Circuit Outputs* (what the verifier checks).
+> **TODO**: This section will explain the distinction between *public inputs*
+> (verifier instance data), *stage outputs* (communication between stages),
+> and *staging circuit outputs* (what the verifier checks).

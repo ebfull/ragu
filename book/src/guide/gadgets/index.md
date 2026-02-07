@@ -106,7 +106,10 @@ types:
 * **`#[ragu(phantom)]`** - for marker types like `PhantomData`
 * **`#[ragu(gadget)]`** - for fields that are themselves gadgets _(optional)_
 
-**Fields without any annotation default to gadget fields.** You only need explicit annotations when mixing gadgets with wires, values, or phantom types. If you mistakenly omit an annotation on a wire or value field, the compiler will produce a helpful error because those types don't implement `Gadget`.
+**Fields without any annotation default to gadget fields.** You only need
+explicit annotations when mixing gadgets with wires, values, or phantom types.
+If you mistakenly omit an annotation on a wire or value field, the compiler
+will produce a helpful error because those types don't implement `Gadget`.
 
 [boolean-gadget]: ragu_primitives::Boolean
 [spongestate-gadget]: ragu_primitives::poseidon::SpongeState

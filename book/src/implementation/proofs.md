@@ -1,4 +1,4 @@
-# PCD Proofs
+# PCD Step and Proofs
 
 The proof structure in Ragu represents the cryptographic evidence that a
 computation was performed correctly. Proofs are _recursive_ and each proof can
@@ -21,7 +21,7 @@ with dummy accumulator inputs, forming a lopsided binary tree structure.
 
 ## The `Pcd` Type
 
-The primary type that applications interact with is `Pcd` (Proof-Carrying Data):
+The primary type that applications interact with is `Pcd` (proof-carrying data):
 
 ```rust
 pub struct Pcd<'source, C: Cycle, R: Rank, H: Header<C::CircuitField>> {
@@ -34,8 +34,9 @@ A `Pcd` bundles two components:
 
 * **`proof`**: The cryptographic proof object containing all data necessary
   for verification.
-* **`data`**: Application-defined public inputs, with a succinct encoded
-  representation as a `Header` representing the current state of the computation.
+* **`data`**: Application-defined public inputs, with a succinct
+  encoded representation as a `Header` representing the current
+  state of the computation.
 
 The type parameters configure the proof system:
 
@@ -47,8 +48,9 @@ The type parameters configure the proof system:
 
 ## The `Step` Trait
 
-A `Step` defines a single computation in the PCD graph. Every
-step takes two child proofs as input (which may be trivial) and produces a new proof:
+A `Step` defines a single computation in the PCD graph. Every step
+takes two child proofs as input (which may be trivial) and produces
+a new proof:
 
 ```rust
 pub trait Step<C: Cycle> {
@@ -96,8 +98,9 @@ impl Step<C> for DoubleAndAddStep {
 }
 ```
 
-Leaf steps are used with `seed()` to create base proofs. Combine steps are used
-with `fuse()` to merge child proofs, building up the PCD tree from leaves to root.
+Leaf steps are used with `seed()` to create base proofs. Combine
+steps are used with `fuse()` to merge child proofs, building up the
+PCD tree from leaves to root.
 
 ## Creating Proofs
 
@@ -118,13 +121,15 @@ must have `Left = ()` and `Right = ()`.
 
 #### Trivial Proofs
 
-A _trivial proof_ is a dummy proof used to seed the base case of recursion. It
-does not encode any real computation; instead, it provides a well-formed starting
-proof that allows the recursive machinery to bootstrap. Internally, trivial proofs
-use zero polynomials and deterministic blinding factors.
+A _trivial proof_ is a dummy proof used to seed the base case of
+recursion. It does not encode any real computation; instead, it
+provides a well-formed starting proof that allows the recursive
+machinery to bootstrap. Internally, trivial proofs use zero
+polynomials and deterministic blinding factors.
 
-Trivial proofs are not meant to verify independently—they exist solely to provide
-valid input structure for `seed()` when no real child proofs are available.
+Trivial proofs are not meant to verify independently—they exist
+solely to provide valid input structure for `seed()` when no real
+child proofs are available.
 
 ### `fuse`
 
@@ -135,13 +140,15 @@ let (proof, aux) = app.fuse(&mut rng, DoubleAndAddStep, step_witness, left_pcd, 
 let pcd = proof.carry::<OutputHeader>(aux);
 ```
 
-The `step_witness` parameter provides any additional private data the step needs
-(in our `DoubleAndAddStep` example above, this is just `()` since the step doesn't
-require extra witness data beyond the child proofs).
+The `step_witness` parameter provides any additional private data
+the step needs (in our `DoubleAndAddStep` example above, this is
+just `()` since the step doesn't require extra witness data beyond
+the child proofs).
 
-Within the step's `witness` function, calling `.encode()` on the child encoders
-commits the child proof data to the witness polynomials. Verification of these
-claims is deferred and occurs when this proof is itself folded into a subsequent step.
+Within the step's `witness` function, calling `.encode()` on the
+child encoders commits the child proof data to the witness
+polynomials. Verification of these claims is deferred and occurs
+when this proof is itself folded into a subsequent step.
 
 ## The `carry` Method
 
@@ -178,16 +185,20 @@ let fresh_pcd = app.rerandomize(pcd, &mut rng)?;
 This is useful for privacy-preserving applications where proof linkability
 must be prevented.
 
-Internally, rerandomization folds the input proof with a _seeded trivial proof_
-using a dedicated rerandomization step. The [`Application`](../guide/configuration.md) caches this seeded
-trivial proof (created once via `seed()`) to avoid regenerating it on each call.
-This cached proof provides valid structure while the fresh randomness from `rng`
-ensures the output proof is unlinkable to the original.
+Internally, rerandomization folds the input proof with a _seeded
+trivial proof_ using a dedicated rerandomization step. The
+[`Application`](../guide/configuration.md) caches this seeded trivial
+proof (created once via `seed()`) to avoid regenerating it on each
+call. This cached proof provides valid structure while the fresh
+randomness from `rng` ensures the output proof is unlinkable to the
+original.
 
 ## Unified Accumulator Structure
 
-Ragu uses an _[accumulation scheme](../protocol/core/accumulation/index.md)_ (similar to [Halo]) to achieve efficient
-recursion. Rather than fully verifying each child proof inside the circuit,
+Ragu uses an
+_[accumulation scheme](../protocol/core/accumulation/index.md)_
+(similar to [Halo]) to achieve efficient recursion. Rather than fully
+verifying each child proof inside the circuit,
 proofs are _folded_ together deferring expensive verification work while
 accumulating claims that will eventually be checked.
 
@@ -206,17 +217,20 @@ history, regardless of tree depth.
 
 Ragu exposes a single proof structure capable of operating in two modes:
 
-* **Uncompressed mode**: BCLMS21-style split-accumulation form that is non-succinct
-  (not sublinear in the circuit size), with a large witness but inexpensive to generate.
-* **Compressed mode**: A succinct form (logarithmic in the circuit size) using an IPA
-  polynomial commitment scheme, with a more expensive verifier (outer decision procedure)
-  that's dominated by a linear-time MSM.
+* **Uncompressed mode**: BCLMS21-style split-accumulation form
+  that is non-succinct (not sublinear in the circuit size), with a
+  large witness but inexpensive to generate.
+* **Compressed mode**: A succinct form (logarithmic in the circuit
+  size) using an IPA polynomial commitment scheme, with a more
+  expensive verifier (outer decision procedure) that's dominated by
+  a linear-time MSM.
 
-The recursion operates in uncompressed mode, and then a compression step is performed
-at certain boundary conditions for bandwidth reasons. For instance, in shielded
-transaction aggregation, broadcasting transaction data in compressed mode optimizes
-for bandwidth. Compressed proofs can be decompressed back to accumulation form if
-further folding is needed.
+The recursion operates in uncompressed mode, and then a compression
+step is performed at certain boundary conditions for bandwidth
+reasons. For instance, in shielded transaction aggregation,
+broadcasting transaction data in compressed mode optimizes for
+bandwidth. Compressed proofs can be decompressed back to
+accumulation form if further folding is needed.
 
 ### Uncompressed (Split-Accumulation Form)
 
@@ -245,11 +259,12 @@ be decompressed back to accumulation form if further folding is needed.
 ```
 
 For deeper background, see
-[Proof-Carrying Data](../concepts/pcd.md#the-cost-model-compression-vs-folding).
+[proof-carrying data](../concepts/pcd.md).
 
 ## Internal Proof Structure
 
 The `Proof` type contains the cryptographic data required for
 verification, organized into components that mirror the protocol's
-[staging system](../protocol/extensions/staging.md). Each proof component captures polynomials,
+[staging system](../protocol/extensions/staging.md). Each proof
+component captures polynomials,
 blinding factors, and commitments on both the host and nested curves.

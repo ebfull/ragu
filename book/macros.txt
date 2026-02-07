@@ -16,6 +16,7 @@
 \endo:\underbar{#1}
 \iseq:\overset{?}{=}
 \com:\mathsf{Commit}
+\nil:\bot
 \acc:\mathsf{acc}
 \pf:\mathsf{pf}
 \aux:\mathsf{aux}

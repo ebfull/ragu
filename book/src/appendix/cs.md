@@ -1,7 +1,8 @@
 # Bootle16 v.s. R1CS
 
 We demonstrate how to build Bootle16 CS and R1CS for the same toy arithmetic 
-circuit with 2 `mul` gates and 1 `add` gate (but slightly different wire labeling).
+circuit with 2 `mul` gates and 1 `add` gate (but slightly different wire
+labeling).
 The output wire at the top is set as the only public output $x\in\F$.
 
 Notice that the `mul` gate with a constant `4` input is a _scalar_ gate and not
@@ -29,11 +30,14 @@ this translates to 3 linear checks, 2 for circuit wiring, 1 for public input:
   - $\v{u}_2=(0, 0), \v{v}_2=(4, -1), \v{w}_2=(0, 0), \v{k}_2=0$
   - $\v{u}_3=(0, 0), \v{v}_3=(4, -1), \v{w}_3=(0, 1), \v{k}_3=x_1$
 
-Recall that in the standard R1CS, there exists a vector $\v{z}=(1, \v{x}, \v{w})$
+Recall that in the standard R1CS, there exists a vector
+$\v{z}=(1, \v{x}, \v{w})$
 for the three public matrix $A, B, C$ describing the circuit such that 
 $A\v{z} \circ B\v{z}=C\v{z}$.
-In our case, $\v{z}=(1,x_1, w_1, w_2, w_3)\in\F^5$, since there are two Hadamard
-checks, the matrix dimension is $A, B, C\in\F^{2\times 5}$ and constructed as:
+In our case, $\v{z}=(1,x_1, w_1, w_2, w_3)\in\F^5$, and since there are two
+multiplication gates (Hadamard checks), the matrices have two rows:
+$A, B, C\in\F^{2\times 5}$. The linear constraints are encoded separately
+via the $\v{u}, \v{v}, \v{w}, \v{k}$ vectors above. The matrices are:
 
 $$
 A=\begin{bmatrix}
@@ -59,7 +63,8 @@ lincheck for the left, right, and public input wire respectively.
 ## Bootle16 to R1CS
 
 The foregoing toy example should provide intuition of why Bootle16 and R1CS are 
-equally powerful. Here we provide a generic transformation from Bootle16 to R1CS, 
+equally powerful. Here we provide a generic transformation from Bootle16 to
+R1CS,
 and provide hints for the other direction.
 
 Given the Bootle16 CS, let $\v{z}=(\v{a}\|\v{b}\|\v{c}\|\v{k})$, ignoring
@@ -103,5 +108,6 @@ let $\v{z}_A = Az, \v{z}_B=Bz, \v{z}_C=Cz$, since the final
 $\v{z}_A \circ \v{z}_B=\v{z}_C$ is doing the $n$ Hadamard checks, we know
 $\v{a}=\v{z}_A,\v{b}=\v{z}_B, \v{c}=\v{z}_C$. 
 However, extrapolating what $A, B, C$ demands into Bootle16's linear relation
-among the three witness vectors is a little hairy, but can be done with a generic
+among the three witness vectors is a little hairy, but can be done with a
+generic
 and deterministic algorithm (we skip the details here).

@@ -1,7 +1,7 @@
 # Summary
 
 [Introduction](introduction.md)
-[Proof-Carrying Data](concepts/pcd.md)
+[Proof-carrying data](concepts/pcd.md)
 
 ---
 
@@ -17,24 +17,26 @@
   - [Drivers](guide/drivers.md)
   - [Configuration](guide/configuration.md)
 - [Part II: Protocol Design]()
-  - [Protocol Overview](protocol/index.md)
-  - [Preliminaries](protocol/prelim/index.md)
+  - [Overview](protocol/index.md)
+  - [Preliminaries]()
+    - [Cryptographic Assumptions](protocol/prelim/assumptions.md)
     - [Notation](protocol/prelim/notation.md)
     - [Structured Vectors](protocol/prelim/structured_vectors.md)
     - [Nested Commitment](protocol/prelim/nested_commitment.md)
     - [Bulletproofs IPA](protocol/prelim/bulletproofs.md)
-  - [Core Construction](protocol/core/index.md)
+    - [Transcript](protocol/prelim/transcript.md)
+  - [Core Construction]()
     - [Arithmetization](protocol/core/arithmetization.md)
     - [NARK](protocol/core/nark.md)
     - [Split-Accumulation Schemes](protocol/core/accumulation/index.md)
       - [PCS Batched Evaluation](protocol/core/accumulation/pcs.md)
       - [Wiring Consistency](protocol/core/accumulation/wiring.md)
       - [Revdot Product](protocol/core/accumulation/revdot.md)
-  - [Extensions](protocol/extensions/index.md)
+  - [Extensions]()
     - [Registry Polynomial](protocol/extensions/registry.md)
     - [Endoscalars](protocol/extensions/endoscalar.md)
     - [Staging](protocol/extensions/staging.md)
-  - [Recursion](protocol/recursion/index.md)
+  - [Recursion]()
     - [Public Inputs](protocol/recursion/public_inputs.md)
   - [Analysis](protocol/analysis.md)
 - [Part III: Implementation]()
@@ -43,7 +45,7 @@
   - [Polynomial Management](implementation/polynomials.md)
   - [PCD Step and Proofs](implementation/proofs.md)
   - [Staging](implementation/staging.md)
-  - [Drivers](implementation/drivers/index.md)
+  - [Drivers]()
     - [Emulator](implementation/drivers/emulator.md)
     - [Writing Custom Drivers](implementation/drivers/custom.md)
 
@@ -53,4 +55,5 @@
 
 - [Bootle16 v.s. R1CS](appendix/cs.md)
 - [Related Work](appendix/related.md)
+- [SNARKs](appendix/snarks.md)
 - [Terminology](appendix/terminology.md)
