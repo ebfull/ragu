@@ -76,7 +76,7 @@ mod fft;
 mod uendo;
 mod util;
 
-use ff::{Field, WithSmallOrderMulGroup};
+use ff::{Field, FromUniformBytes, WithSmallOrderMulGroup};
 
 pub use coeff::Coeff;
 pub use domain::Domain;
@@ -106,10 +106,10 @@ pub use u128 as Uendo;
 pub trait Cycle: Copy + Clone + Default + Send + Sync + 'static {
     /// The field that circuit developers will primarily work with, and the
     /// scalar field of the [`HostCurve`](Cycle::HostCurve).
-    type CircuitField: WithSmallOrderMulGroup<3>;
+    type CircuitField: WithSmallOrderMulGroup<3> + FromUniformBytes<64>;
 
     /// The scalar field of the [`NestedCurve`](Cycle::NestedCurve).
-    type ScalarField: WithSmallOrderMulGroup<3>;
+    type ScalarField: WithSmallOrderMulGroup<3> + FromUniformBytes<64>;
 
     /// The nested curve that applications typically use for asymmetric keys,
     /// signatures, and other cryptographic primitives. (This is the Pallas

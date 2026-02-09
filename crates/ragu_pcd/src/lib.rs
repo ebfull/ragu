@@ -148,8 +148,8 @@ impl<'params, C: Cycle, R: Rank, const HEADER_SIZE: usize>
         self.nested_registry = circuits::nested::register_all::<C, R>(self.nested_registry)?;
 
         Ok(Application {
-            native_registry: self.native_registry.finalize(C::circuit_poseidon(params))?,
-            nested_registry: self.nested_registry.finalize(C::scalar_poseidon(params))?,
+            native_registry: self.native_registry.finalize()?,
+            nested_registry: self.nested_registry.finalize()?,
             params,
             num_application_steps: self.num_application_steps,
             seeded_trivial: OnceCell::new(),

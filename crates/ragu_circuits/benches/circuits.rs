@@ -13,7 +13,7 @@ use ragu_circuits::{Circuit, CircuitExt};
 use ragu_pasta::{Fp, Pasta};
 use setup::{
     builder_squares, f, key, rand_structured_poly, rand_structured_poly_vec,
-    rand_unstructured_poly, registry_simple, setup_poseidon, setup_rng, setup_with_rng,
+    rand_unstructured_poly, registry_simple, setup_rng, setup_with_rng,
 };
 
 #[library_benchmark(setup = setup_with_rng)]
@@ -126,9 +126,9 @@ fn register() {
 }
 
 #[library_benchmark]
-#[bench::finalize(setup_poseidon(), builder_squares())]
-fn finalize(poseidon: &<Pasta as Cycle>::CircuitPoseidon, builder: RegistryBuilder<Fp, R<25>>) {
-    black_box(builder.finalize(poseidon)).unwrap();
+#[bench::finalize(builder_squares())]
+fn finalize(builder: RegistryBuilder<Fp, R<25>>) {
+    black_box(builder.finalize()).unwrap();
 }
 
 #[library_benchmark(setup = setup_with_rng)]

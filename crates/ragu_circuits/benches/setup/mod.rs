@@ -1,9 +1,8 @@
-use arithmetic::Cycle;
 use ff::Field;
 use ragu_circuits::polynomials::{R, structured, unstructured};
 use ragu_circuits::registry::{Key, Registry, RegistryBuilder};
 use ragu_circuits::test_fixtures::{MySimpleCircuit, SquareCircuit};
-use ragu_pasta::{Fp, Pasta};
+use ragu_pasta::Fp;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
@@ -73,10 +72,6 @@ pub fn rand_unstructured_poly(rng: &mut StdRng) -> unstructured::Polynomial<Fp, 
     unstructured::Polynomial::random(rng)
 }
 
-pub fn setup_poseidon<'a>() -> &'a <Pasta as Cycle>::CircuitPoseidon {
-    Pasta::circuit_poseidon(Pasta::baked())
-}
-
 pub fn builder_squares<'a>() -> RegistryBuilder<'a, Fp, R<25>> {
     RegistryBuilder::<'a, Fp, R<25>>::new()
         .register_circuit(SquareCircuit { times: 2 })
@@ -110,5 +105,5 @@ pub fn builder_simple<'a>() -> RegistryBuilder<'a, Fp, R<5>> {
 }
 
 pub fn registry_simple<'a>() -> Registry<'a, Fp, R<5>> {
-    builder_simple().finalize(setup_poseidon()).unwrap()
+    builder_simple().finalize().unwrap()
 }

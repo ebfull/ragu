@@ -68,6 +68,7 @@ rand = "0.9"
 lazy_static = "1.5.0"
 proptest = "1.7.0"
 gungraun = "0.17.0"
+blake2b_simd = "1.0"
 
 [patch.crates-io]
 # `ebfull/addchain` branch `bump-num-bigint` is a replica of
