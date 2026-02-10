@@ -42,6 +42,35 @@ pub type InternalOutputKind<C: Cycle> = Kind![C::CircuitField; WithSuffix<'_, _,
 /// Used for allocation sizing and verified by tests.
 pub const NUM_WIRES: usize = 29;
 
+/// Maps a field type to its `Output` gadget type.
+macro_rules! unified_output_type {
+    (Point, $dr:lifetime, $D:ty, $C:ty) => {
+        Point<$dr, $D, <$C as Cycle>::NestedCurve>
+    };
+    (Element, $dr:lifetime, $D:ty, $C:ty) => {
+        Element<$dr, $D>
+    };
+}
+
+/// Maps a field type to its Instance native type.
+macro_rules! unified_instance_type {
+    (Point, $C:ty) => {
+        <$C as Cycle>::NestedCurve
+    };
+    (Element, $C:ty) => {
+        <$C as Cycle>::CircuitField
+    };
+}
+
+/// Creates a `Slot` initializer for a field (works for both Point and Element).
+macro_rules! unified_slot_new {
+    ($field_type:ident, $field:ident, $D:ty, $C:ty) => {
+        Slot::new(|dr, i: &DriverValue<$D, &'a Instance<$C>>| {
+            $field_type::alloc(dr, i.view().map(|i| i.$field))
+        })
+    };
+}
+
 /// Generates the unified instance types: `Output`, `Instance`, `OutputBuilder`.
 ///
 /// This macro reduces boilerplate by generating all related types from a single
@@ -75,7 +104,7 @@ macro_rules! define_unified_instance {
             $(
                 $(#[$field_meta])*
                 #[ragu(gadget)]
-                pub $field: define_unified_instance!(@output_type $field_type, 'dr, D, C),
+                pub $field: unified_output_type!($field_type, 'dr, D, C),
             )+
         }
 
@@ -88,7 +117,7 @@ macro_rules! define_unified_instance {
         /// See [`Output`] for field descriptions.
         pub struct Instance<C: Cycle> {
             $(
-                pub $field: define_unified_instance!(@instance_type $field_type, C),
+                pub $field: unified_instance_type!($field_type, C),
             )+
         }
 
@@ -108,7 +137,7 @@ macro_rules! define_unified_instance {
         /// Any slots not explicitly filled will be allocated during finalization.
         pub struct OutputBuilder<'a, 'dr, D: Driver<'dr>, C: Cycle<CircuitField = D::F>> {
             $(
-                pub $field: Slot<'a, 'dr, D, define_unified_instance!(@output_type $field_type, 'dr, D, C), C>,
+                pub $field: Slot<'a, 'dr, D, unified_output_type!($field_type, 'dr, D, C), C>,
             )+
         }
 
@@ -120,7 +149,7 @@ macro_rules! define_unified_instance {
             pub fn new() -> Self {
                 OutputBuilder {
                     $(
-                        $field: define_unified_instance!(@slot_new $field_type, $field, D, C),
+                        $field: unified_slot_new!($field_type, $field, D, C),
                     )+
                 }
             }
@@ -142,29 +171,6 @@ macro_rules! define_unified_instance {
                 })
             }
         }
-    };
-
-    // Helper: Output gadget type for a field
-    (@output_type Point, $dr:lifetime, $D:ty, $C:ty) => {
-        Point<$dr, $D, <$C as Cycle>::NestedCurve>
-    };
-    (@output_type Element, $dr:lifetime, $D:ty, $C:ty) => {
-        Element<$dr, $D>
-    };
-
-    // Helper: Instance native type for a field
-    (@instance_type Point, $C:ty) => {
-        <$C as Cycle>::NestedCurve
-    };
-    (@instance_type Element, $C:ty) => {
-        <$C as Cycle>::CircuitField
-    };
-
-    // Helper: Slot initializer - works for both Point and Element (same alloc interface)
-    (@slot_new $field_type:ident, $field:ident, $D:ty, $C:ty) => {
-        Slot::new(|dr, i: &DriverValue<$D, &'a Instance<$C>>| {
-            $field_type::alloc(dr, i.view().map(|i| i.$field))
-        })
     };
 }
 
