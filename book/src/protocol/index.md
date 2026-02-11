@@ -46,7 +46,7 @@ compatibility with the
 elliptic curves (used for signing in hardware wallets, for example) as
 deployed in Orchard.
 
-### ECDLP-based Protocol
+## ECDLP-based Protocol
 
 Tachyon will need _small_ recursive proof sizes for deployment in Zcash,
 given our existing [Zerocash](https://eprint.iacr.org/2014/349)-based
@@ -67,7 +67,7 @@ maximum size of the committed vectors—this requires a careful trade-off with
 prover performance and implementation complexity, but can be achieved thanks
 to the fact that Pedersen commitments are linearly homomorphic.
 
-### First-class Polynomial Oracles
+## First-class Polynomial Oracles
 
 Ragu internally uses an accumulation scheme (heavily based on Halo), which
 provides the best recursion performance of known ECDLP-based constructions.
@@ -83,7 +83,7 @@ schemes) because the construction we present can largely avoid polynomial
 multiplications and encoding witnesses in the Lagrange basis _without_ using
 the sum-check protocol.
 
-### Simple Circuit Model
+## Simple Circuit Model
 
 The requirement for smaller committed vectors requires either splitting up
 our recursive SNARK protocol into many separate circuits (corresponding to
@@ -99,7 +99,7 @@ This has led to two fundamental design decisions:
   arithmetization based on the
   [[BCCGP16]](https://eprint.iacr.org/2016/263) lineage of argument
   systems, with a cost model similar to that of QAP-based SNARKs like
-  [[Growth16]](https://eprint.iacr.org/2016/260). Notably, there is no need
+  [[Groth16]](https://eprint.iacr.org/2016/260). Notably, there is no need
   to _materialize_ sparse R1CS matrices or expensive QAP reductions; it
   supports unlimited fan-in addition gates, and the polynomials encoding the
   circuit can be synthesized directly. There are no custom gates and no

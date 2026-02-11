@@ -22,7 +22,7 @@ A few arithmetic facts (assume all vectors have the same length):
 ## Constraint System: Bootle16
 
 The Bootle16 constraint system was proposed in
-[[BCC+16]](https://eprint.iacr.org/2016/263) and later used in
+[[BCCGP16]](https://eprint.iacr.org/2016/263) and later used in
 [Sonic](https://eprint.iacr.org/2019/099) and
 [Halo](https://eprint.iacr.org/2019/1021) papers.
 It describes any NP relation $\Rel=\set{(x,w): \Cir(x,w)=1}$

@@ -10,7 +10,7 @@ P = \dot{\v{a}}{\v{G}} + \dot{\v{b}}{\v{H}} + \dot{\v{a}}{\v{b}}\cdot Q
 \}
 $$
 
-[[BCC+16]](https://eprint.iacr.org/2016/263) and Bulletproof constructed a 
+[[BCCGP16]](https://eprint.iacr.org/2016/263) and Bulletproof constructed a 
 transparent SNARK for this relation with $O(\log n)$ proof size
 but $O(n)$ verifier time.
 We skip presenting the full protocol and refer readers to existing
