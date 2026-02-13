@@ -74,7 +74,7 @@ impl<'a, F: Field, R: Rank> Driver<'a> for Evaluator<'a, F, R> {
         routine: Ro,
         input: <Ro::Input as GadgetKind<Self::F>>::Rebind<'a, Self>,
     ) -> Result<<Ro::Output as GadgetKind<Self::F>>::Rebind<'a, Self>> {
-        let _guard = crate::RestoreGuard::new(&mut self.available_b);
+        let _guard = crate::RestoreGuard::new(&mut self.available_b, None);
         let mut dummy = Emulator::wireless();
         let dummy_input = Ro::Input::map_gadget(&input, &mut dummy)?;
         let aux = routine.predict(&mut dummy, &dummy_input)?.into_aux();

@@ -42,19 +42,20 @@ use alloc::{boxed::Box, vec::Vec};
 
 use polynomials::{Rank, structured, unstructured};
 
-/// Takes a value from a slot and restores it on drop.
+/// Saves a value and restores it on drop.
 ///
 /// Used to isolate allocation state within routines, ensuring restoration
 /// even on early `?` returns or panics.
 pub(crate) struct RestoreGuard<T> {
-    slot: *mut Option<T>,
-    value: Option<T>,
+    slot: *mut T,
+    value: T,
 }
 
 impl<T> RestoreGuard<T> {
-    /// Takes the value from `slot`, returning a guard that restores it on drop.
-    pub(crate) fn new(slot: &mut Option<T>) -> Self {
-        let value = slot.take();
+    /// Saves the current value of `slot`, sets it to `replacement`, and
+    /// returns a guard that restores the original value on drop.
+    pub(crate) fn new(slot: &mut T, replacement: T) -> Self {
+        let value = core::mem::replace(slot, replacement);
         // Raw pointer ends the borrow, allowing `&mut self` while guard exists.
         Self {
             slot: slot as *mut _,
@@ -67,7 +68,7 @@ impl<T> Drop for RestoreGuard<T> {
     fn drop(&mut self) {
         // SAFETY: Guard is a local in a method of the struct owning the slot,
         // so the pointer remains valid for the guard's lifetime.
-        unsafe { *self.slot = self.value.take() }
+        unsafe { core::ptr::swap(self.slot, &mut self.value) }
     }
 }
 
