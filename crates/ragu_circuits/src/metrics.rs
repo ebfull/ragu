@@ -8,8 +8,8 @@ use ff::Field;
 use ragu_arithmetic::Coeff;
 use ragu_core::{
     Result,
-    drivers::{Driver, DriverTypes, emulator::Emulator},
-    gadgets::{Bound, GadgetKind},
+    drivers::{Driver, DriverTypes},
+    gadgets::Bound,
     maybe::Empty,
     routines::Routine,
 };
@@ -17,7 +17,7 @@ use ragu_primitives::GadgetExt;
 
 use core::marker::PhantomData;
 
-use super::{Circuit, FreshB};
+use super::{Circuit, FreshB, routine_with_fresh_b};
 
 /// Performs full constraint system analysis, capturing basic details about a circuit's topology through simulation.
 pub struct CircuitMetrics {
@@ -92,12 +92,7 @@ impl<'dr, F: Field> Driver<'dr> for Counter<F> {
         routine: Ro,
         input: Bound<'dr, Self, Ro::Input>,
     ) -> Result<Bound<'dr, Self, Ro::Output>> {
-        self.with_fresh_b(|this| {
-            let mut dummy = Emulator::wireless();
-            let dummy_input = Ro::Input::map_gadget(&input, &mut dummy)?;
-            let aux = routine.predict(&mut dummy, &dummy_input)?.into_aux();
-            routine.execute(this, input, aux)
-        })
+        routine_with_fresh_b(self, routine, input)
     }
 }
 

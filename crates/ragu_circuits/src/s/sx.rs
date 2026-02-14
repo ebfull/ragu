@@ -66,8 +66,8 @@ use ff::Field;
 use ragu_arithmetic::Coeff;
 use ragu_core::{
     Error, Result,
-    drivers::{Driver, DriverTypes, emulator::Emulator},
-    gadgets::{Bound, GadgetKind},
+    drivers::{Driver, DriverTypes},
+    gadgets::Bound,
     maybe::Empty,
     routines::Routine,
 };
@@ -81,7 +81,7 @@ use crate::{
         Rank,
         unstructured::{self, Polynomial},
     },
-    registry,
+    registry, routine_with_fresh_b,
 };
 
 use super::{
@@ -254,18 +254,12 @@ impl<'dr, F: Field, R: Rank> Driver<'dr> for Evaluator<F, R> {
         Ok(())
     }
 
-    /// Executes a routine with isolated allocation state.
     fn routine<Ro: Routine<Self::F> + 'dr>(
         &mut self,
         routine: Ro,
         input: Bound<'dr, Self, Ro::Input>,
     ) -> Result<Bound<'dr, Self, Ro::Output>> {
-        self.with_fresh_b(|this| {
-            let mut dummy = Emulator::wireless();
-            let dummy_input = Ro::Input::map_gadget(&input, &mut dummy)?;
-            let aux = routine.predict(&mut dummy, &dummy_input)?.into_aux();
-            routine.execute(this, input, aux)
-        })
+        routine_with_fresh_b(self, routine, input)
     }
 }
 

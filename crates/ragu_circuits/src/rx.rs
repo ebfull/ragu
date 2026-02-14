@@ -9,8 +9,8 @@ use ff::Field;
 use ragu_arithmetic::Coeff;
 use ragu_core::{
     Error, Result,
-    drivers::{Driver, DriverTypes, emulator::Emulator},
-    gadgets::{Bound, GadgetKind},
+    drivers::{Driver, DriverTypes},
+    gadgets::Bound,
     maybe::{Always, Maybe, MaybeKind},
     routines::Routine,
 };
@@ -18,7 +18,7 @@ use ragu_primitives::GadgetExt;
 
 use alloc::vec::Vec;
 
-use super::{Circuit, FreshB, Rank, registry, structured};
+use super::{Circuit, FreshB, Rank, registry, routine_with_fresh_b, structured};
 
 /// Witness data produced by evaluating a circuit.
 ///
@@ -148,12 +148,7 @@ impl<'a, F: Field> Driver<'a> for Evaluator<'a, F> {
         routine: Ro,
         input: Bound<'a, Self, Ro::Input>,
     ) -> Result<Bound<'a, Self, Ro::Output>> {
-        self.with_fresh_b(|this| {
-            let mut dummy = Emulator::wireless();
-            let dummy_input = Ro::Input::map_gadget(&input, &mut dummy)?;
-            let aux = routine.predict(&mut dummy, &dummy_input)?.into_aux();
-            routine.execute(this, input, aux)
-        })
+        routine_with_fresh_b(self, routine, input)
     }
 }
 

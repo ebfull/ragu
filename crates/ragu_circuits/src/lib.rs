@@ -32,8 +32,9 @@ mod tests;
 use ff::Field;
 use ragu_core::{
     Error, Result,
-    drivers::{Driver, DriverValue},
-    gadgets::Bound,
+    drivers::{Driver, DriverValue, emulator::Emulator},
+    gadgets::{Bound, GadgetKind},
+    routines::Routine,
 };
 use ragu_primitives::io::Write;
 
@@ -59,6 +60,30 @@ pub(crate) trait FreshB<B: Default> {
         *self.available_b() = saved;
         result
     }
+}
+
+/// Executes a routine with isolated allocation state.
+///
+/// This is the shared [`Driver::routine`] implementation for all evaluator
+/// drivers in this crate. Each overrides `routine` to delegate here, wrapping
+/// the default routine logic in [`FreshB::with_fresh_b`] to prevent paired
+/// allocation state from leaking across routine boundaries.
+pub(crate) fn routine_with_fresh_b<'dr, D, B, Ro>(
+    driver: &mut D,
+    routine: Ro,
+    input: Bound<'dr, D, Ro::Input>,
+) -> Result<Bound<'dr, D, Ro::Output>>
+where
+    D: Driver<'dr> + FreshB<B>,
+    B: Default,
+    Ro: Routine<D::F> + 'dr,
+{
+    driver.with_fresh_b(|this| {
+        let mut dummy = Emulator::wireless();
+        let dummy_input = Ro::Input::map_gadget(&input, &mut dummy)?;
+        let aux = routine.predict(&mut dummy, &dummy_input)?.into_aux();
+        routine.execute(this, input, aux)
+    })
 }
 
 /// Core trait for arithmetic circuits.
