@@ -52,10 +52,6 @@ pub fn f<F: Field>(rng: &mut StdRng) -> F {
     F::random(rng)
 }
 
-pub fn key<F: Field>(rng: &mut StdRng) -> Key<F> {
-    Key::new(F::random(rng))
-}
-
 pub fn rand_structured_poly(rng: &mut StdRng) -> structured::Polynomial<Fp, R<13>> {
     structured::Polynomial::random(rng)
 }

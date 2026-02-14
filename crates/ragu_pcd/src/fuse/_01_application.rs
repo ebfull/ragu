@@ -31,8 +31,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         proof::Application<C, R>,
         S::Aux<'source>,
     )> {
-        let (rx, aux) = Adapter::<C, S, R, HEADER_SIZE>::new(step)
-            .rx::<R>((left.data, right.data, witness), self.native_registry.key())?;
+        let (gates, aux) =
+            Adapter::<C, S, R, HEADER_SIZE>::new(step).rx((left.data, right.data, witness))?;
+        let rx = self.native_registry.assemble(&gates)?;
         let blind = C::CircuitField::random(&mut *rng);
         let commitment = rx.commit(C::host_generators(self.params), blind);
 

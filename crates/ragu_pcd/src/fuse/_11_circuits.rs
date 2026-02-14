@@ -55,73 +55,69 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             v: p.v,
         };
 
-        let (hashes_1_rx, _) =
+        let (hashes_1_gates, _) =
             native::hashes_1::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(
                 self.params,
                 total_circuit_counts(self.num_application_steps).1,
             )
-            .rx::<R>(
-                native::hashes_1::Witness {
-                    unified_instance,
-                    preamble_witness,
-                    error_n_witness,
-                },
-                self.native_registry.key(),
-            )?;
+            .rx(native::hashes_1::Witness {
+                unified_instance,
+                preamble_witness,
+                error_n_witness,
+            })?;
+        let hashes_1_rx = self.native_registry.assemble(&hashes_1_gates)?;
         let hashes_1_rx_blind = C::CircuitField::random(&mut *rng);
         let hashes_1_rx_commitment =
             hashes_1_rx.commit(C::host_generators(self.params), hashes_1_rx_blind);
 
-        let (hashes_2_rx, _) =
-            native::hashes_2::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(self.params)
-                .rx::<R>(
-                    native::hashes_2::Witness {
-                        unified_instance,
-                        error_n_witness,
-                    },
-                    self.native_registry.key(),
-                )?;
+        let (hashes_2_gates, _) =
+            native::hashes_2::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new(self.params).rx(
+                native::hashes_2::Witness {
+                    unified_instance,
+                    error_n_witness,
+                },
+            )?;
+        let hashes_2_rx = self.native_registry.assemble(&hashes_2_gates)?;
         let hashes_2_rx_blind = C::CircuitField::random(&mut *rng);
         let hashes_2_rx_commitment =
             hashes_2_rx.commit(C::host_generators(self.params), hashes_2_rx_blind);
 
-        let (partial_collapse_rx, _) =
-            native::partial_collapse::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new()
-                .rx::<R>(
-                    native::partial_collapse::Witness {
-                        preamble_witness,
-                        unified_instance,
-                        error_m_witness,
-                        error_n_witness,
-                    },
-                    self.native_registry.key(),
-                )?;
+        let (partial_collapse_gates, _) =
+            native::partial_collapse::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new().rx(
+                native::partial_collapse::Witness {
+                    preamble_witness,
+                    unified_instance,
+                    error_m_witness,
+                    error_n_witness,
+                },
+            )?;
+        let partial_collapse_rx = self.native_registry.assemble(&partial_collapse_gates)?;
         let partial_collapse_rx_blind = C::CircuitField::random(&mut *rng);
         let partial_collapse_rx_commitment =
             partial_collapse_rx.commit(C::host_generators(self.params), partial_collapse_rx_blind);
 
-        let (full_collapse_rx, _) =
-            native::full_collapse::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new().rx::<R>(
+        let (full_collapse_gates, _) =
+            native::full_collapse::Circuit::<C, R, HEADER_SIZE, NativeParameters>::new().rx(
                 native::full_collapse::Witness {
                     unified_instance,
                     preamble_witness,
                     error_n_witness,
                 },
-                self.native_registry.key(),
             )?;
+        let full_collapse_rx = self.native_registry.assemble(&full_collapse_gates)?;
         let full_collapse_rx_blind = C::CircuitField::random(&mut *rng);
         let full_collapse_rx_commitment =
             full_collapse_rx.commit(C::host_generators(self.params), full_collapse_rx_blind);
 
-        let (compute_v_rx, _) = native::compute_v::Circuit::<C, R, HEADER_SIZE>::new().rx::<R>(
+        let (compute_v_gates, _) = native::compute_v::Circuit::<C, R, HEADER_SIZE>::new().rx(
             native::compute_v::Witness {
                 unified_instance,
                 preamble_witness,
                 query_witness,
                 eval_witness,
             },
-            self.native_registry.key(),
         )?;
+        let compute_v_rx = self.native_registry.assemble(&compute_v_gates)?;
         let compute_v_rx_blind = C::CircuitField::random(&mut *rng);
         let compute_v_rx_commitment =
             compute_v_rx.commit(C::host_generators(self.params), compute_v_rx_blind);

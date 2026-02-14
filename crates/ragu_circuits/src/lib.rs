@@ -24,6 +24,8 @@ mod s;
 pub mod staging;
 mod trivial;
 
+pub use rx::Witness;
+
 #[cfg(test)]
 mod tests;
 
@@ -158,13 +160,15 @@ pub trait CircuitExt<F: Field>: Circuit<F> {
         Ok(Box::new(circuit))
     }
 
-    /// Computes the witness polynomial $r(X)$ given a witness for the circuit.
-    fn rx<'witness, R: Rank>(
+    /// Evaluates the witness for this circuit.
+    ///
+    /// The returned [`Witness`] can be assembled into a polynomial
+    /// via [`Registry::assemble`](registry::Registry::assemble).
+    fn rx<'witness>(
         &self,
         witness: Self::Witness<'witness>,
-        key: &registry::Key<F>,
-    ) -> Result<(structured::Polynomial<F, R>, Self::Aux<'witness>)> {
-        rx::eval(self, witness, key)
+    ) -> Result<(Witness<F>, Self::Aux<'witness>)> {
+        rx::eval(self, witness)
     }
 
     /// Computes the public input polynomial $k(Y)$ for the given instance.

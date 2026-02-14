@@ -23,7 +23,7 @@ use ragu_core::{Error, Result};
 use alloc::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::{
-    Circuit, CircuitExt, CircuitObject,
+    Circuit, CircuitExt, CircuitObject, Witness,
     polynomials::{Rank, structured, unstructured},
     staging::{Stage, StageExt},
 };
@@ -332,10 +332,19 @@ impl<F: PrimeField> From<F> for OmegaKey {
 }
 
 impl<F: PrimeField, R: Rank> Registry<'_, F, R> {
-    /// Return the constraint system key for this registry, used by the proof
-    /// generator.
-    pub fn key(&self) -> &Key<F> {
-        &self.key
+    /// Returns the registry digest value.
+    ///
+    /// This is the binding key computed during
+    /// [`RegistryBuilder::finalize`] that ties each circuit's wiring
+    /// polynomial to this registry.
+    pub fn digest(&self) -> F {
+        self.key.value()
+    }
+
+    /// Assembles a [`Witness`] into a [`structured::Polynomial`] using
+    /// this registry's key.
+    pub fn assemble(&self, witness: &Witness<F>) -> Result<structured::Polynomial<F, R>> {
+        witness.assemble_with_key(&self.key)
     }
 
     /// Returns a slice of the circuit objects in this registry.

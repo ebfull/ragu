@@ -131,26 +131,23 @@ fn test_simple_circuit() {
         }
     }
 
-    let assignment = MySimpleCircuit
-        .rx::<MyRank>(
-            (
-                Fp::from_raw([
-                    1833481853729904510,
-                    5119040798866070668,
-                    13106006979685074791,
-                    104139735293675522,
-                ]),
-                Fp::from_raw([
-                    1114250137190507128,
-                    15522336584428696251,
-                    4689053926428793931,
-                    2277752110332726989,
-                ]),
-            ),
-            &registry::Key::default(),
-        )
-        .unwrap()
-        .0;
+    let (gates, _) = MySimpleCircuit
+        .rx((
+            Fp::from_raw([
+                1833481853729904510,
+                5119040798866070668,
+                13106006979685074791,
+                104139735293675522,
+            ]),
+            Fp::from_raw([
+                1114250137190507128,
+                15522336584428696251,
+                4689053926428793931,
+                2277752110332726989,
+            ]),
+        ))
+        .unwrap();
+    let assignment = gates.assemble_trivial::<MyRank>().unwrap();
 
     type MyRank = R<5>;
     let circuit = MySimpleCircuit.into_object::<MyRank>().unwrap();

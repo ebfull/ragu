@@ -443,13 +443,11 @@ mod tests {
             let endoscalar_rx = <EndoscalarStage as StageExt<Fp, R>>::rx(endoscalar)?;
             let points_rx = <PointsStage<EpAffine, NUM_POINTS> as StageExt<Fp, R>>::rx(&points)?;
             let key = registry::Key::default();
-            let (final_rx, _) = staged.rx::<R>(
-                EndoscalingStepWitness {
-                    endoscalar,
-                    points: &points,
-                },
-                &key,
-            )?;
+            let (final_gates, _) = staged.rx(EndoscalingStepWitness {
+                endoscalar,
+                points: &points,
+            })?;
+            let final_rx = final_gates.assemble_trivial::<R>()?;
 
             let staged_s = staged.clone().into_object()?;
             let ky = staged.ky(())?;
@@ -510,13 +508,11 @@ mod tests {
             let staged = MultiStage::new(step_circuit.clone());
 
             let key = registry::Key::default();
-            let (final_rx, _) = staged.rx::<R>(
-                EndoscalingStepWitness {
-                    endoscalar,
-                    points: &points,
-                },
-                &key,
-            )?;
+            let (final_gates, _) = staged.rx(EndoscalingStepWitness {
+                endoscalar,
+                points: &points,
+            })?;
+            let final_rx = final_gates.assemble_trivial::<R>()?;
 
             let staged_s = staged.clone().into_object()?;
             let ky = staged.ky(())?;
