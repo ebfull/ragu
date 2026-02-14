@@ -18,7 +18,7 @@ use ragu_primitives::GadgetExt;
 
 use alloc::vec::Vec;
 
-use super::{Circuit, FreshB, Rank, registry, routine_with_fresh_b, structured};
+use super::{Circuit, DriverScope, Rank, registry, routine_with_scope, structured};
 
 /// Witness data produced by evaluating a circuit.
 ///
@@ -89,8 +89,8 @@ struct Evaluator<'a, F: Field> {
     available_b: Option<usize>,
 }
 
-impl<F: Field> FreshB<Option<usize>> for Evaluator<'_, F> {
-    fn available_b(&mut self) -> &mut Option<usize> {
+impl<F: Field> DriverScope<Option<usize>> for Evaluator<'_, F> {
+    fn scope(&mut self) -> &mut Option<usize> {
         &mut self.available_b
     }
 }
@@ -148,7 +148,7 @@ impl<'a, F: Field> Driver<'a> for Evaluator<'a, F> {
         routine: Ro,
         input: Bound<'a, Self, Ro::Input>,
     ) -> Result<Bound<'a, Self, Ro::Output>> {
-        routine_with_fresh_b(self, routine, input)
+        routine_with_scope(self, routine, input)
     }
 }
 

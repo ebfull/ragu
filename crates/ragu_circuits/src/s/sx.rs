@@ -76,12 +76,12 @@ use ragu_primitives::GadgetExt;
 use alloc::vec;
 
 use crate::{
-    Circuit, FreshB,
+    Circuit, DriverScope,
     polynomials::{
         Rank,
         unstructured::{self, Polynomial},
     },
-    registry, routine_with_fresh_b,
+    registry, routine_with_scope,
 };
 
 use super::{
@@ -151,8 +151,8 @@ struct Evaluator<F: Field, R: Rank> {
     _marker: core::marker::PhantomData<R>,
 }
 
-impl<F: Field, R: Rank> FreshB<Option<WireEval<F>>> for Evaluator<F, R> {
-    fn available_b(&mut self) -> &mut Option<WireEval<F>> {
+impl<F: Field, R: Rank> DriverScope<Option<WireEval<F>>> for Evaluator<F, R> {
+    fn scope(&mut self) -> &mut Option<WireEval<F>> {
         &mut self.available_b
     }
 }
@@ -259,7 +259,7 @@ impl<'dr, F: Field, R: Rank> Driver<'dr> for Evaluator<F, R> {
         routine: Ro,
         input: Bound<'dr, Self, Ro::Input>,
     ) -> Result<Bound<'dr, Self, Ro::Output>> {
-        routine_with_fresh_b(self, routine, input)
+        routine_with_scope(self, routine, input)
     }
 }
 

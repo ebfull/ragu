@@ -42,43 +42,44 @@ use alloc::{boxed::Box, vec::Vec};
 
 use polynomials::{Rank, structured, unstructured};
 
-/// A trait for drivers that stash a spare wire from paired allocation (see
-/// [`Driver::alloc`]).
+/// A trait for drivers that carry per-routine state which must be saved and
+/// restored across routine boundaries.
 ///
-/// Provides [`with_fresh_b`](Self::with_fresh_b), which saves [`available_b`](Self::available_b), resets it to its
-/// [`Default`], runs a closure with `&mut self`, then restores the original
-/// value. This isolates allocation state within routines.
-pub(crate) trait FreshB<B: Default> {
-    /// Returns a mutable reference to the `available_b` field.
-    fn available_b(&mut self) -> &mut B;
+/// Provides [`with_scope`](Self::with_scope), which saves
+/// [`scope`](Self::scope), resets it to its [`Default`], runs a closure with
+/// `&mut self`, then restores the original value. This isolates driver state
+/// within routines.
+pub(crate) trait DriverScope<S: Default> {
+    /// Returns a mutable reference to the scoped state.
+    fn scope(&mut self) -> &mut S;
 
-    /// Runs `f` with [`available_b`](Self::available_b) temporarily reset to its default, then
+    /// Runs `f` with [`scope`](Self::scope) temporarily reset to its default, then
     /// restores the original value.
-    fn with_fresh_b<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        let saved = core::mem::take(self.available_b());
+    fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let saved = core::mem::take(self.scope());
         let result = f(self);
-        *self.available_b() = saved;
+        *self.scope() = saved;
         result
     }
 }
 
-/// Executes a routine with isolated allocation state.
+/// Executes a routine with isolated driver state.
 ///
 /// This is the shared [`Driver::routine`] implementation for all evaluator
 /// drivers in this crate. Each overrides `routine` to delegate here, wrapping
-/// the default routine logic in [`FreshB::with_fresh_b`] to prevent paired
-/// allocation state from leaking across routine boundaries.
-pub(crate) fn routine_with_fresh_b<'dr, D, B, Ro>(
+/// the default routine logic in [`DriverScope::with_scope`] to prevent
+/// per-routine state from leaking across routine boundaries.
+pub(crate) fn routine_with_scope<'dr, D, S, Ro>(
     driver: &mut D,
     routine: Ro,
     input: Bound<'dr, D, Ro::Input>,
 ) -> Result<Bound<'dr, D, Ro::Output>>
 where
-    D: Driver<'dr> + FreshB<B>,
-    B: Default,
+    D: Driver<'dr> + DriverScope<S>,
+    S: Default,
     Ro: Routine<D::F> + 'dr,
 {
-    driver.with_fresh_b(|this| {
+    driver.with_scope(|this| {
         let mut dummy = Emulator::wireless();
         let dummy_input = Ro::Input::map_gadget(&input, &mut dummy)?;
         let aux = routine.predict(&mut dummy, &dummy_input)?.into_aux();
