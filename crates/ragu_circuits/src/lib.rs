@@ -45,21 +45,30 @@ use polynomials::{Rank, structured, unstructured};
 /// A trait for drivers that carry per-routine state which must be saved and
 /// restored across routine boundaries.
 ///
-/// Provides [`with_scope`](Self::with_scope), which saves
-/// [`scope`](Self::scope), resets it to its [`Default`], runs a closure with
-/// `&mut self`, then restores the original value. This isolates driver state
-/// within routines.
-pub(crate) trait DriverScope<S: Default> {
+/// Provides [`with_scope_init`](Self::with_scope_init), which saves
+/// [`scope`](Self::scope), replaces it with a caller-supplied value, runs a
+/// closure with `&mut self`, then restores the original value. This isolates
+/// driver state within routines.
+pub(crate) trait DriverScope<S> {
     /// Returns a mutable reference to the scoped state.
     fn scope(&mut self) -> &mut S;
 
-    /// Runs `f` with [`scope`](Self::scope) temporarily reset to its default, then
-    /// restores the original value.
-    fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        let saved = core::mem::take(self.scope());
+    /// Runs `f` with [`scope`](Self::scope) temporarily replaced by `init`,
+    /// then restores the original value.
+    fn with_scope_init<R>(&mut self, init: S, f: impl FnOnce(&mut Self) -> R) -> R {
+        let saved = core::mem::replace(self.scope(), init);
         let result = f(self);
         *self.scope() = saved;
         result
+    }
+
+    /// Convenience wrapper: calls [`with_scope_init`](Self::with_scope_init)
+    /// with [`S::default()`](Default::default).
+    fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R
+    where
+        S: Default,
+    {
+        self.with_scope_init(S::default(), f)
     }
 }
 
