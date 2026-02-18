@@ -1,6 +1,6 @@
 use ff::Field;
 use ragu_circuits::polynomials::{R, structured, unstructured};
-use ragu_circuits::registry::{Key, Registry, RegistryBuilder};
+use ragu_circuits::registry::{Registry, RegistryBuilder};
 use ragu_pasta::Fp;
 use ragu_testing::circuits::{MySimpleCircuit, SquareCircuit};
 use rand::SeedableRng;

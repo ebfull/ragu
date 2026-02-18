@@ -7,7 +7,7 @@ use std::hint::black_box;
 use gungraun::{library_benchmark, library_benchmark_group, main};
 use ragu_arithmetic::Cycle;
 use ragu_circuits::polynomials::{R, structured, unstructured};
-use ragu_circuits::registry::{Key, Registry, RegistryBuilder};
+use ragu_circuits::registry::{Registry, RegistryBuilder};
 use ragu_circuits::{Circuit, CircuitExt};
 use ragu_pasta::{Fp, Pasta};
 use ragu_testing::circuits::{MySimpleCircuit, SquareCircuit};
