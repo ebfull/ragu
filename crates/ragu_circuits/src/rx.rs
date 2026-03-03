@@ -16,18 +16,14 @@ use ragu_core::{
 };
 use ragu_primitives::GadgetExt;
 
-use alloc::{boxed::Box, vec, vec::Vec};
+use alloc::{vec, vec::Vec};
 use core::marker::PhantomData;
+use std::sync::mpsc;
 
 use super::{
     Circuit, DriverScope, Rank, floor_planner::ConstraintSegment, metrics::SegmentRecord, registry,
     structured,
 };
-
-/// A deferred routine evaluation, queued for serial execution.
-struct Thunk<'env, F: Field>(
-    Box<dyn FnOnce(&mut Vec<Thunk<'env, F>>) -> Result<Vec<AnnotatedSegment<F>>> + Send + 'env>,
-);
 
 /// A contiguous group of multiplication gates.
 ///
@@ -193,15 +189,21 @@ struct TraceScope {
 
 struct Evaluator<'scope, 'env, F: Field> {
     segments: Vec<AnnotatedSegment<F>>,
-    thunks: &'scope mut Vec<Thunk<'env, F>>,
+    scope: &'scope rayon::Scope<'env>,
+    tx: mpsc::Sender<Result<Vec<AnnotatedSegment<F>>>>,
     state: TraceScope,
 }
 
 impl<'scope, 'env, F: Field> Evaluator<'scope, 'env, F> {
-    fn new(prefix: Vec<usize>, thunks: &'scope mut Vec<Thunk<'env, F>>) -> Self {
+    fn new(
+        prefix: Vec<usize>,
+        scope: &'scope rayon::Scope<'env>,
+        tx: mpsc::Sender<Result<Vec<AnnotatedSegment<F>>>>,
+    ) -> Self {
         Self {
             segments: vec![AnnotatedSegment::new(&prefix)],
-            thunks,
+            scope,
+            tx,
             state: TraceScope {
                 available_b: None,
                 current_segment: 0,
@@ -290,14 +292,18 @@ impl<'scope, 'env, F: Field> Driver<'env> for Evaluator<'scope, 'env, F> {
                 let output = predicted_output.map(&mut Lifter::lift())?;
                 let input = input.map(&mut Lifter::lift())?.sendable();
 
-                self.thunks.push(Thunk(Box::new(move |thunks| {
-                    let mut eval = Evaluator::new(child_prefix, thunks);
-                    input
-                        .into_inner()
-                        .map(&mut Lifter::lift())
-                        .and_then(|input| routine.execute(&mut eval, input, aux))
-                        .map(|_| eval.segments)
-                })));
+                let tx = self.tx.clone();
+                self.scope.spawn(move |s| {
+                    let mut eval = Evaluator::new(child_prefix, s, tx.clone());
+                    tx.send(
+                        input
+                            .into_inner()
+                            .map(&mut Lifter::lift())
+                            .and_then(|input| routine.execute(&mut eval, input, aux))
+                            .map(|_| eval.segments),
+                    )
+                    .expect("receiver alive");
+                });
 
                 Ok(output)
             }
@@ -336,10 +342,10 @@ pub fn eval<'witness, F: Field, C: Circuit<F>>(
     circuit: &C,
     witness: C::Witness<'witness>,
 ) -> Result<(Trace<F>, C::Aux<'witness>)> {
-    let mut thunks = Vec::new();
+    let (tx, rx) = mpsc::channel();
 
-    let (mut segments, aux) = {
-        let mut evaluator = Evaluator::new(Vec::new(), &mut thunks);
+    let (mut segments, aux) = rayon::scope(|s| {
+        let mut evaluator = Evaluator::new(Vec::new(), s, tx);
 
         let aux = {
             let (io, aux) = circuit.witness(&mut evaluator, Always::maybe_just(|| witness))?;
@@ -348,10 +354,10 @@ pub fn eval<'witness, F: Field, C: Circuit<F>>(
         };
 
         Ok((evaluator.segments, aux))
-    }?;
+    })?;
 
-    while let Some(thunk) = thunks.pop() {
-        segments.extend(thunk.0(&mut thunks)?);
+    for batch in rx {
+        segments.extend(batch?);
     }
 
     Ok((finish(segments), aux))
