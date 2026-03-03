@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+mod segment_order;
+
 use ff::Field;
 use ragu_core::{
     Result,
