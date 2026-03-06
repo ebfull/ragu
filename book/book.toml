@@ -16,7 +16,7 @@ command = "mdbook-admonish"
 assets_version = "3.0.0"
 
 [preprocessor.todo]
-command = "python3 preprocessor-todo.py"
+command = "python3 -c 'import sys,json,os,subprocess as s;a=sys.argv[1:];\nexit(0)if a else None;d=sys.stdin.buffer.read();r=json.loads(d)[0][\"root\"];\np=s.run([sys.executable,os.path.join(r,\"preprocessor-todo.py\")],input=d,stdout=s.PIPE);\nsys.stdout.buffer.write(p.stdout);exit(p.returncode)'"
 after = ["links"]
 
 [output]
