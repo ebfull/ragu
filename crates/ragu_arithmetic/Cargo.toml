@@ -41,11 +41,11 @@ std = []
 bench = false
 
 [dependencies]
-ff_modern = { workspace = true, optional = true }
+ff_modern = { workspace = true, optional = true, features = ["bits"] }
 group_modern = { workspace = true, optional = true }
 pasta_curves_modern = { workspace = true, optional = true }
 rand_modern = { workspace = true, optional = true }
-ff_legacy = { workspace = true, optional = true }
+ff_legacy = { workspace = true, optional = true, features = ["bits"] }
 group_legacy = { workspace = true, optional = true }
 pasta_curves_legacy = { workspace = true, optional = true }
 rand_legacy = { workspace = true, optional = true }

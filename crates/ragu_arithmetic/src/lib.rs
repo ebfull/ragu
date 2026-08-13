@@ -81,6 +81,7 @@ mod deferred;
 mod domain;
 mod fft;
 mod multicore;
+mod packable;
 mod util;
 
 /// The selected `ff` crate.
@@ -112,6 +113,7 @@ pub use coeff::Coeff;
 pub use deferred::DeferredField;
 pub use domain::Domain;
 pub use fft::{Ring, bitreverse};
+pub use packable::Packable;
 /// Converts a 256-bit integer literal into the little endian `[u64; 4]`
 /// representation that e.g. [`Fp::from_raw`](crate::pasta_curves::Fp::from_raw) or
 /// [`Fp::pow`](crate::pasta_curves::Fp::pow) need as input. This makes constants
