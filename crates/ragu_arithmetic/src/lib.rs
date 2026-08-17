@@ -124,7 +124,7 @@ pub use util::{
     poly_mul, poly_with_roots,
 };
 
-use crate::ff::{Field, FromUniformBytes, WithSmallOrderMulGroup};
+use crate::ff::{Field, FromUniformBytes, PrimeFieldBits, WithSmallOrderMulGroup};
 pub use crate::pasta_curves::arithmetic::{Coordinates, CurveAffine, CurveExt};
 
 /// A random number generator suitable for cryptographic field sampling,
@@ -157,10 +157,16 @@ impl<RNG: crate::rand::CryptoRng + crate::rand::RngCore + ?Sized> CryptoRngCore 
 pub trait Cycle: Copy + Default + Send + Sync + 'static {
     /// The field that circuit developers will primarily work with, and the
     /// scalar field of the [`HostCurve`](Cycle::HostCurve).
-    type CircuitField: WithSmallOrderMulGroup<3> + FromUniformBytes<64> + DeferredField;
+    type CircuitField: WithSmallOrderMulGroup<3>
+        + FromUniformBytes<64>
+        + PrimeFieldBits
+        + DeferredField;
 
     /// The scalar field of the [`NestedCurve`](Cycle::NestedCurve).
-    type ScalarField: WithSmallOrderMulGroup<3> + FromUniformBytes<64> + DeferredField;
+    type ScalarField: WithSmallOrderMulGroup<3>
+        + FromUniformBytes<64>
+        + PrimeFieldBits
+        + DeferredField;
 
     /// The nested curve that applications typically use for asymmetric keys,
     /// signatures, and other cryptographic primitives. (This is the Pallas
