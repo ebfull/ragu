@@ -1049,4 +1049,38 @@ mod tests {
             "Commitment via staging mechanism should match manual computation"
         );
     }
+
+    /// Tests that incrementing a stage's alpha by one shifts its commitment
+    /// by the generator at [`StageExt::alpha_generator_index`], for both a
+    /// root stage and a child stage with non-zero skip. Callers that
+    /// re-randomize a stage commitment (grinding) rely on this
+    /// single-point-addition identity.
+    #[test]
+    fn test_alpha_increment_adds_alpha_generator() {
+        let pasta = Pasta::baked();
+        let generators = Pasta::host_generators(pasta);
+
+        let challenges = [Fp::from(42u64), Fp::from(123u64), Fp::from(456u64)];
+        let alpha = Fp::from(7u64);
+
+        let base: EqAffine = ParentAOnlyStage::rx(alpha, challenges)
+            .unwrap()
+            .commit_to_affine(generators);
+        let bumped: EqAffine = ParentAOnlyStage::rx(alpha + Fp::ONE, challenges)
+            .unwrap()
+            .commit_to_affine(generators);
+        let alpha_gen =
+            generators.g()[<ParentAOnlyStage as StageExt<Fp, R>>::alpha_generator_index()];
+        assert_eq!(bumped, (base.to_curve() + alpha_gen).to_affine());
+
+        let base: EqAffine = ChildOfParentAOnlyStage::rx(alpha, challenges)
+            .unwrap()
+            .commit_to_affine(generators);
+        let bumped: EqAffine = ChildOfParentAOnlyStage::rx(alpha + Fp::ONE, challenges)
+            .unwrap()
+            .commit_to_affine(generators);
+        let alpha_gen =
+            generators.g()[<ChildOfParentAOnlyStage as StageExt<Fp, R>>::alpha_generator_index()];
+        assert_eq!(bumped, (base.to_curve() + alpha_gen).to_affine());
+    }
 }

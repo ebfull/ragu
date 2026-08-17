@@ -467,6 +467,16 @@ pub trait StageExt<F: Field, R: Rank>: Stage<F, R> {
         )?)))
     }
 
+    /// Returns the generator index of the stage alpha placed at the SYSTEM
+    /// gate `a[0]` by [`rx_configured`](Self::rx_configured).
+    ///
+    /// The SYSTEM gate's $a$-wire occupies degree $2n - 1$, so adding the
+    /// generator at this index to a stage commitment increments the stage's
+    /// alpha by one.
+    fn alpha_generator_index() -> usize {
+        2 * R::n() - 1
+    }
+
     /// Returns the generator index for the i-th first-value coefficient of
     /// this stage's alloc gates.
     ///
