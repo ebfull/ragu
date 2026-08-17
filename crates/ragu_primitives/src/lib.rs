@@ -41,7 +41,7 @@ pub use element::{Element, multiadd};
 pub use endoscalar::{Endoscalar, extract_endoscalar, lift_endoscalar};
 pub use invertible::{Invertible, Nonzero, NonzeroBank};
 use io::{Buffer, Write};
-pub use packable::PackableElement;
+pub use packable::{NotPackableError, PackableElement};
 pub use point::Point;
 use promotion::Demoted;
 use ragu_core::{Result, drivers::Driver, gadgets::Gadget};

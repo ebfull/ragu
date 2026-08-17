@@ -53,6 +53,13 @@ pub enum Error {
     /// This variant is retained for compatibility. Documentation should describe
     /// the concrete failure category and condition instead of referring to it as
     /// an "invalid witness."
+    ///
+    /// Code that constructs this variant may box a dedicated error type so that
+    /// callers can identify a specific failure condition. A caller probes for
+    /// such a condition with
+    /// [`invalid_witness_source`](Error::invalid_witness_source) or by
+    /// downcasting the boxed source directly. The `Display` output of this
+    /// variant is not a stable contract; the typed source is.
     #[error("invalid witness: {0}")]
     InvalidWitness(#[source] Box<dyn error::Error + Send + Sync + 'static>),
 
@@ -73,6 +80,22 @@ pub enum Error {
     /// Setup error: registration, initialization, or configuration failed.
     #[error("initialization failed: {0}")]
     Initialization(#[source] Box<dyn error::Error + Send + Sync + 'static>),
+}
+
+impl Error {
+    /// Returns the boxed source of an [`Error::InvalidWitness`] downcast to
+    /// `T`.
+    ///
+    /// Returns `None` when this error is a different variant or when the
+    /// source is not a `T`. A caller that expects a specific
+    /// witness-generation failure for some inputs uses this to detect that
+    /// condition and retry with a different input.
+    pub fn invalid_witness_source<T: error::Error + 'static>(&self) -> Option<&T> {
+        match self {
+            Self::InvalidWitness(source) => source.downcast_ref::<T>(),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -170,5 +193,24 @@ mod tests {
             actual: 2,
         };
         assert!(err.source().is_none());
+    }
+
+    /// Verifies that `invalid_witness_source` downcasts the boxed source of
+    /// `InvalidWitness` and returns `None` for a mismatched source type and
+    /// for other variants.
+    #[test]
+    fn test_invalid_witness_source() {
+        #[derive(thiserror::Error, Debug, Clone, Copy, PartialEq, Eq)]
+        #[error("marker")]
+        struct Marker;
+
+        let err = Error::InvalidWitness(Box::new(Marker));
+        assert_eq!(err.invalid_witness_source::<Marker>(), Some(&Marker));
+
+        let err = Error::InvalidWitness("inner".into());
+        assert!(err.invalid_witness_source::<Marker>().is_none());
+
+        let err = Error::GateBoundExceeded { limit: 1 };
+        assert!(err.invalid_witness_source::<Marker>().is_none());
     }
 }

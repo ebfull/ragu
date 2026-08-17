@@ -2,7 +2,10 @@
 //!
 //! Provides the [`PackableElement`] type, an [`Element`] whose canonical
 //! little-endian bit decomposition is computed and constrained in-circuit.
+//! Witness generation for a value that is not packable fails with a
+//! [`NotPackableError`] source.
 
+use alloc::boxed::Box;
 use core::marker::PhantomData;
 
 use ragu_arithmetic::{
@@ -26,6 +29,28 @@ use crate::{
     multipack,
     vec::{FixedVec, Len},
 };
+
+/// An error indicating that an element's witness value is not packable.
+///
+/// [`PackableElement::new`] boxes this type as the source of
+/// [`Error::InvalidWitness`] when the witness value's canonical
+/// representative does not fit in [`CAPACITY`](PrimeField::CAPACITY) bits.
+/// A caller that grinds candidate inputs detects this condition with
+/// [`Error::invalid_witness_source`], resamples, and retries; every other
+/// error reports a distinct failure.
+///
+/// # Examples
+///
+/// ```
+/// use ragu_core::Error;
+/// use ragu_primitives::NotPackableError;
+///
+/// let err = Error::InvalidWitness(Box::new(NotPackableError));
+/// assert!(err.invalid_witness_source::<NotPackableError>().is_some());
+/// ```
+#[derive(thiserror::Error, Debug, Clone, Copy, PartialEq, Eq)]
+#[error("element is not packable")]
+pub struct NotPackableError;
 
 /// Type-level [`Len`] marker for the field's [`CAPACITY`](PrimeField::CAPACITY).
 struct CapacityLen<F: PrimeField>(PhantomData<F>);
@@ -77,9 +102,12 @@ impl<'dr, D: Driver<'dr, F: PrimeFieldBits>> PackableElement<'dr, D> {
     ///
     /// # Errors
     ///
-    /// Returns a witness-generation error if witness input is not packable,
-    /// or propagates any error encountered while allocating and constraining
-    /// the bit decomposition.
+    /// Witness generation fails with [`Error::InvalidWitness`] when
+    /// `element`'s witness value is not packable. The boxed source is a
+    /// [`NotPackableError`] value, which callers that grind candidate inputs
+    /// can detect with [`Error::invalid_witness_source`]. Any error
+    /// encountered while allocating and constraining the bit decomposition
+    /// propagates unchanged.
     pub fn new<A: Allocator<'dr, D>>(
         dr: &mut D,
         allocator: &mut A,
@@ -87,7 +115,7 @@ impl<'dr, D: Driver<'dr, F: PrimeFieldBits>> PackableElement<'dr, D> {
     ) -> Result<Self> {
         let packable = D::try_just(|| {
             Packable::new(*element.value().take())
-                .ok_or_else(|| Error::InvalidWitness("element is not packable".into()))
+                .ok_or_else(|| Error::InvalidWitness(Box::new(NotPackableError)))
         })?;
         let mut bit_values = packable.as_ref().map(|value| value.bits());
         let bits = FixedVec::try_from_fn(|_| {
@@ -282,8 +310,43 @@ mod tests {
                 Ok(())
             });
 
-            assert!(matches!(result, Err(Error::InvalidWitness(_))));
+            let Err(err) = result else {
+                panic!("witness generation must fail for a non-packable value");
+            };
+            assert_eq!(
+                err.invalid_witness_source::<NotPackableError>(),
+                Some(&NotPackableError)
+            );
+            assert!(matches!(
+                &err,
+                Error::InvalidWitness(source) if source.is::<NotPackableError>()
+            ));
         }
+    }
+
+    #[test]
+    fn test_grinding_caller_distinguishes_not_packable() -> Result<()> {
+        // A grinding caller resamples candidates until one is packable,
+        // retrying only on the typed completeness failure.
+        let mut accepted = None;
+        for value in [capacity_bound(), -F::ONE, F::from(42)] {
+            let result = Sim::simulate(value, |dr, witness| {
+                let element = Element::constant(dr, *witness.snag());
+                PackableElement::new(dr, &mut Standard::new(), element)?;
+                Ok(())
+            });
+
+            match result {
+                Ok(_) => {
+                    accepted = Some(value);
+                    break;
+                }
+                Err(err) if err.invalid_witness_source::<NotPackableError>().is_some() => continue,
+                Err(err) => return Err(err),
+            }
+        }
+        assert_eq!(accepted, Some(F::from(42)));
+        Ok(())
     }
 
     #[test]
