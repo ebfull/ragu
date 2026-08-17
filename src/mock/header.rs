@@ -9,7 +9,7 @@ use ragu_pasta::{Ep, Eq, Fp, Fq};
 /// Mirrors real ragu's `InternalStepIndex` layout:
 /// - Slot 0: `Rerandomize` (reserved; mock rerandomize is a transformation, not
 ///   a Step, but the slot stays reserved for migration parity).
-/// - Slot 1: trivial header [`()`].
+/// - Slot 1: trivial header `()`.
 pub(crate) const NUM_INTERNAL_SUFFIXES: usize = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

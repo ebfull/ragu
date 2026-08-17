@@ -1,13 +1,13 @@
-use alloc::string::ToString as _;
-
 use ragu_arithmetic::{Cycle as _, ff::Field as _};
 use ragu_core::{
-    Error,
     drivers::emulator::{Emulator, Wireless},
     maybe::{Always, Maybe as _},
 };
 use ragu_pasta::{Fp, Pasta};
-use ragu_primitives::{Element, poseidon::Sponge as InnerSponge};
+use ragu_primitives::{
+    Element,
+    poseidon::{SaveError, Sponge as InnerSponge},
+};
 
 use crate::sponge::Sponge;
 
@@ -85,8 +85,10 @@ fn save_resume_round_trips() {
 #[test]
 fn save_state_rejects_empty_sponge() {
     let err = Sponge::new().save_state().unwrap_err();
-    assert!(matches!(err, Error::Initialization(_)));
-    assert!(err.to_string().contains("nothing absorbed"));
+    assert_eq!(
+        err.initialization_source::<SaveError>(),
+        Some(&SaveError::NothingAbsorbed)
+    );
 }
 
 #[test]
@@ -95,6 +97,8 @@ fn save_state_rejects_squeeze_mode() {
     sponge.absorb(Fp::ONE).unwrap();
     sponge.squeeze().unwrap();
     let err = sponge.save_state().unwrap_err();
-    assert!(matches!(err, Error::Initialization(_)));
-    assert!(err.to_string().contains("already in squeeze mode"));
+    assert_eq!(
+        err.initialization_source::<SaveError>(),
+        Some(&SaveError::AlreadyInSqueezeMode)
+    );
 }

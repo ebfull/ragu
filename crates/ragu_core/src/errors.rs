@@ -78,6 +78,13 @@ pub enum Error {
     },
 
     /// Setup error: registration, initialization, or configuration failed.
+    ///
+    /// Code that constructs this variant may box a dedicated error type so that
+    /// callers can identify a specific failure condition. A caller probes for
+    /// such a condition with
+    /// [`initialization_source`](Error::initialization_source) or by
+    /// downcasting the boxed source directly. The `Display` output of this
+    /// variant is not a stable contract; the typed source is.
     #[error("initialization failed: {0}")]
     Initialization(#[source] Box<dyn error::Error + Send + Sync + 'static>),
 }
@@ -93,6 +100,20 @@ impl Error {
     pub fn invalid_witness_source<T: error::Error + 'static>(&self) -> Option<&T> {
         match self {
             Self::InvalidWitness(source) => source.downcast_ref::<T>(),
+            _ => None,
+        }
+    }
+
+    /// Returns the boxed source of an [`Error::Initialization`] downcast to
+    /// `T`.
+    ///
+    /// Returns `None` when this error is a different variant or when the
+    /// source is not a `T`. A caller that expects a specific setup failure
+    /// uses this to detect that condition and handle it apart from other
+    /// errors.
+    pub fn initialization_source<T: error::Error + 'static>(&self) -> Option<&T> {
+        match self {
+            Self::Initialization(source) => source.downcast_ref::<T>(),
             _ => None,
         }
     }
@@ -212,5 +233,24 @@ mod tests {
 
         let err = Error::GateBoundExceeded { limit: 1 };
         assert!(err.invalid_witness_source::<Marker>().is_none());
+    }
+
+    /// Verifies that `initialization_source` downcasts the boxed source of
+    /// `Initialization` and returns `None` for a mismatched source type and
+    /// for other variants.
+    #[test]
+    fn test_initialization_source() {
+        #[derive(thiserror::Error, Debug, Clone, Copy, PartialEq, Eq)]
+        #[error("marker")]
+        struct Marker;
+
+        let err = Error::Initialization(Box::new(Marker));
+        assert_eq!(err.initialization_source::<Marker>(), Some(&Marker));
+
+        let err = Error::Initialization("inner".into());
+        assert!(err.initialization_source::<Marker>().is_none());
+
+        let err = Error::GateBoundExceeded { limit: 1 };
+        assert!(err.initialization_source::<Marker>().is_none());
     }
 }

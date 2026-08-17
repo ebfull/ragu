@@ -20,6 +20,8 @@
 //! disagree at every level, including the permutation. Consumers whose hashes
 //! are pinned to `halo2_poseidon` output must keep using it directly.
 
+use alloc::boxed::Box;
+
 use ragu_arithmetic::{Cycle as _, PoseidonPermutation as _, ff::Field as _};
 use ragu_core::{
     Error, Result,
@@ -29,7 +31,7 @@ use ragu_core::{
 use ragu_pasta::{Fp, Pasta, PoseidonFp};
 use ragu_primitives::{
     Element,
-    poseidon::{SaveError, Sponge as InnerSponge, SpongeState as InnerState},
+    poseidon::{Sponge as InnerSponge, SpongeState as InnerState},
 };
 
 /// The wireless emulator driver used to evaluate the sponge natively. `Wire` is
@@ -73,19 +75,18 @@ impl Sponge {
     /// Permute pending values and return the raw [`SpongeState`]. Mirrors
     /// `Sponge::save_state`.
     ///
-    /// Fails if the sponge is already in squeeze mode or has nothing absorbed.
+    /// # Errors
+    ///
+    /// Fails with [`Error::Initialization`] when the sponge is already in
+    /// squeeze mode or has nothing absorbed. The boxed source is the
+    /// [`SaveError`](ragu_primitives::poseidon::SaveError) reported by the
+    /// real sponge, which callers detect with
+    /// [`Error::initialization_source`].
     pub fn save_state(self) -> Result<SpongeState> {
         let Self { mut emu, inner } = self;
-        let inner_state = inner.save_state(&mut emu).map_err(|e| {
-            let message = match e {
-                SaveError::AlreadyInSqueezeMode => {
-                    "cannot save sponge state: already in squeeze mode"
-                }
-                SaveError::NothingAbsorbed => "cannot save sponge state: nothing absorbed",
-                _ => "cannot save sponge state",
-            };
-            Error::Initialization(message.into())
-        })?;
+        let inner_state = inner
+            .save_state(&mut emu)
+            .map_err(|e| Error::Initialization(Box::new(e)))?;
         let mut values = [Fp::ZERO; STATE_LEN];
         for (slot, element) in values.iter_mut().zip(inner_state.into_elements().iter()) {
             *slot = *element.value().take();
