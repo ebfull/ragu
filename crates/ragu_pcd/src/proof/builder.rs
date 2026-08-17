@@ -5,7 +5,8 @@
 //! The three "simple" bridge commitments (outer_error, ab, query) are also
 //! lazily computed from [`bridge_alpha`](ProofBuilder::bridge_alpha) and the
 //! native commitments already on the builder. The eval bridge is set
-//! explicitly by the fuse step, like the other bridge pairs.
+//! explicitly instead, because the fuse pre_beta grind may increment its
+//! alpha away from the derived power of `bridge_alpha`.
 
 use alloc::{sync::Arc, vec::Vec};
 use core::cell::OnceCell;
@@ -211,7 +212,7 @@ pub(crate) struct ProofBuilder<'params, C: Cycle, R: Rank> {
     params: &'params C::Params,
 
     /// Shared alpha source for the alpha-derived bridge commitments
-    /// (outer_error, ab, query, eval).
+    /// (outer_error, ab, query, and the eval bridge's base alpha).
     bridge_alpha: C::ScalarField,
 
     // Application metadata
@@ -245,7 +246,8 @@ pub(crate) struct ProofBuilder<'params, C: Cycle, R: Rank> {
     bridge_inner_error_commitment: Option<C::NestedCurve>,
     bridge_f_rx: Option<Arc<sparse::Polynomial<C::ScalarField, R>>>,
     bridge_f_commitment: Option<C::NestedCurve>,
-    // bridge_eval is set explicitly by the fuse step rather than cached.
+    // bridge_eval is set explicitly rather than cached because the fuse
+    // pre_beta grind may increment its alpha away from `bridge_alpha^4`.
     bridge_eval_rx: Option<Arc<sparse::Polynomial<C::ScalarField, R>>>,
     bridge_eval_commitment: Option<C::NestedCurve>,
 
@@ -549,7 +551,8 @@ impl<'params, C: Cycle, R: Rank> ProofBuilder<'params, C, R> {
     );
 
     /// Returns the derived alpha for an alpha-derived bridge, as a distinct
-    /// power of `bridge_alpha`.
+    /// power of `bridge_alpha`. For `BridgeEval` this is the base alpha that
+    /// the fuse pre_beta grind may increment.
     pub(crate) fn bridge_alpha_power(&self, idx: nested::RxIndex) -> C::ScalarField {
         let n = match idx {
             nested::RxIndex::BridgeOuterError => 1,

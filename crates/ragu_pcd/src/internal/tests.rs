@@ -136,7 +136,7 @@ fn test_internal_circuit_constraint_counts() {
     check_constraints!(Hashes2Circuit,        mul = 1999, lin = 2951);
     check_constraints!(InnerCollapseCircuit,  mul = 1876, lin = 1918);
     check_constraints!(OuterCollapseCircuit,  mul = 2043, lin = 3042);
-    check_constraints!(ComputeVCircuit,       mul = 1255, lin = 1773);
+    check_constraints!(ComputeVCircuit,       mul = 1125, lin = 1514);
 }
 
 #[rustfmt::skip]
@@ -232,7 +232,7 @@ fn test_native_registry_digest() {
         .finalize(pasta)
         .unwrap();
 
-    let expected = fp!(0x31e1786b198ad8953d0ec1699a2d1c7ed26d312a7c8c67099cb5a517259e54e3);
+    let expected = fp!(0x37a7d7fd7a291556eb66640663d4c5270ada6e082002e164ccf20ea1afebad98);
 
     assert_eq!(
         app.native_registry.digest(),

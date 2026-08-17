@@ -16,7 +16,10 @@
 //!   (first query receives highest $\alpha$ power)
 //!
 //! ### $v$ computation
-//! - Extract endoscalar from [$\beta$] and compute effective beta via lift
+//! - Extract the endoscalar as the low 128 bits of the packable challenge
+//!   [$\beta$] and compute effective beta via lift; witness generation is
+//!   unsatisfiable when [$\beta$] is not packable, which the prover prevents
+//!   by grinding the transcript (see `fuse`)
 //! - Compute $v = f(u) + \text{effective\_beta} \cdot \text{eval}$
 //! - Set computed [$v$] in unified output, enforcing correctness
 //!
@@ -59,7 +62,7 @@ use ragu_core::{
     gadgets::Bound,
     maybe::Maybe,
 };
-use ragu_primitives::{Element, Endoscalar, GadgetExt, allocator::Standard};
+use ragu_primitives::{Element, Endoscalar, GadgetExt, PackableElement, allocator::Standard};
 
 use super::super::{
     InternalCircuitIndex, InternalCircuitValues, RxComponent, RxIndex, STATIC_F_QUERIES,
@@ -162,11 +165,13 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> MultiStageCircuit<C::CircuitFi
         let allocator = &mut Standard::new();
         let mut unified_output = OutputBuilder::new(witness.map(|w| w.unified));
 
-        // Extract endoscalar early: each of the 128 Boolean gates has a
-        // spare D wire. Donating them to the pool lets subsequent reads
-        // reuse those wires instead of allocating fresh gates.
+        // Extract endoscalar early: each of the CAPACITY Boolean gates in
+        // the packable decomposition has a spare D wire. Donating them to
+        // the pool lets subsequent reads reuse those wires instead of
+        // allocating fresh gates.
         let pre_beta = unified_output.pre_beta.read(dr, allocator)?;
-        let beta_endo = Endoscalar::extract(dr, allocator, pre_beta)?;
+        let pre_beta = PackableElement::new(dr, allocator, pre_beta)?;
+        let beta_endo = Endoscalar::from_packable(&pre_beta)?;
 
         // Retrieve Fiat-Shamir challenges from the unified instance.
         // These reads draw from the pool donated above.

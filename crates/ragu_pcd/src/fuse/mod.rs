@@ -17,13 +17,17 @@ mod _11_circuits;
 pub(crate) mod claims;
 
 use claims::FuseProofSource;
-use ragu_arithmetic::{CryptoRngCore, Cycle, ff::Field};
+use ragu_arithmetic::{
+    CryptoRngCore, Cycle, FixedGenerators,
+    ff::Field,
+    group::{Curve, CurveAffine as _},
+};
 use ragu_circuits::{
     polynomials::{Rank, sparse},
     staging::StageExt,
 };
 use ragu_core::{Result, drivers::emulator::Emulator, maybe::Maybe};
-use ragu_primitives::{GadgetExt, Point, vec::CollectFixed};
+use ragu_primitives::{EndoscalarChallenge, GadgetExt, Point, vec::CollectFixed};
 
 use crate::{
     Application, Pcd, RAGU_TAG,
@@ -184,19 +188,64 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             self.compute_eval(&u, &left, &right, &native_s_prime, &registry_wy, &builder);
         builder.set_native_eval_rx(self.sample_eval_rx(rng, &eval_witness)?);
 
-        let bridge_eval_rx = nested::stages::eval::Stage::<C::HostCurve, R>::rx(
-            builder.bridge_alpha_power(nested::RxIndex::BridgeEval),
-            &nested::stages::eval::Witness {
-                native_eval: builder.native_eval_commitment(),
-            },
+        // The endoscalar derived from pre_beta is the low 128 bits of its
+        // canonical representative, which requires pre_beta to be packable.
+        // A squeezed challenge fails that with probability ~2^-129, in which
+        // case the transcript is ground: incrementing the eval bridge's
+        // alpha shifts its commitment by the alpha generator (one point
+        // addition instead of a fresh MSM), yielding a fresh challenge.
+        // `EndoscalarChallenge::sample` owns the rejection loop, so a
+        // challenge cannot be obtained from a rejected candidate; the closure
+        // advances the (alpha, commitment) state on a retry and re-derives
+        // the candidate from a fresh transcript clone, threading the accepted
+        // pair out as the payload.
+        //
+        // `alpha_generator` backs the stage alpha coefficient; it is distinct
+        // from the FixedGenerators blinding generator `h()`.
+        let generators = C::nested_generators(self.params);
+        let alpha_generator =
+            generators.g()[<nested::stages::eval::Stage<C::HostCurve, R> as StageExt<
+                C::ScalarField,
+                R,
+            >>::alpha_generator_index()];
+        let bridge_eval_witness = nested::stages::eval::Witness {
+            native_eval: builder.native_eval_commitment(),
+        };
+        let bridge_eval_base_alpha = builder.bridge_alpha_power(nested::RxIndex::BridgeEval);
+        let bridge_eval_base_rx = nested::stages::eval::Stage::<C::HostCurve, R>::rx(
+            bridge_eval_base_alpha,
+            &bridge_eval_witness,
         )?;
-        let bridge_eval_commitment =
-            bridge_eval_rx.commit_to_affine(C::nested_generators(self.params));
+        let mut bridge_eval_alpha = bridge_eval_base_alpha;
+        let mut bridge_eval_commitment = bridge_eval_base_rx.commit_to_affine(generators);
+        let mut first = true;
+        let (pre_beta, (bridge_eval_alpha, bridge_eval_commitment)) =
+            EndoscalarChallenge::sample(|| {
+                if first {
+                    first = false;
+                } else {
+                    bridge_eval_alpha += C::ScalarField::ONE;
+                    bridge_eval_commitment =
+                        (bridge_eval_commitment.to_curve() + alpha_generator).to_affine();
+                }
+                let mut candidate = transcript.clone();
+                let eval_commitment = Point::constant(&mut dr, bridge_eval_commitment)?;
+                eval_commitment.write(&mut dr, &mut candidate)?;
+                let pre_beta = candidate.challenge(&mut dr)?;
+                Ok((
+                    *pre_beta.value().take(),
+                    (bridge_eval_alpha, bridge_eval_commitment),
+                ))
+            })?;
+        let bridge_eval_rx = if bridge_eval_alpha == bridge_eval_base_alpha {
+            bridge_eval_base_rx
+        } else {
+            nested::stages::eval::Stage::<C::HostCurve, R>::rx(
+                bridge_eval_alpha,
+                &bridge_eval_witness,
+            )?
+        };
         builder.set_bridge_eval_rx(bridge_eval_rx, bridge_eval_commitment);
-
-        let eval_commitment = Point::constant(&mut dr, bridge_eval_commitment)?;
-        eval_commitment.write(&mut dr, &mut transcript)?;
-        let pre_beta = transcript.challenge(&mut dr)?;
 
         self.compute_p(
             rng,
@@ -220,7 +269,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         builder.set_x(*x.value().take());
         builder.set_alpha(*alpha.value().take());
         builder.set_u(*u.value().take());
-        builder.set_pre_beta(*pre_beta.value().take());
+        builder.set_pre_beta(pre_beta.element());
 
         // Store children's stage rx polynomials for copying circuit claims.
         builder.set_child_left_stage_rx(left.as_child_stage_rx());

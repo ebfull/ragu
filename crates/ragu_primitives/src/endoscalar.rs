@@ -8,26 +8,28 @@
 //! multiplied by equally "random" challenge scalars more efficiently within a
 //! circuit than an arbitrary scalar.
 //!
-//! This module provides an implementation of the scaling operation for curves
-//! which support the endomorphism, and an implementation of the algorithm for
-//! recovering the effective scalar that an endoscalar maps to for a particular
-//! prime field.
-
-use alloc::vec::Vec;
+//! An endoscalar is extracted from a field element by taking the lower 128
+//! bits of its canonical representative, which is well-defined only for
+//! packable elements (see [`PackableElement`]). This module provides the
+//! extraction, an implementation of the scaling operation for curves which
+//! support the endomorphism, an implementation of the algorithm for
+//! recovering the effective scalar that an endoscalar maps to for a
+//! particular prime field, and [`EndoscalarChallenge`], which produces a
+//! challenge validated for extraction by rejection sampling.
 
 use ragu_arithmetic::{
-    Coeff, CurveAffine,
-    ff::{Field, PrimeField, WithSmallOrderMulGroup},
+    Coeff, CurveAffine, Packable,
+    ff::{Field, PrimeField, PrimeFieldBits, WithSmallOrderMulGroup},
 };
 use ragu_core::{
     Result,
-    drivers::{Driver, DriverValue, LinearExpression, emulator::Emulator},
+    drivers::{Driver, DriverValue},
     gadgets::Gadget,
     maybe::Maybe,
 };
 
 use crate::{
-    Boolean, Element, NonzeroBank, Point,
+    Boolean, Element, NonzeroBank, PackableElement, Point,
     promotion::Demoted,
     vec::{CollectFixed, ConstLen, FixedVec},
 };
@@ -53,7 +55,7 @@ impl<'dr, D: Driver<'dr>> Endoscalar<'dr, D> {
     /// Nothing ties those bits to `value`, which is witness input: witness
     /// generation decomposes it in little-endian order, but callers needing the
     /// endoscalar bound to a specific field element must enforce that relation
-    /// themselves (see [`extract`](Self::extract)).
+    /// themselves (see [`from_packable`](Self::from_packable)).
     pub fn alloc(dr: &mut D, value: DriverValue<D, u128>) -> Result<Self> {
         let bits = (0..u128::BITS as usize)
             .map(|i| {
@@ -81,93 +83,29 @@ impl<'dr, D: Driver<'dr>> Endoscalar<'dr, D> {
         })
     }
 
-    /// Extracts an endoscalar from a random element in the field.
+    /// Extracts an endoscalar from a packable element, taking the lower 128
+    /// bits of its canonical representative.
+    ///
+    /// This adds no constraints: the returned endoscalar's bits are the first
+    /// 128 stored bits of `packable`, whose decomposition [`PackableElement`]
+    /// already constrains.
     ///
     /// # Soundness
     ///
-    /// Any satisfying assignment makes each returned bit encode whether
-    /// `elem + i` is a quadratic residue for the corresponding bit position
-    /// `i`, except where `elem + i == 0`. At those exceptional inputs
-    /// (`elem = -i` for `0 <= i < 128`) both quadratic-residue branches are
-    /// zero, which is a square, so a malicious prover can flip that bit. This
-    /// is unreachable when `elem` is a transcript-derived challenge (forcing
-    /// `elem = -i` requires grinding ~`|F| / 128` hashes). [#765] tracks the
-    /// canonical bit-decomposition that closes the gap.
-    ///
-    /// [#765]: https://github.com/tachyon-zcash/ragu/issues/765
-    pub fn extract<A: crate::allocator::Allocator<'dr, D>>(
-        dr: &mut D,
-        allocator: &mut A,
-        elem: Element<'dr, D>,
-    ) -> Result<Self>
+    /// Any satisfying assignment makes each returned bit represent the
+    /// corresponding low bit of the element's canonical representative.
+    pub fn from_packable(packable: &PackableElement<'dr, D>) -> Result<Self>
     where
-        D::F: WithSmallOrderMulGroup<3>,
+        D::F: PrimeFieldBits,
     {
-        let mut bits = Vec::with_capacity(u128::BITS as usize);
-        let mut value = D::just(|| 0u128);
-        let mut constant = D::F::ZERO;
+        const { assert!(D::F::CAPACITY >= u128::BITS) };
+        let bits = packable.bits()[..u128::BITS as usize]
+            .iter()
+            .map(Demoted::new)
+            .try_collect_fixed()?;
+        let value = packable.value().map(extract_endoscalar);
 
-        let mut coeff_0 = D::F::ZERO;
-        let mut coeff_1 = D::F::ZERO;
-        let coeff_2 = D::F::MULTIPLICATIVE_GENERATOR;
-        let coeff_3 = D::F::ONE - D::F::MULTIPLICATIVE_GENERATOR;
-
-        for i in 0..(u128::BITS as usize) {
-            let (sqrt, bit) = D::try_just(|| {
-                let value = *elem.value().take() + constant;
-
-                if let Some(sqrt) = value.sqrt().into_option() {
-                    Ok((sqrt, true))
-                } else {
-                    let sqrt = (value * D::F::MULTIPLICATIVE_GENERATOR)
-                        .sqrt()
-                        .into_option()
-                        .expect("should produce a square if the other didn't");
-                    Ok((sqrt, false))
-                }
-            })?
-            .cast();
-
-            value.as_mut().map(|v| {
-                if *bit.snag() {
-                    *v |= 1u128 << i
-                }
-            });
-
-            let bit = Boolean::alloc(dr, allocator, bit)?;
-            let (_, square) = Element::alloc_square(dr, sqrt)?;
-            let vb = elem.mul(dr, &bit.element())?;
-
-            // Enforce that the square is equal to
-            //     (elem + i) if bit == 1
-            //     (elem + i) * MULTIPLICATIVE_GENERATOR) if bit == 0
-            // This is done by enforcing the constraint:
-            //
-            //     square = bit * (elem + i)
-            //            + (1 - bit) * ((elem + i) * MULTIPLICATIVE_GENERATOR)
-            //
-            //            = i * MULTIPLICATIVE_GENERATOR
-            //            + bit * (i * (1 - MULTIPLICATIVE_GENERATOR))
-            //            + elem * MULTIPLICATIVE_GENERATOR
-            //            + vb * (1 - MULTIPLICATIVE_GENERATOR)
-            dr.enforce_zero(|lc| {
-                lc.add_term(&D::ONE, coeff_0.into())
-                    .add_term(bit.wire(), coeff_1.into())
-                    .add_term(elem.wire(), coeff_2.into())
-                    .add_term(vb.wire(), coeff_3.into())
-                    .sub(square.wire())
-            })?;
-
-            bits.push(Demoted::new(&bit)?);
-            constant += D::F::ONE;
-            coeff_0 += coeff_2;
-            coeff_1 += coeff_3;
-        }
-
-        Ok(Endoscalar {
-            bits: FixedVec::try_from(bits)?,
-            value,
-        })
+        Ok(Endoscalar { bits, value })
     }
 
     /// Scale a point by the endoscalar.
@@ -294,33 +232,100 @@ pub fn lift_endoscalar<F: WithSmallOrderMulGroup<3>>(endo: u128) -> F {
     acc
 }
 
-/// Extracts an endoscalar from a random field element.
+/// Extracts an endoscalar from a packable field element.
 ///
-/// Given a random output of a secure algebraic hash function, this extracts
-/// `k` bits of "randomness" from the value by checking whether `value + i`
-/// is a quadratic residue for each bit position `i`.
-pub fn extract_endoscalar<F: PrimeField + WithSmallOrderMulGroup<3>>(value: F) -> u128 {
-    Emulator::emulate_wireless(value, |dr, witness| {
-        let elem = Element::alloc(dr, &mut (), witness)?;
-        let endo = Endoscalar::extract(dr, &mut (), elem)?;
-        Ok(*endo.value.snag())
-    })
-    .expect("wireless emulation should not fail")
+/// The endoscalar is the lower 128 bits of the element's canonical
+/// representative, in little-endian order. This is the native counterpart to
+/// [`Endoscalar::from_packable`]; callers obtain a [`Packable`] via
+/// [`Packable::new`].
+pub fn extract_endoscalar<F: PrimeFieldBits>(value: Packable<F>) -> u128 {
+    const { assert!(F::CAPACITY >= u128::BITS) };
+    value
+        .bits()
+        .take(u128::BITS as usize)
+        .enumerate()
+        .fold(0u128, |acc, (i, bit)| acc | (u128::from(bit) << i))
+}
+
+/// A transcript challenge validated for endoscalar extraction.
+///
+/// Wraps a field element whose canonical representative fits in
+/// `F::CAPACITY` bits, so [`extract_endoscalar`] is well-defined for it. The
+/// endoscalar is extracted once at construction and returned by
+/// [`endoscalar`](Self::endoscalar).
+///
+/// This is a native-only type, not a [`Gadget`]: a gadget must never carry a
+/// contract over its witness. The in-circuit counterpart is
+/// [`PackableElement`], which enforces the same range by constraint; this
+/// type enforces it by construction, because [`sample`](Self::sample) is the
+/// only constructor and never returns an out-of-range challenge.
+#[derive(Clone, Copy, Debug)]
+pub struct EndoscalarChallenge<F: PrimeFieldBits> {
+    /// The accepted challenge element, validated as packable.
+    packable: Packable<F>,
+
+    /// The endoscalar extracted from `packable` at construction.
+    endoscalar: u128,
+}
+
+impl<F: PrimeFieldBits> EndoscalarChallenge<F> {
+    /// Produces a validated endoscalar challenge by rejection sampling.
+    ///
+    /// Each call to `produce` returns one candidate element together with a
+    /// payload of side state derived alongside it. A packable candidate is
+    /// accepted and returned with its payload; a non-packable candidate is
+    /// discarded, and `produce` is called again for a fresh one. The payload
+    /// lets the caller recover state that must correspond to the accepted
+    /// candidate.
+    ///
+    /// With uniformly random candidates, each attempt succeeds with
+    /// overwhelming probability (about $1 - 2^{-129}$ over the Pasta fields).
+    ///
+    /// # Errors
+    ///
+    /// An error from `produce` propagates immediately without retrying; the
+    /// loop retries only on the expected non-packable outcome.
+    pub fn sample<T>(mut produce: impl FnMut() -> Result<(F, T)>) -> Result<(Self, T)> {
+        loop {
+            let (value, payload) = produce()?;
+            if let Some(packable) = Packable::new(value) {
+                return Ok((
+                    EndoscalarChallenge {
+                        packable,
+                        endoscalar: extract_endoscalar(packable),
+                    },
+                    payload,
+                ));
+            }
+        }
+    }
+
+    /// Returns the endoscalar extracted from the accepted challenge element.
+    pub fn endoscalar(&self) -> u128 {
+        self.endoscalar
+    }
+
+    /// Returns the accepted challenge element.
+    pub fn element(&self) -> F {
+        *self.packable
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use ragu_arithmetic::{
         CurveAffine, CurveExt,
-        ff::{Field, PrimeField, WithSmallOrderMulGroup},
+        ff::{Field, PrimeFieldBits, WithSmallOrderMulGroup},
         group::{CurveAffine as _, Group},
         rand::RngExt,
     };
-    use ragu_core::Result;
+    use ragu_core::{Error, Result};
     use ragu_pasta::{EpAffine, Fp};
 
-    use super::{Element, Endoscalar, Maybe, Point};
-    use crate::{Simulator, allocator::Standard};
+    use super::{
+        Element, Endoscalar, EndoscalarChallenge, Maybe, Packable, PackableElement, Point,
+    };
+    use crate::{NotPackableError, Simulator, allocator::Standard};
 
     pub struct EndoscalarTest {
         pub value: u128,
@@ -351,9 +356,11 @@ mod tests {
         }
     }
 
-    pub fn extract<F: PrimeField + WithSmallOrderMulGroup<3>>(value: F) -> EndoscalarTest {
+    pub fn extract<F: PrimeFieldBits>(value: F) -> EndoscalarTest {
         EndoscalarTest {
-            value: super::extract_endoscalar(value),
+            value: super::extract_endoscalar(
+                Packable::new(value).expect("test input must be packable"),
+            ),
         }
     }
 
@@ -384,7 +391,8 @@ mod tests {
             let p = Point::alloc(dr, p)?;
             let allocator = &mut Standard::new();
             let r = Element::alloc(dr, allocator, r)?;
-            let my_extracted = Endoscalar::extract(dr, &mut (), r)?;
+            let r = PackableElement::new(dr, allocator, r)?;
+            let my_extracted = Endoscalar::from_packable(&r)?;
             let allocated = Endoscalar::alloc(dr, extracted)?;
 
             assert_eq!(my_extracted.value.snag(), allocated.value.snag());
@@ -397,6 +405,65 @@ mod tests {
         })?;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_extraction_rejects_non_packable() {
+        let result = Simulator::<Fp>::simulate(-Fp::ONE, |dr, witness| {
+            let allocator = &mut Standard::new();
+            let elem = Element::alloc(dr, allocator, witness)?;
+            let packable = PackableElement::new(dr, allocator, elem)?;
+            Endoscalar::from_packable(&packable)?;
+            Ok(())
+        });
+
+        let Err(err) = result else {
+            panic!("witness generation must fail for a non-packable value");
+        };
+        assert_eq!(
+            err.invalid_witness_source::<NotPackableError>(),
+            Some(&NotPackableError)
+        );
+    }
+
+    #[test]
+    fn test_sample_grinds_until_in_range() -> Result<()> {
+        // Feed one non-packable candidate followed by a packable one: `sample`
+        // must reject the first, accept the second, and return the payload
+        // produced alongside the accepted candidate.
+        let in_range = Fp::from(42);
+        let candidates = [-Fp::ONE, in_range];
+        let mut calls = 0;
+
+        let (challenge, payload) = EndoscalarChallenge::sample(|| {
+            let candidate = candidates[calls];
+            calls += 1;
+            Ok((candidate, calls))
+        })?;
+
+        assert_eq!(calls, 2, "expected exactly one rejection");
+        assert_eq!(payload, 2, "accepted candidate's payload must be returned");
+        assert_eq!(challenge.element(), in_range);
+        assert_eq!(
+            challenge.endoscalar(),
+            super::extract_endoscalar(Packable::new(in_range).expect("42 is packable")),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_sample_propagates_produce_error() {
+        // A genuine error from `produce` must surface immediately instead of
+        // being retried: the loop retries only on non-packable candidates.
+        let mut calls = 0;
+        let result: Result<(EndoscalarChallenge<Fp>, ())> = EndoscalarChallenge::sample(|| {
+            calls += 1;
+            Err(Error::GateBoundExceeded { limit: 1 })
+        });
+
+        assert!(matches!(result, Err(Error::GateBoundExceeded { limit: 1 })));
+        assert_eq!(calls, 1, "produce error must not be retried");
     }
 
     #[test]

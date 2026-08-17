@@ -14,7 +14,7 @@ pub(crate) mod builder;
 use alloc::{sync::Arc, vec, vec::Vec};
 
 pub(crate) use builder::ProofBuilder;
-use ragu_arithmetic::{Cycle, ff::Field};
+use ragu_arithmetic::{Cycle, Packable, ff::Field};
 use ragu_circuits::{
     CircuitExt,
     polynomials::{Rank, sparse},
@@ -128,7 +128,8 @@ impl<C: Cycle, R: Rank> Proof<C, R> {
 /// primary data; commitment fields are `Cached` values derivable from
 /// polynomials. Three bridge polynomials (outer_error, ab, query) are also
 /// `Cached`, derivable from `bridge_alpha` and native commitments. The eval
-/// bridge is primary data, set explicitly by the fuse step.
+/// bridge is primary data: the fuse pre_beta grind may increment its alpha
+/// away from the derived power of `bridge_alpha`.
 #[derive(Clone)]
 pub struct Proof<C: Cycle, R: Rank> {
     /// Shared alpha source for deriving cached bridge polynomial alphas.
@@ -598,8 +599,9 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> crate::Application<'_, C, R, H
             builder.set_bridge_f_rx(rx, commitment);
         }
         {
-            // The trivial builder's bridge_alpha is ONE, matching the alpha
-            // the fuse step uses.
+            // The trivial builder's bridge_alpha is ONE, so the base alpha
+            // matches what the fuse grind starts from; pre_beta is ONE
+            // (packable), so no grinding occurs.
             let rx = nested::stages::eval::Stage::<C::HostCurve, R>::rx(
                 builder.bridge_alpha_power(nested::RxIndex::BridgeEval),
                 &nested::stages::eval::Witness {
@@ -614,7 +616,8 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> crate::Application<'_, C, R, H
         // Build dummy PointsStage inputs in `_10_p` accumulation order
         // and delegate to `compute_endoscaling` so this trivial setup
         // cannot silently drift from the real prover path.
-        let beta_endo = extract_endoscalar(C::CircuitField::ONE);
+        let beta_endo =
+            extract_endoscalar(Packable::new(C::CircuitField::ONE).expect("one is packable"));
         let p_commitment = {
             let mut points = Vec::with_capacity(NUM_ENDOSCALING_POINTS);
 

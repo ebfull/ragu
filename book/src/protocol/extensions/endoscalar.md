@@ -12,7 +12,13 @@ target fields. In `ragu`, the endoscalar type is `u128`, wrapped by the
 Endoscalars must support the following operations:
 
 - $\mathsf{extract}(s\in\F)\rightarrow \endo{s}$: deterministically extract a
-$\lambda$-bit value from a field element $s\in\F$ where $\log |\F|>\lambda$
+$\lambda$-bit value from a _packable_ field element $s\in\F$ where
+$\log |\F|>\lambda$. A packable element is one whose canonical representative
+fits in the field's capacity ($2^{254}$ for the Pasta fields), and the
+extracted value is the lower $\lambda$ bits of that representative.
+Extraction fails for the remaining elements; a prover that derives $s$ from
+a transcript re-randomizes and re-derives the challenge in that case
+(probability $\approx 2^{-129}$)
 - $\mathsf{lift}(\endo{s})\rightarrow s\in\F$: deterministically lift an
 endoscalar back to a target field; note that this target field can differ
 from the source field from which $\endo{s}$ is extracted, as long as the target
@@ -22,9 +28,9 @@ on group elements, we call this operation _endoscaling_
 
 The expected properties include:
 
-- pseudorandom extraction: informally, if the original field element is sampled
-from a uniform distribution over $\F$ where $|\F|\gg 2^\lambda$, then
-the extracted $\endo{s}$ is pseudorandom over $\{0,1\}^\lambda$
+- uniform extraction: if the original field element is sampled from a uniform
+distribution over the packable subset of $\F$ where $|\F|\gg 2^\lambda$, then
+the extracted $\endo{s}$ is uniform over $\{0,1\}^\lambda$
 - endoscaling consistency: $\endo{s}\cdot G = \mathsf{lift}(\endo{s})\cdot G$
 for any $\endo{s}$
 - circuit efficiency: all three operations above should be efficient to
