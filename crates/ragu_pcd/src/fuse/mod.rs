@@ -18,12 +18,18 @@ pub(crate) mod claims;
 
 use claims::FuseProofSource;
 use ragu_arithmetic::{CryptoRngCore, Cycle, ff::Field};
-use ragu_circuits::polynomials::{Rank, sparse};
+use ragu_circuits::{
+    polynomials::{Rank, sparse},
+    staging::StageExt,
+};
 use ragu_core::{Result, drivers::emulator::Emulator, maybe::Maybe};
 use ragu_primitives::{GadgetExt, Point, vec::CollectFixed};
 
 use crate::{
-    Application, Pcd, RAGU_TAG, internal::transcript::Transcript, proof::ProofBuilder, step::Step,
+    Application, Pcd, RAGU_TAG,
+    internal::{nested, transcript::Transcript},
+    proof::ProofBuilder,
+    step::Step,
 };
 
 /// Ephemeral native-field data for $f(X)$, used only during the fuse step.
@@ -174,16 +180,21 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
         f_commitment.write(&mut dr, &mut transcript)?;
         let u = transcript.challenge(&mut dr)?;
 
-        let eval_witness = self.compute_eval(
-            rng,
-            &u,
-            &left,
-            &right,
-            &native_s_prime,
-            &registry_wy,
-            &mut builder,
+        let eval_witness =
+            self.compute_eval(&u, &left, &right, &native_s_prime, &registry_wy, &builder);
+        builder.set_native_eval_rx(self.sample_eval_rx(rng, &eval_witness)?);
+
+        let bridge_eval_rx = nested::stages::eval::Stage::<C::HostCurve, R>::rx(
+            builder.bridge_alpha_power(nested::RxIndex::BridgeEval),
+            &nested::stages::eval::Witness {
+                native_eval: builder.native_eval_commitment(),
+            },
         )?;
-        let eval_commitment = Point::constant(&mut dr, builder.bridge_eval_commitment()?)?;
+        let bridge_eval_commitment =
+            bridge_eval_rx.commit_to_affine(C::nested_generators(self.params));
+        builder.set_bridge_eval_rx(bridge_eval_rx, bridge_eval_commitment);
+
+        let eval_commitment = Point::constant(&mut dr, bridge_eval_commitment)?;
         eval_commitment.write(&mut dr, &mut transcript)?;
         let pre_beta = transcript.challenge(&mut dr)?;
 

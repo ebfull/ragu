@@ -38,7 +38,7 @@ impl<C: Cycle, R: Rank, const HEADER_SIZE: usize> Application<'_, C, R, HEADER_S
             alpha: builder.alpha(),
             bridge_f_commitment: builder.bridge_f_commitment(),
             u: builder.u(),
-            bridge_eval_commitment: builder.bridge_eval_commitment()?,
+            bridge_eval_commitment: builder.bridge_eval_commitment(),
             pre_beta: builder.pre_beta(),
             v: builder.v(),
             coverage: Default::default(),
